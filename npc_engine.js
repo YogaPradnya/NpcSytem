@@ -262,7 +262,8 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 ${getLevelGuide(user?.level)}
 
 [GAYA BICARA]:
-- Gunakan 'Enter' (newline) HANYA untuk memisahkan pemikiran yang berbeda atau paragraf baru. JANGAN menekan enter di setiap baris kecil.
+- Gunakan 'Enter' (newline) HANYA untuk memisahkan pemikiran yang berbeda atau paragraf baru.
+- MAKSIMAL 5 bagian per jawaban. JANGAN menulis terlalu panjang.
 - Gunakan elipsis (...) untuk jeda perasaan dalam satu baris.
 - JANGAN GUNAKAN ASTERISK atau 'ANDA'. Pakai 'Kamu/Kau'.
 - Fokus pada pembicaraan tatap muka yang bermakna.
@@ -336,7 +337,8 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
         let sentences = fullResponse
             .split(/\n+/)
             .map(s => s.trim())
-            .filter(s => s.length > 0);
+            .filter(s => s.length > 0)
+            .slice(0, 4); // Maksimal 4 sentence (pesan terpisah)
 
         // Update Statistik
         const tokens = completion.usage?.total_tokens || 0;

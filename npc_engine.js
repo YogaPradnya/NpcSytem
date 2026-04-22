@@ -263,8 +263,9 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 ${getLevelGuide(user?.level)}
 
 [GAYA BICARA]:
-- Gunakan 'Enter' (newline) untuk memisahkan responmu menjadi 2 sampai 5 bagian (kalimat/paragraf pendek). JANGAN mengirim hanya 1 baris panjang.
+- Gunakan 'Enter' (newline) untuk memisahkan responmu menjadi 2 sampai 5 bagian.
 - MAKSIMAL 5 bagian per jawaban.
+- TOTAL KARAKTER HARUS DI BAWAH 300 HURUF. JANGAN MENULIS TERLALU PANJANG.
 - Gunakan elipsis (...) untuk jeda perasaan dalam satu baris.
 - JANGAN GUNAKAN ASTERISK atau 'ANDA'. Pakai 'Kamu/Kau'.
 - Fokus pada pembicaraan tatap muka yang bermakna.
@@ -309,7 +310,7 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
                     ...chatHistory,
                     { role: 'user', content: message }
                 ],
-                max_tokens: 300, // Cukup untuk 1-2 paragraf singkat
+                max_tokens: 150, // Dibatasi agar total karakter di bawah 300
                 temperature: 0.8
             });
         } catch (error) {
@@ -327,7 +328,7 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
                     ...chatHistory,
                     { role: 'user', content: message }
                 ],
-                max_tokens: 300,
+                max_tokens: 150,
                 temperature: 0.8
             });
         }
@@ -339,7 +340,7 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
             .split(/\n+/)
             .map(s => s.trim())
             .filter(s => s.length > 0)
-            .slice(0, 4); // Maksimal 4 sentence (pesan terpisah)
+            .slice(0, 5); // Maksimal 5 sentence (pesan terpisah)
 
         // Update Statistik
         const tokens = completion.usage?.total_tokens || 0;

@@ -15,7 +15,7 @@ app.use((req, res, next) => {
 });
 app.use(express.static('public')); // Serve the chat UI
 
-const PORT = 4000; // Menggunakan port berbeda agar tidak bentrok dengan bot utama
+const PORT = process.env.PORT || 4000; // Menggunakan port dari environment atau 4000 jika lokal
 
 // Statistik Monitoring (InMemory)
 let globalStats = {

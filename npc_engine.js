@@ -48,6 +48,12 @@ let globalStats = {
     charUsage: {} // Track tokens per character
 };
 
+// Konfigurasi Model AI
+let aiConfig = {
+    primaryModel: 'llama-3.3-70b-versatile',
+    fallbackModel: 'llama-3.1-8b-instant'
+};
+
 // Fungsi untuk mendapatkan waktu dunia nyata secara deskriptif
 function getTimeOfDay() {
     const hour = new Date().getHours();
@@ -104,7 +110,8 @@ async function initDB() {
                 npc_personality TEXT,
                 npc_speaking_style TEXT,
                 world_setting TEXT,
-                language TEXT
+                language TEXT,
+                is_enabled INTEGER DEFAULT 1
             )
         `);
         console.log("[DB] Table 'characters' ready.");
@@ -124,10 +131,10 @@ async function initDB() {
                 for (const id in jsonData) {
                     const c = jsonData[id];
                     await db.execute({
-                        sql: "INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, world_setting, language) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        args: [id, c.npc_name, c.npc_description, c.npc_personality, c.npc_speaking_style, c.world_setting, c.language || 'id']
+                        sql: "INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, world_setting, language, is_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        args: [id, c.npc_name, c.npc_description, c.npc_personality, c.npc_speaking_style, c.world_setting, c.language || 'id', c.is_enabled !== undefined ? (c.is_enabled ? 1 : 0) : 1]
                     });
-                    characters[id] = { id, ...c };
+                    characters[id] = { id, ...c, is_enabled: c.is_enabled !== undefined ? !!c.is_enabled : true };
                 }
                 console.log("[DB] Migrated data from characters.json to Turso.");
             }
@@ -163,11 +170,12 @@ const keys = [
 
 ].filter(Boolean);
 
-// Inisialisasi Groq Clients dengan status cooldown
+// Inisialisasi Groq Clients dengan status cooldown & manual toggle
 const groqClients = keys.map((key, index) => ({
     id: index + 1,
     client: new Groq({ apiKey: key }),
-    cooldownUntil: 0
+    cooldownUntil: 0,
+    isEnabled: true
 }));
 
 if (groqClients.length === 0) {
@@ -182,10 +190,10 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 
         // Pilih karakter
         const aiKey = (system && system.ai_name) ? system.ai_name.toLowerCase() : 'alya';
-        const char = characters[aiKey] || characters['alya'];
+        let char = characters[aiKey] || characters['alya'];
 
-        if (!char) {
-            return res.status(404).json({ success: false, error: `Character '${aiKey}' not found.` });
+        if (!char || char.is_enabled === false) {
+            return res.status(404).json({ success: false, error: `Character '${aiKey}' not found or disabled.` });
         }
 
         // System Prompt: Membangun dari Struktur Data Baru
@@ -222,8 +230,8 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
             }));
         }
 
-        // Pilih client yang tidak sedang cooldown (Load Balancing)
-        const availableClients = groqClients.filter(c => Date.now() > c.cooldownUntil);
+        // Pilih client yang tidak sedang cooldown & diaktifkan secara manual
+        const availableClients = groqClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil);
         
         if (availableClients.length === 0) {
             return res.status(503).json({ 
@@ -237,9 +245,9 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
 
         if (!client) throw new Error("No AI clients available.");
 
-        // Konfigurasi Model (Gunakan 70b untuk kepintaran maksimal sesuai permintaan user)
-        const primaryModel = 'llama-3.3-70b-versatile';
-        const fallbackModel = 'llama-3.1-8b-instant';
+        // Konfigurasi Model (Gunakan pilihan dari config)
+        const primaryModel = aiConfig.primaryModel;
+        const fallbackModel = aiConfig.fallbackModel;
 
         let completion;
         try {
@@ -334,6 +342,42 @@ app.get('/admin', basicAuth, (req, res) => {
     res.send(getAdminDashboardHTML(stats));
 });
 
+// API: Get Model Config & Otak Status
+app.get('/api/admin/models', basicAuth, (req, res) => {
+    res.json({
+        config: aiConfig,
+        otak: groqClients.map(c => ({
+            id: c.id,
+            isEnabled: c.isEnabled,
+            isCoolingDown: Date.now() < c.cooldownUntil,
+            cooldownRemaining: Math.max(0, Math.floor((c.cooldownUntil - Date.now()) / 1000))
+        }))
+    });
+});
+
+// API: Toggle Otak
+app.post('/api/admin/models/toggle', basicAuth, (req, res) => {
+    const { id, enabled } = req.body;
+    const otak = groqClients.find(c => c.id === id);
+    if (otak) {
+        otak.isEnabled = enabled;
+        res.json({ success: true, id, enabled });
+    } else {
+        res.status(404).json({ error: "Otak not found" });
+    }
+});
+
+// API: Switch Primary Model
+app.post('/api/admin/models/switch', basicAuth, (req, res) => {
+    const { primaryModel } = req.body;
+    if (primaryModel) {
+        aiConfig.primaryModel = primaryModel;
+        res.json({ success: true, primaryModel });
+    } else {
+        res.status(400).json({ error: "Missing model name" });
+    }
+});
+
 // API: Save/Update Character
 app.post('/api/characters/save', async (req, res) => {
     const { id, data } = req.body;
@@ -341,16 +385,17 @@ app.post('/api/characters/save', async (req, res) => {
 
     try {
         await db.execute({
-            sql: `INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, world_setting, language) 
-                  VALUES (?, ?, ?, ?, ?, ?, ?)
+            sql: `INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, world_setting, language, is_enabled) 
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                   ON CONFLICT(id) DO UPDATE SET 
                   npc_name=excluded.npc_name, 
                   npc_description=excluded.npc_description, 
                   npc_personality=excluded.npc_personality, 
                   npc_speaking_style=excluded.npc_speaking_style, 
                   world_setting=excluded.world_setting, 
-                  language=excluded.language`,
-            args: [id, data.npc_name, data.npc_description, data.npc_personality, data.npc_speaking_style, data.world_setting, data.language || 'id']
+                  language=excluded.language,
+                  is_enabled=excluded.is_enabled`,
+            args: [id, data.npc_name, data.npc_description, data.npc_personality, data.npc_speaking_style, data.world_setting, data.language || 'id', data.is_enabled ? 1 : 0]
         });
         
         characters[id] = { id, ...data };

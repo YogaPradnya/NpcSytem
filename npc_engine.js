@@ -1,5 +1,4 @@
 const express = require('express');
-const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const Groq = require('groq-sdk');
@@ -9,7 +8,6 @@ const { createClient } = require('@libsql/client');
 const { getAdminDashboardHTML, getLoginPageHTML } = require('./dashboard.js');
 
 const app = express();
-app.use(cors()); // Izinkan akses dari domain luar/file lokal untuk testing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser('npc-system-secret-88'));
@@ -143,7 +141,20 @@ async function initDB() {
                 is_enabled INTEGER DEFAULT 1
             )
         `);
-        console.log("[DB] Table 'characters' ready.");
+        
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS chat_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                ai_name TEXT,
+                username TEXT,
+                user_message TEXT,
+                bot_response TEXT,
+                tokens INTEGER,
+                model TEXT
+            )
+        `);
+        console.log("[DB] Table 'characters' & 'chat_logs' ready.");
 
         // Ambil data dari Turso
         const result = await db.execute("SELECT * FROM characters");
@@ -242,7 +253,7 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 ${getLevelGuide(user?.level)}
 
 [GAYA BICARA]:
-- VARIASIKAN PANJANG RESPON (Pilih random 1 sampai 4 kalimat pendek).
+- Gunakan 'Enter' (newline) untuk memisahkan setiap bagian kalimat yang ingin kamu kirim secara terpisah.
 - Gunakan elipsis (...) untuk jeda perasaan.
 - JANGAN GUNAKAN ASTERISK atau 'ANDA'. Pakai 'Kamu/Kau'.
 - Fokus pada pembicaraan tatap muka yang bermakna.
@@ -312,22 +323,25 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
 
         const fullResponse = completion.choices[0].message.content;
         
-        // Pecah menjadi kalimat secara cerdas
+        // Pecah menjadi kalimat HANYA saat ada Enter (newline)
         let sentences = fullResponse
-            .split(/(?<=[.!?])\s+|\n+/)
+            .split(/\n+/)
             .map(s => s.trim())
             .filter(s => s.length > 0);
-        
-        // Randomize cap (antara 2 sampai 4) agar tidak selalu panjang
-        const randomCap = Math.floor(Math.random() * 3) + 2; 
-        sentences = sentences.slice(0, randomCap);
 
         // Update Statistik
-        const tokens = completion.usage?.total_tokens || 0;
-        globalStats.totalRequests++;
-        globalStats.totalTokens += tokens;
         if (!globalStats.charUsage[aiKey]) globalStats.charUsage[aiKey] = 0;
         globalStats.charUsage[aiKey] += tokens;
+
+        // Simpan Log ke Database
+        try {
+            await db.execute({
+                sql: "INSERT INTO chat_logs (ai_name, username, user_message, bot_response, tokens, model) VALUES (?, ?, ?, ?, ?, ?)",
+                args: [aiKey, user?.username || 'Guest', message, sentences.join('\n'), tokens, completion.model]
+            });
+        } catch (logErr) {
+            console.error("[DB LOG ERROR]:", logErr.message);
+        }
 
         const result = {
             sentence_count: sentences.length,
@@ -404,6 +418,16 @@ app.post('/api/admin/models/switch', apiAuth, (req, res) => {
         res.json({ success: true, primaryModel });
     } else {
         res.status(400).json({ error: "Missing model name" });
+    }
+});
+
+// API: Get Chat Logs
+app.get('/api/admin/logs', apiAuth, async (req, res) => {
+    try {
+        const result = await db.execute("SELECT * FROM chat_logs ORDER BY timestamp DESC LIMIT 50");
+        res.json({ logs: result.rows });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
 });
 

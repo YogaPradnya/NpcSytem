@@ -43,7 +43,7 @@ function getAdminDashboardHTML(stats) {
                 margin-bottom: 2.5rem;
                 letter-spacing: -0.5px;
             }
-            nav { display: flex; flex-direction: column; gap: 0.5rem; }
+            nav { display: flex; flex-direction: column; gap: 0.3rem; }
             .nav-item {
                 padding: 0.75rem 1rem;
                 border-radius: 0.5rem;
@@ -95,7 +95,7 @@ function getAdminDashboardHTML(stats) {
             }
             table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
             table th { text-align: left; padding: 1rem; color: var(--text-muted); font-size: 0.85rem; border-bottom: 1px solid var(--border); font-weight: 500; }
-            table td { padding: 1rem; border-bottom: 1px solid #f1f5f9; font-size: 0.95rem; }
+            table td { padding: 1rem; border-bottom: 1px solid #f1f5f9; font-size: 0.95rem; vertical-align: top; }
 
             /* Buttons */
             .btn {
@@ -147,6 +147,11 @@ function getAdminDashboardHTML(stats) {
             .form-group input:focus { outline: none; border-color: var(--primary); }
 
             .hidden { display: none !important; }
+
+            /* Logs Specific */
+            .log-bubble { padding: 0.5rem; border-radius: 0.5rem; font-size: 0.85rem; margin-bottom: 0.5rem; }
+            .log-user { background: #f8fafc; border-left: 3px solid #cbd5e1; }
+            .log-bot { background: #fff7ed; border-left: 3px solid var(--primary); }
         </style>
     </head>
     <body>
@@ -156,8 +161,12 @@ function getAdminDashboardHTML(stats) {
                 <div class="nav-item active" onclick="showPage('dashboard', this)">Dashboard</div>
                 <div class="nav-item" onclick="showPage('karakter', this)">Data Karakter</div>
                 <div class="nav-item" onclick="showPage('otak', this)">Manajemen Otak</div>
+                <div class="nav-item" onclick="showPage('logs', this)">Log Percakapan</div>
             </nav>
-            <div style="margin-top: auto; font-size: 0.75rem; color: var(--text-muted)">v1.2 // Turso Cloud DB</div>
+            <div style="margin-top: auto; font-size: 0.75rem; color: var(--text-muted)">
+                <a href="/logout" style="color: var(--text-muted); text-decoration: none">Logout</a>
+                <br>v1.5 // Turso Logging Active
+            </div>
         </aside>
 
         <main>
@@ -211,6 +220,27 @@ function getAdminDashboardHTML(stats) {
                 </header>
                 <div id="otak-list" class="otak-grid"></div>
             </div>
+
+            <!-- PAGE: LOGS -->
+            <div id="page-logs" class="hidden">
+                <header>
+                    <h1>Log Percakapan Terakhir</h1>
+                    <button class="btn btn-outline" onclick="loadLogs()">Refresh Log</button>
+                </header>
+                <div class="card-section">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 150px">WAKTU</th>
+                                <th style="width: 100px">NPC / USER</th>
+                                <th>ISI PERCAKAPAN</th>
+                                <th style="width: 150px">MODEL / TOKEN</th>
+                            </tr>
+                        </thead>
+                        <tbody id="log-body"></tbody>
+                    </table>
+                </div>
+            </div>
         </main>
 
         <!-- FORM MODAL -->
@@ -242,21 +272,30 @@ function getAdminDashboardHTML(stats) {
             function showPage(pageId, el) {
                 currentPage = pageId;
                 document.querySelectorAll('main > div').forEach(p => p.classList.add('hidden'));
-                document.getElementById('page-' + pageId).classList.remove('hidden');
+                const p = document.getElementById('page-' + pageId);
+                if(p) p.classList.remove('hidden');
+                
                 document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-                el.classList.add('active');
+                if(el) el.classList.add('active');
+
+                if(pageId === 'logs') loadLogs();
+                if(pageId === 'karakter') load();
+                if(pageId === 'otak') loadModels();
             }
 
             async function load() {
-                const r = await fetch('/api/characters');
-                const d = await r.json();
-                characters = d.characters;
-                renderCharacters();
-                loadModels();
+                try {
+                    const r = await fetch('/api/characters');
+                    const d = await r.json();
+                    characters = d.characters;
+                    renderCharacters();
+                    loadModels();
+                } catch(e) {}
             }
 
             function renderCharacters() {
                 const b = document.getElementById('char-body');
+                if(!b) return;
                 b.innerHTML = '';
                 characters.forEach(c => {
                     b.innerHTML += '<tr>' +
@@ -283,9 +322,11 @@ function getAdminDashboardHTML(stats) {
                 try {
                     const r = await fetch('/api/admin/models');
                     const d = await r.json();
-                    document.getElementById('m-primary').value = d.config.primaryModel;
+                    const m = document.getElementById('m-primary');
+                    if(m) m.value = d.config.primaryModel;
                     
                     const list = document.getElementById('otak-list');
+                    if(!list) return;
                     list.innerHTML = '';
                     d.otak.forEach(o => {
                         const isCd = o.isCoolingDown;
@@ -306,13 +347,39 @@ function getAdminDashboardHTML(stats) {
                 } catch(e) {}
             }
 
+            async function loadLogs() {
+                try {
+                    const r = await fetch('/api/admin/logs');
+                    const d = await r.json();
+                    const b = document.getElementById('log-body');
+                    if(!b) return;
+                    b.innerHTML = '';
+                    d.logs.forEach(l => {
+                        const date = new Date(l.timestamp).toLocaleString('id-ID');
+                        b.innerHTML += '<tr>' +
+                            '<td style="font-size: 0.75rem; color: var(--text-muted)">' + date + '</td>' +
+                            '<td>' +
+                                '<div style="font-weight:600; color:var(--primary)">' + l.ai_name.toUpperCase() + '</div>' +
+                                '<div style="font-size: 0.8rem; color:var(--text-muted)">@' + l.username + '</div>' +
+                            '</td>' +
+                            '<td>' +
+                                '<div class="log-bubble log-user"><b>User:</b> ' + l.user_message + '</div>' +
+                                '<div class="log-bubble log-bot"><b>AI:</b> ' + l.bot_response.replace(/\\n/g, '<br>') + '</div>' +
+                            '</td>' +
+                            '<td>' +
+                                '<div style="font-size: 0.8rem; font-weight:500">' + l.model + '</div>' +
+                                '<div style="font-size: 0.75rem; color:var(--text-muted)">' + l.tokens + ' tokens</div>' +
+                            '</td>' +
+                        '</tr>';
+                    });
+                } catch(e) {}
+            }
+
             async function toggleCharStatus(id, enabled) {
                 const char = characters.find(x => x.id === id);
                 if(!char) return;
-                
                 const data = { ...char, is_enabled: enabled };
-                delete data.id; // API expects ID separately if needed, but here it's body.id
-
+                delete data.id;
                 await fetch('/api/characters/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -396,10 +463,13 @@ function getAdminDashboardHTML(stats) {
                 try {
                     const r = await fetch('/api/stats');
                     const d = await r.json();
-                    document.getElementById('s-req').innerText = d.totalRequests;
-                    document.getElementById('s-tok').innerText = d.totalTokens;
-                    document.getElementById('s-active').innerText = d.active_keys + ' / ' + d.available_keys;
-                    document.getElementById('s-cooldown').innerText = d.cooldown_keys;
+                    const reqEl = document.getElementById('s-req');
+                    if(reqEl) {
+                        reqEl.innerText = d.totalRequests;
+                        document.getElementById('s-tok').innerText = d.totalTokens;
+                        document.getElementById('s-active').innerText = d.active_keys + ' / ' + d.available_keys;
+                        document.getElementById('s-cooldown').innerText = d.cooldown_keys;
+                    }
                     if(currentPage === 'otak') loadModels();
                 } catch(e) {}
             }, 5000);
@@ -503,7 +573,7 @@ function getLoginPageHTML(error = '') {
             <div class="brand">NPC SYSTEM</div>
             <div class="subtitle">Silakan login untuk mengelola engine</div>
             
-            ${error ? `<div class="error">${error}</div>` : ''}
+            \${error ? \`<div class="error">\${error}</div>\` : ''}
 
             <form action="/login" method="POST">
                 <div class="form-group">

@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const Groq = require('groq-sdk');
@@ -8,6 +9,7 @@ const { createClient } = require('@libsql/client');
 const { getAdminDashboardHTML, getLoginPageHTML } = require('./dashboard.js');
 
 const app = express();
+app.use(cors()); // Mengizinkan akses dari aplikasi luar (APK/Web)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser('npc-system-secret-88'));
@@ -373,7 +375,11 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
 
     } catch (e) {
         console.error("[NPC V1 API ERROR]:", e.message);
-        res.status(500).json({ success: false, error: e.message });
+        res.status(500).json({ 
+            success: false, 
+            error: "Gagal mengambil balasan AI", 
+            message: e.message 
+        });
     }
 });
 

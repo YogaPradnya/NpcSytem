@@ -262,8 +262,8 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 ${getLevelGuide(user?.level)}
 
 [GAYA BICARA]:
-- Gunakan 'Enter' (newline) untuk memisahkan setiap bagian kalimat yang ingin kamu kirim secara terpisah.
-- Gunakan elipsis (...) untuk jeda perasaan.
+- Gunakan 'Enter' (newline) HANYA untuk memisahkan pemikiran yang berbeda atau paragraf baru. JANGAN menekan enter di setiap baris kecil.
+- Gunakan elipsis (...) untuk jeda perasaan dalam satu baris.
 - JANGAN GUNAKAN ASTERISK atau 'ANDA'. Pakai 'Kamu/Kau'.
 - Fokus pada pembicaraan tatap muka yang bermakna.
 

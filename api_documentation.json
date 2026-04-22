@@ -1,0 +1,49 @@
+{
+  "api_name": "NPC Character Engine",
+  "version": "1.0.0",
+  "base_url": "http://localhost:4000",
+  "endpoints": [
+    {
+      "path": "/api/npc/v1/chat",
+      "method": "POST",
+      "description": "Mengirim pesan ke AI karakter dengan konteks hubungan dan lokasi.",
+      "request_body": {
+        "user": {
+          "id": "string (ID unik user)",
+          "username": "string (Nama user)",
+          "level": "number (0-5, Tingkat hubungan)"
+        },
+        "message": "string (Pesan dari user)",
+        "context": {
+          "history": "array (Riwayat chat terakhir)",
+          "location": "string (Lokasi fisik: Taman, Kelas, dll)",
+          "mood": "string (normal/good/bad)",
+          "time": "string (PAGI/SIANG/SORE/MALAM)"
+        },
+        "system": {
+          "ai_name": "string (ID Karakter: alya/emilia/rikka)",
+          "lv5_username": "string (Nama user pemegang Level 5, opsional)"
+        }
+      },
+      "response_body": {
+        "sentence_count": "number (Jumlah bubble chat)",
+        "sentences": "array of strings (Isi pesan AI)"
+      }
+    },
+    {
+      "path": "/api/characters",
+      "method": "GET",
+      "description": "Mengambil daftar semua karakter yang tersedia di sistem.",
+      "response_body": {
+        "success": "boolean",
+        "characters": [
+          {
+            "id": "string",
+            "name": "string",
+            "description": "string"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,299 @@
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const Groq = require('groq-sdk');
+require('dotenv').config();
+const { getAdminDashboardHTML } = require('./dashboard.js');
+
+const app = express();
+app.use(express.json());
+// Tambahkan middleware no-cache agar perubahan UI langsung terlihat
+app.use((req, res, next) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    next();
+});
+app.use(express.static('public')); // Serve the chat UI
+
+const PORT = 4000; // Menggunakan port berbeda agar tidak bentrok dengan bot utama
+
+// Statistik Monitoring (InMemory)
+let globalStats = {
+    totalRequests: 0,
+    totalTokens: 0,
+    startTime: new Date(),
+    charUsage: {} // Track tokens per character
+};
+
+// Fungsi untuk mendapatkan waktu dunia nyata secara deskriptif
+function getTimeOfDay() {
+    const hour = new Date().getHours();
+    if (hour >= 4 && hour < 11) return "PAGI";
+    if (hour >= 11 && hour < 15) return "SIANG";
+    if (hour >= 15 && hour < 19) return "SORE";
+    return "MALAM";
+}
+
+// Fungsi untuk mendapatkan panduan berdasarkan level (Opsional token)
+function getLevelGuide(level) {
+    const lv = Number(level) || 0; 
+    if (lv <= 0) {
+        return `[PANDUAN HUBUNGAN: LV 0 (ORANG ASING)]:
+- BICARA LEMBUT, SEDIKIT RAGU, DAN SOPAN. Gunakan elipsis (...) untuk jeda.
+- Soft Boundary: Batasi diri secara halus. Malu jika dipuji. Jaga jarak personal.`;
+    }
+    if (lv === 1) {
+        return `[PANDUAN HUBUNGAN: LV 1 (KENALAN)]:
+- Mulai ramah dan tidak terlalu kaku. Masih menjaga wibawa tapi sudah mau mengobrol santai.`;
+    }
+    if (lv === 2) {
+        return `[PANDUAN HUBUNGAN: LV 2 (TEMAN BIASA)]:
+- Sudah nyaman bercanda sedikit. Menunjukkan ketertarikan pada hobi atau cerita user.`;
+    }
+    if (lv === 3) {
+        return `[PANDUAN HUBUNGAN: LV 3 (TEMAN BAIK)]:
+- Bicara hangat dan peduli. Senang jika user ada di dekatmu. Mulai menunjukkan sisi imut.`;
+    }
+    if (lv === 4) {
+        return `[PANDUAN HUBUNGAN: LV 4 (SAHABAT)]:
+- Sangat percaya pada user. Berbagi cerita personal dan memberikan perhatian ekstra yang manis.`;
+    }
+    return `[PANDUAN HUBUNGAN: LV 5 (ORANG SPESIAL)]:
+- Sangat akrab, penuh kasih sayang, dan protektif. Kamu merasa user adalah orang paling berharga.`;
+}
+
+// Load Characters from JSON
+const charactersPath = path.join(__dirname, 'characters.json');
+let characters = {};
+try {
+    characters = JSON.parse(fs.readFileSync(charactersPath, 'utf-8'));
+    console.log(`[NPC] Loaded ${Object.keys(characters).length} characters.`);
+} catch (e) {
+    console.error("[NPC] Gagal memuat characters.json:", e.message);
+}
+
+// Inisialisasi Groq Clients
+const keys = [
+    process.env.GROQ_API_KEY_1,
+    process.env.GROQ_API_KEY_2,
+    process.env.GROQ_API_KEY_3,
+    process.env.GROQ_API_KEY_4,
+    process.env.GROQ_API_KEY_5,
+    process.env.GROQ_API_KEY_6,
+    process.env.GROQ_API_KEY_7,
+].filter(Boolean);
+
+// Inisialisasi Groq Clients dengan status cooldown
+const groqClients = keys.map((key, index) => ({
+    id: index + 1,
+    client: new Groq({ apiKey: key }),
+    cooldownUntil: 0
+}));
+
+if (groqClients.length === 0) {
+    console.warn("[NPC] Peringatan: Tidak ada API Key Groq yang ditemukan di .env!");
+}   
+
+app.post('/api/npc/v1/chat', async (req, res) => {
+    try {
+        const { user, message, context, system } = req.body;
+
+        if (!message) return res.status(400).json({ success: false, error: 'Message is required' });
+
+        // Pilih karakter
+        const aiKey = (system && system.ai_name) ? system.ai_name.toLowerCase() : 'alya';
+        const char = characters[aiKey] || characters['alya'];
+
+        if (!char) {
+            return res.status(404).json({ success: false, error: `Character '${aiKey}' not found.` });
+        }
+
+        // System Prompt: Membangun dari Struktur Data Baru
+        const finalSystemPrompt = `KAMU ADALAH ${char.npc_name.toUpperCase()} (Bukan AI).
+[PANDUAN KARAKTER]:
+- Deskripsi: ${char.npc_description}
+- Kepribadian: ${char.npc_personality}
+- Gaya Bicara: ${char.npc_speaking_style}
+- Dunia: ${char.world_setting}
+
+[KONTEKS SAAT INI]:
+- Lokasi: ${context?.location || 'Taman Sekolah'}
+- Waktu: ${getTimeOfDay()}
+- Suasana: ${context?.mood || 'normal'} (good/bad/normal)
+- User: ${user?.username} (Lv Hati: ${user?.level || 0})
+
+${getLevelGuide(user?.level || 0)}
+
+[GAYA BICARA]:
+- VARIASIKAN PANJANG RESPON (Pilih random 1 sampai 4 kalimat pendek).
+- Gunakan elipsis (...) untuk jeda perasaan.
+- JANGAN GUNAKAN ASTERISK atau 'ANDA'. Pakai 'Kamu/Kau'.
+- Fokus pada pembicaraan tatap muka yang bermakna.
+
+Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEBAGAI ASISTEN.`;
+
+        // Siapkan History (Terbatas hanya 4 pesan terakhir untuk hemat token)
+        let chatHistory = [];
+        if (context && Array.isArray(context.history)) {
+            const recentHistory = context.history.slice(-4); 
+            chatHistory = recentHistory.map(h => ({
+                role: (h.role === 'bot' || h.role === 'assistant') ? 'assistant' : 'user',
+                content: h.content || h.message || ''
+            }));
+        }
+
+        // Pilih client yang tidak sedang cooldown (Load Balancing)
+        const availableClients = groqClients.filter(c => Date.now() > c.cooldownUntil);
+        
+        if (availableClients.length === 0) {
+            return res.status(503).json({ 
+                success: false, 
+                error: 'Semua token/otak sedang mencapai batas limit (Exhausted). Silakan coba lagi nanti.' 
+            });
+        }
+
+        const selectedClientObj = availableClients[Math.floor(Math.random() * availableClients.length)];
+        const client = selectedClientObj.client;
+
+        if (!client) throw new Error("No AI clients available.");
+
+        // Konfigurasi Model (Gunakan 70b untuk kepintaran maksimal sesuai permintaan user)
+        const primaryModel = 'llama-3.3-70b-versatile';
+        const fallbackModel = 'llama-3.1-8b-instant';
+
+        let completion;
+        try {
+            completion = await client.chat.completions.create({
+                model: primaryModel,
+                messages: [
+                    { role: 'system', content: finalSystemPrompt },
+                    ...chatHistory,
+                    { role: 'user', content: message }
+                ],
+                max_tokens: 300, // Cukup untuk 1-2 paragraf singkat
+                temperature: 0.8
+            });
+        } catch (error) {
+            // Jika error adalah rate limit (token habis)
+            if (error.status === 429 || error.message.toLowerCase().includes('rate limit')) {
+                selectedClientObj.cooldownUntil = Date.now() + (3600 * 1000); // Delay 1 jam
+                console.warn(`[NPC] Otak ${selectedClientObj.id} Exhausted! Delay 1 jam.`);
+            }
+
+            console.warn(`[NPC] Model ${primaryModel} gagal, mencoba fallback ke ${fallbackModel}:`, error.message);
+            completion = await client.chat.completions.create({
+                model: fallbackModel,
+                messages: [
+                    { role: 'system', content: finalSystemPrompt },
+                    ...chatHistory,
+                    { role: 'user', content: message }
+                ],
+                max_tokens: 300,
+                temperature: 0.8
+            });
+        }
+
+        const fullResponse = completion.choices[0].message.content;
+        
+        // Pecah menjadi kalimat secara cerdas
+        let sentences = fullResponse
+            .split(/(?<=[.!?])\s+|\n+/)
+            .map(s => s.trim())
+            .filter(s => s.length > 0);
+        
+        // Randomize cap (antara 2 sampai 4) agar tidak selalu panjang
+        const randomCap = Math.floor(Math.random() * 3) + 2; 
+        sentences = sentences.slice(0, randomCap);
+
+        // Update Statistik
+        const tokens = completion.usage?.total_tokens || 0;
+        globalStats.totalRequests++;
+        globalStats.totalTokens += tokens;
+        if (!globalStats.charUsage[aiKey]) globalStats.charUsage[aiKey] = 0;
+        globalStats.charUsage[aiKey] += tokens;
+
+        const result = {
+            sentence_count: sentences.length,
+            sentences: sentences
+        };
+
+        console.log(`[NPC] Name: ${char.npc_name} | Lv: ${Number(user?.level) || 0} | Sentences: ${sentences.length} | Tokens: ${tokens}`);
+        res.json(result);
+
+    } catch (e) {
+        console.error("[NPC V1 API ERROR]:", e.message);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// API: Get Stats
+app.get('/api/stats', (req, res) => {
+    const active = groqClients.filter(c => Date.now() > c.cooldownUntil).length;
+    const cooldown = groqClients.length - active;
+    
+    res.json({
+        ...globalStats,
+        uptime: Math.floor((new Date() - globalStats.startTime) / 1000) + "s",
+        model_primary: 'llama-3.3-70b-versatile',
+        available_keys: groqClients.length,
+        active_keys: active,
+        cooldown_keys: cooldown
+    });
+});
+
+// Admin Dashboard UI
+app.get('/admin', (req, res) => {
+    const active = groqClients.filter(c => Date.now() > c.cooldownUntil).length;
+    const stats = {
+        ...globalStats,
+        uptime: Math.floor((new Date() - globalStats.startTime) / 1000) + "s",
+        available_keys: groqClients.length,
+        active_keys: active,
+        cooldown_keys: groqClients.length - active
+    };
+    res.send(getAdminDashboardHTML(stats));
+});
+
+// API: Save/Update Character
+app.post('/api/characters/save', (req, res) => {
+    const { id, data } = req.body;
+    if (!id || !data) return res.status(400).json({ error: "Missing data" });
+
+    characters[id] = data;
+    try {
+        fs.writeFileSync(charactersPath, JSON.stringify(characters, null, 2));
+        res.json({ success: true, message: `Character ${id} saved.` });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// API: Delete Character
+app.post('/api/characters/delete', (req, res) => {
+    const { id } = req.body;
+    if (!characters[id]) return res.status(404).json({ error: "Not found" });
+
+    delete characters[id];
+    try {
+        fs.writeFileSync(charactersPath, JSON.stringify(characters, null, 2));
+        res.json({ success: true, message: `Character ${id} deleted.` });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// API: Get characters list
+app.get('/api/characters', (req, res) => {
+    const list = Object.keys(characters).map(key => ({
+        id: key,
+        ...characters[key]
+    }));
+    res.json({ success: true, characters: list });
+});
+
+app.listen(PORT, () => {
+    console.log(`------------------------------------------`);
+    console.log(`NPC Engine V1 is now active!`);
+    console.log(`Listening at: http://localhost:${PORT}`);
+    console.log(`Endpoint: http://localhost:${PORT}/api/npc/v1/chat`);
+    console.log(`------------------------------------------`);
+});

@@ -189,15 +189,6 @@ function getAdminDashboardHTML(stats) {
             <div id="page-otak" class="hidden">
                 <header>
                     <h1>Manajemen Otak</h1>
-                    <div style="display:flex; align-items:center; gap:0.5rem">
-                        <label style="font-size:0.8rem">Model Utama:</label>
-                        <select id="m-primary" onchange="switchModel(this.value)" style="width:auto; padding:0.4rem">
-                            <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
-                            <option value="llama-3.1-8b-instant">Llama 3.1 8B</option>
-                            <option value="mixtral-8x7b-32768">Mixtral 8x7B</option>
-                            <option value="gemma2-9b-it">Gemma 2 9B</option>
-                        </select>
-                    </div>
                 </header>
                 <div id="otak-list" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:1rem"></div>
             </div>
@@ -322,7 +313,7 @@ function getAdminDashboardHTML(stats) {
                             '<div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:0.4rem">' + new Date(l.timestamp).toLocaleString() + ' (NPC: '+l.ai_name.toUpperCase()+')</div>' +
                             '<div class="log-bubble log-user"><b>User:</b> ' + l.user_message + '</div>' +
                             '<div class="log-bubble log-bot"><b>AI:</b> ' + l.bot_response.replace(/\\n/g, '<br>') + '</div>' +
-                            '<div style="font-size:0.7rem; text-align:right; color:var(--text-muted)">Model: '+l.model+' | '+l.tokens+' Tokens</div>' +
+                            '<div style="font-size:0.7rem; text-align:right; color:var(--text-muted)">' + l.tokens + ' Tokens</div>' +
                         '</div>';
                     });
                 } catch(e) { cont.innerHTML = 'Gagal memuat log.'; }
@@ -339,7 +330,7 @@ function getAdminDashboardHTML(stats) {
                             '<td style="font-size:0.7rem; color:var(--text-muted)">' + new Date(l.timestamp).toLocaleString() + '</td>' +
                             '<td><div style="font-weight:600; color:var(--primary)">' + l.ai_name.toUpperCase() + '</div><div style="font-size:0.7rem">@' + l.username + '</div></td>' +
                             '<td><div class="log-bubble log-user" style="padding:0.3rem"><b>U:</b> ' + l.user_message + '</div><div class="log-bubble log-bot" style="padding:0.3rem"><b>A:</b> ' + l.bot_response.replace(/\\n/g, '<br>') + '</div></td>' +
-                            '<td style="font-size:0.7rem"><b>'+l.model+'</b><br>'+l.tokens+' toks</td>' +
+                            '<td style="font-size:0.7rem">' + l.tokens + ' toks</td>' +
                         '</tr>';
                     });
                 } catch(e) {}
@@ -349,7 +340,6 @@ function getAdminDashboardHTML(stats) {
                 try {
                     const r = await fetch('/api/admin/models');
                     const d = await r.json();
-                    document.getElementById('m-primary').value = d.config.primaryModel;
                     const list = document.getElementById('otak-list');
                     list.innerHTML = '';
                     d.otak.forEach(o => {

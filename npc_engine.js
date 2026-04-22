@@ -263,8 +263,8 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 ${getLevelGuide(user?.level)}
 
 [GAYA BICARA]:
-- Gunakan 'Enter' (newline) untuk memisahkan responmu menjadi 2 sampai 5 bagian.
-- MAKSIMAL 5 bagian per jawaban.
+- Gunakan 'Enter' (newline) untuk memisahkan responmu menjadi 2 sampai 4 bagian.
+- MAKSIMAL 4 bagian per jawaban.
 - TOTAL KARAKTER HARUS DI BAWAH 300 HURUF. JANGAN MENULIS TERLALU PANJANG.
 - Gunakan elipsis (...) untuk jeda perasaan dalam satu baris.
 - JANGAN GUNAKAN ASTERISK atau 'ANDA'. Pakai 'Kamu/Kau'.
@@ -345,10 +345,10 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
 
         // Pecah menjadi kalimat secara cerdas (Enter atau Titik/Tanda Tanya/Seru)
         let sentences = fullResponse
-            .split(/(?<=[.!?])\s+|\n+/)
+            .split(/\n+/)
             .map(s => s.trim())
             .filter(s => s.length > 0)
-            .slice(0, 5); // Maksimal 5 sentence (pesan terpisah)
+            .slice(0, 4); // Maksimal 4 sentence (pesan terpisah)
 
         // Update Statistik
         const tokens = completion.usage?.total_tokens || 0;

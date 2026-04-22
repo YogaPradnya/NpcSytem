@@ -13,7 +13,17 @@ app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     next();
 });
-app.use(express.static('public')); // Serve the chat UI
+// Redirect root ke Admin
+app.get('/', (req, res) => {
+    res.redirect('/admin');
+});
+
+// Route untuk Chat UI
+app.get('/chat', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.use(express.static('public')); // Serve static files (CSS, JS)
 
 // Middleware Basic Auth untuk Admin Dashboard
 const basicAuth = (req, res, next) => {
@@ -34,11 +44,6 @@ const basicAuth = (req, res, next) => {
         return res.status(401).send('Invalid credentials');
     }
 };
-
-// Redirect root ke Admin atau layani Landing Page
-app.get('/', (req, res) => {
-    res.redirect('/admin');
-});
 
 const PORT = process.env.PORT || 4000; // Menggunakan port dari environment atau 4000 jika lokal
 

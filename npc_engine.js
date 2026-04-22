@@ -154,7 +154,14 @@ async function initDB() {
                 model TEXT
             )
         `);
-        console.log("[DB] Table 'characters' & 'chat_logs' ready.");
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS users (
+                username TEXT PRIMARY KEY,
+                heart_level INTEGER DEFAULT 0,
+                last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log("[DB] Tables 'characters', 'chat_logs', & 'users' ready.");
 
         // Ambil data dari Turso
         const result = await db.execute("SELECT * FROM characters");
@@ -333,11 +340,24 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
         if (!globalStats.charUsage[aiKey]) globalStats.charUsage[aiKey] = 0;
         globalStats.charUsage[aiKey] += tokens;
 
+        // Simpan/Update Metadata User
+        const currentUsername = user?.username || 'Guest';
+        const currentHeartLv = Number(user?.level) || 0;
+        
+        try {
+            await db.execute({
+                sql: "INSERT INTO users (username, heart_level, last_seen) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(username) DO UPDATE SET heart_level=excluded.heart_level, last_seen=CURRENT_TIMESTAMP",
+                args: [currentUsername, currentHeartLv]
+            });
+        } catch (uErr) {
+            console.error("[DB USER SYNC ERROR]:", uErr.message);
+        }
+
         // Simpan Log ke Database
         try {
             await db.execute({
                 sql: "INSERT INTO chat_logs (ai_name, username, user_message, bot_response, tokens, model) VALUES (?, ?, ?, ?, ?, ?)",
-                args: [aiKey, user?.username || 'Guest', message, sentences.join('\n'), tokens, completion.model]
+                args: [aiKey, currentUsername, message, sentences.join('\n'), tokens, completion.model]
             });
         } catch (logErr) {
             console.error("[DB LOG ERROR]:", logErr.message);
@@ -424,7 +444,30 @@ app.post('/api/admin/models/switch', apiAuth, (req, res) => {
 // API: Get Chat Logs
 app.get('/api/admin/logs', apiAuth, async (req, res) => {
     try {
-        const result = await db.execute("SELECT * FROM chat_logs ORDER BY timestamp DESC LIMIT 50");
+        const result = await db.execute("SELECT * FROM chat_logs ORDER BY timestamp DESC LIMIT 100");
+        res.json({ logs: result.rows });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// API: Get Users List
+app.get('/api/admin/users', apiAuth, async (req, res) => {
+    try {
+        const result = await db.execute("SELECT * FROM users ORDER BY last_seen DESC");
+        res.json({ users: result.rows });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// API: Get Specific User Logs
+app.get('/api/admin/user-logs/:username', apiAuth, async (req, res) => {
+    try {
+        const result = await db.execute({
+            sql: "SELECT * FROM chat_logs WHERE username = ? ORDER BY timestamp DESC LIMIT 50",
+            args: [req.params.username]
+        });
         res.json({ logs: result.rows });
     } catch (e) {
         res.status(500).json({ error: e.message });

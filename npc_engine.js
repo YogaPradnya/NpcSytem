@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const Groq = require('groq-sdk');
@@ -8,6 +9,7 @@ const { createClient } = require('@libsql/client');
 const { getAdminDashboardHTML, getLoginPageHTML } = require('./dashboard.js');
 
 const app = express();
+app.use(cors()); // Izinkan akses dari domain luar/file lokal untuk testing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser('npc-system-secret-88'));

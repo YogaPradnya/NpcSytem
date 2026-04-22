@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const Groq = require('groq-sdk');
 require('dotenv').config();
+const { createClient } = require('@libsql/client');
 const { getAdminDashboardHTML } = require('./dashboard.js');
 
 const app = express();
@@ -61,25 +62,82 @@ function getLevelGuide(level) {
 - Sangat akrab, penuh kasih sayang, dan protektif. Kamu merasa user adalah orang paling berharga.`;
 }
 
-// Load Characters from JSON
-const charactersPath = path.join(__dirname, 'characters.json');
+// Inisialisasi Turso Client
+const db = createClient({
+    url: process.env.TURSO_URL,
+    authToken: process.env.TURSO_AUTH_TOKEN,
+});
+
 let characters = {};
-try {
-    characters = JSON.parse(fs.readFileSync(charactersPath, 'utf-8'));
-    console.log(`[NPC] Loaded ${Object.keys(characters).length} characters.`);
-} catch (e) {
-    console.error("[NPC] Gagal memuat characters.json:", e.message);
+
+// Fungsi untuk inisialisasi Database & Migrasi dari JSON
+async function initDB() {
+    try {
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS characters (
+                id TEXT PRIMARY KEY,
+                npc_name TEXT,
+                npc_description TEXT,
+                npc_personality TEXT,
+                npc_speaking_style TEXT,
+                world_setting TEXT,
+                language TEXT
+            )
+        `);
+        console.log("[DB] Table 'characters' ready.");
+
+        // Ambil data dari Turso
+        const result = await db.execute("SELECT * FROM characters");
+        if (result.rows.length > 0) {
+            result.rows.forEach(row => {
+                characters[row.id] = { ...row };
+            });
+            console.log(`[DB] Loaded ${result.rows.length} characters from Turso.`);
+        } else {
+            // Jika DB kosong, migrasi dari JSON
+            const jsonPath = path.join(__dirname, 'characters.json');
+            if (fs.existsSync(jsonPath)) {
+                const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+                for (const id in jsonData) {
+                    const c = jsonData[id];
+                    await db.execute({
+                        sql: "INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, world_setting, language) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        args: [id, c.npc_name, c.npc_description, c.npc_personality, c.npc_speaking_style, c.world_setting, c.language || 'id']
+                    });
+                    characters[id] = { id, ...c };
+                }
+                console.log("[DB] Migrated data from characters.json to Turso.");
+            }
+        }
+    } catch (e) {
+        console.error("[DB] Gagal inisialisasi database:", e.message);
+    }
 }
+initDB();
 
 // Inisialisasi Groq Clients
 const keys = [
-    process.env.GROQ_API_KEY_1,
+    process.env.GROQ_API_KEY,
     process.env.GROQ_API_KEY_2,
     process.env.GROQ_API_KEY_3,
     process.env.GROQ_API_KEY_4,
     process.env.GROQ_API_KEY_5,
     process.env.GROQ_API_KEY_6,
     process.env.GROQ_API_KEY_7,
+    process.env.GROQ_API_KEY_8,
+    process.env.GROQ_API_KEY_9,
+    process.env.GROQ_API_KEY_10,
+    process.env.GROQ_API_KEY_11,
+    process.env.GROQ_API_KEY_12,
+    process.env.GROQ_API_KEY_13,
+    process.env.GROQ_API_KEY_14,
+    process.env.GROQ_API_KEY_15,
+    process.env.GROQ_API_KEY_16,
+    process.env.GROQ_API_KEY_17,
+    process.env.GROQ_API_KEY_18,
+    process.env.GROQ_API_KEY_19,
+    process.env.GROQ_API_KEY_20,
+
 ].filter(Boolean);
 
 // Inisialisasi Groq Clients dengan status cooldown
@@ -254,28 +312,43 @@ app.get('/admin', (req, res) => {
 });
 
 // API: Save/Update Character
-app.post('/api/characters/save', (req, res) => {
+app.post('/api/characters/save', async (req, res) => {
     const { id, data } = req.body;
     if (!id || !data) return res.status(400).json({ error: "Missing data" });
 
-    characters[id] = data;
     try {
-        fs.writeFileSync(charactersPath, JSON.stringify(characters, null, 2));
-        res.json({ success: true, message: `Character ${id} saved.` });
+        await db.execute({
+            sql: `INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, world_setting, language) 
+                  VALUES (?, ?, ?, ?, ?, ?, ?)
+                  ON CONFLICT(id) DO UPDATE SET 
+                  npc_name=excluded.npc_name, 
+                  npc_description=excluded.npc_description, 
+                  npc_personality=excluded.npc_personality, 
+                  npc_speaking_style=excluded.npc_speaking_style, 
+                  world_setting=excluded.world_setting, 
+                  language=excluded.language`,
+            args: [id, data.npc_name, data.npc_description, data.npc_personality, data.npc_speaking_style, data.world_setting, data.language || 'id']
+        });
+        
+        characters[id] = { id, ...data };
+        res.json({ success: true, message: `Character ${id} saved to Turso.` });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
 // API: Delete Character
-app.post('/api/characters/delete', (req, res) => {
+app.post('/api/characters/delete', async (req, res) => {
     const { id } = req.body;
-    if (!characters[id]) return res.status(404).json({ error: "Not found" });
+    if (!id) return res.status(400).json({ error: "Missing ID" });
 
-    delete characters[id];
     try {
-        fs.writeFileSync(charactersPath, JSON.stringify(characters, null, 2));
-        res.json({ success: true, message: `Character ${id} deleted.` });
+        await db.execute({
+            sql: "DELETE FROM characters WHERE id = ?",
+            args: [id]
+        });
+        delete characters[id];
+        res.json({ success: true, message: `Character ${id} deleted from Turso.` });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

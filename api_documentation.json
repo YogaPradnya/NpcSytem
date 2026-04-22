@@ -1,7 +1,7 @@
 {
   "api_name": "NPC Character Engine",
   "version": "1.0.0",
-  "base_url": "http://localhost:4000",
+  "base_url": "https://npcsytem.onrender.com",
   "endpoints": [
     {
       "path": "/api/npc/v1/chat",
@@ -47,3 +47,22 @@
     }
   ]
 }
+
+
+
+
+
+
+
+
+
+
+curl -X POST https://npcsytem.onrender.com/api/npc/v1/chat \
+-H "Content-Type: application/json" \
+-d '{
+  "message": "Halo Alya, siapa namamu?",
+  "system": {
+    "ai_name": "rikka",
+    "user_name": "Archara"
+  }
+}'

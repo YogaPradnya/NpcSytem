@@ -232,9 +232,9 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 - Dunia: ${char.world_setting}
 
 [KONTEKS SAAT INI]:
-- Lokasi: ${context?.location}
-- Waktu: ${getTimeOfDay()}
-- Suasana: ${context?.mood}
+- Lokasi: ${context?.location || 'Tidak diketahui'}
+- Waktu: ${context?.time || getTimeOfDay()}
+- Suasana: ${context?.mood || 'normal'}
 - User: ${user?.username} (Lv Hati: ${user?.level})
 
 ${getLevelGuide(user?.level)}

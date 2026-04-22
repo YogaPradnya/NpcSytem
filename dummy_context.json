@@ -1,0 +1,14 @@
+{
+  "user": {
+    "username": "Archara",
+    "level": 3,
+    "xp": 450,
+    "is_premium": true
+  },
+  "context": {
+    "location": "Taman Sekolah",
+    "time": "SORE",
+    "mood": "normal",
+    "topic": "Membicarakan tentang hobi masing-masing"
+  }
+}

@@ -411,4 +411,115 @@ function getAdminDashboardHTML(stats) {
     `;
 }
 
-module.exports = { getAdminDashboardHTML };
+function getLoginPageHTML(error = '') {
+    return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Login - NPC Engine</title>
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+        <style>
+            :root {
+                --primary: #f97316;
+                --primary-hover: #ea580c;
+                --bg: #f8fafc;
+                --card: #ffffff;
+                --border: #e2e8f0;
+                --text: #1e293b;
+                --text-muted: #64748b;
+            }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body {
+                font-family: 'Outfit', sans-serif;
+                background: var(--bg);
+                color: var(--text);
+                height: 100vh;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                padding: 1rem;
+            }
+            .login-card {
+                background: var(--card);
+                padding: 2.5rem;
+                width: 100%;
+                max-width: 400px;
+                border: 1px solid var(--border);
+                border-radius: 1rem;
+            }
+            .brand {
+                font-size: 1.5rem;
+                font-weight: 600;
+                color: var(--primary);
+                margin-bottom: 0.5rem;
+                text-align: center;
+            }
+            .subtitle {
+                font-size: 0.85rem;
+                color: var(--text-muted);
+                text-align: center;
+                margin-bottom: 2rem;
+            }
+            .form-group { margin-bottom: 1.25rem; }
+            .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 500; color: var(--text-muted); }
+            .form-group input {
+                width: 100%;
+                padding: 0.75rem;
+                border: 1px solid var(--border);
+                border-radius: 0.5rem;
+                font-family: inherit;
+                outline: none;
+            }
+            .form-group input:focus { border-color: var(--primary); }
+            .btn {
+                width: 100%;
+                background: var(--primary);
+                color: #fff;
+                border: none;
+                padding: 0.75rem;
+                border-radius: 0.5rem;
+                cursor: pointer;
+                font-weight: 600;
+                transition: background 0.2s;
+                margin-top: 0.5rem;
+            }
+            .btn:hover { background: var(--primary-hover); }
+            .error {
+                background: #fef2f2;
+                color: #ef4444;
+                padding: 0.75rem;
+                border-radius: 0.5rem;
+                font-size: 0.8rem;
+                margin-bottom: 1rem;
+                border: 1px solid #fee2e2;
+                text-align: center;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="login-card">
+            <div class="brand">NPC SYSTEM</div>
+            <div class="subtitle">Silakan login untuk mengelola engine</div>
+            
+            ${error ? `<div class="error">${error}</div>` : ''}
+
+            <form action="/login" method="POST">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" name="username" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" name="password" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn">Masuk ke Dashboard</button>
+            </form>
+        </div>
+    </body>
+    </html>
+    `;
+}
+
+module.exports = { getAdminDashboardHTML, getLoginPageHTML };

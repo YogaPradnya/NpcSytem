@@ -2,12 +2,16 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const Groq = require('groq-sdk');
+const cookieParser = require('cookie-parser');
 require('dotenv').config();
 const { createClient } = require('@libsql/client');
-const { getAdminDashboardHTML } = require('./dashboard.js');
+const { getAdminDashboardHTML, getLoginPageHTML } = require('./dashboard.js');
 
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser('npc-system-secret-88'));
+
 // Tambahkan middleware no-cache agar perubahan UI langsung terlihat
 app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -18,25 +22,48 @@ app.get('/', (req, res) => {
     res.redirect('/admin');
 });
 
-// Middleware Basic Auth untuk Admin Dashboard
-const basicAuth = (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-        res.setHeader('WWW-Authenticate', 'Basic realm="Admin Dashboard"');
-        return res.status(401).send('Authentication required');
-    }
-
-    const auth = Buffer.from(authHeader.split(' ')[1], 'base64').toString().split(':');
-    const user = auth[0];
-    const pass = auth[1];
-
-    if (user === process.env.DASHBOARD_USER && pass === process.env.DASHBOARD_PASS) {
+// Middleware Session Auth untuk Admin Dashboard
+const sessionAuth = (req, res, next) => {
+    if (req.signedCookies.isLoggedIn === 'true') {
         next();
     } else {
-        res.setHeader('WWW-Authenticate', 'Basic realm="Admin Dashboard"');
-        return res.status(401).send('Invalid credentials');
+        res.redirect('/login');
     }
 };
+
+// Middleware Session Auth khusus API (kembalikan 401, bukan redirect)
+const apiAuth = (req, res, next) => {
+    if (req.signedCookies.isLoggedIn === 'true') {
+        next();
+    } else {
+        res.status(401).json({ error: 'Unauthorized. Please login.' });
+    }
+};
+
+// Route Login
+app.get('/login', (req, res) => {
+    if (req.signedCookies.isLoggedIn === 'true') return res.redirect('/admin');
+    res.send(getLoginPageHTML());
+});
+
+app.post('/login', (req, res) => {
+    const { username, password } = req.body;
+    if (username === process.env.DASHBOARD_USER && password === process.env.DASHBOARD_PASS) {
+        res.cookie('isLoggedIn', 'true', { 
+            signed: true, 
+            httpOnly: true, 
+            maxAge: 86400000 * 7 // 7 hari
+        });
+        res.redirect('/admin');
+    } else {
+        res.send(getLoginPageHTML('Username atau Password salah!'));
+    }
+});
+
+app.get('/logout', (req, res) => {
+    res.clearCookie('isLoggedIn');
+    res.redirect('/login');
+});
 
 const PORT = process.env.PORT || 4000; // Menggunakan port dari environment atau 4000 jika lokal
 
@@ -205,12 +232,12 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 - Dunia: ${char.world_setting}
 
 [KONTEKS SAAT INI]:
-- Lokasi: ${context?.location || 'Taman Sekolah'}
+- Lokasi: ${context?.location}
 - Waktu: ${getTimeOfDay()}
-- Suasana: ${context?.mood || 'normal'} (good/bad/normal)
-- User: ${user?.username} (Lv Hati: ${user?.level || 0})
+- Suasana: ${context?.mood}
+- User: ${user?.username} (Lv Hati: ${user?.level})
 
-${getLevelGuide(user?.level || 0)}
+${getLevelGuide(user?.level)}
 
 [GAYA BICARA]:
 - VARIASIKAN PANJANG RESPON (Pilih random 1 sampai 4 kalimat pendek).
@@ -330,7 +357,7 @@ app.get('/api/stats', (req, res) => {
 });
 
 // Admin Dashboard UI
-app.get('/admin', basicAuth, (req, res) => {
+app.get('/admin', sessionAuth, (req, res) => {
     const active = groqClients.filter(c => Date.now() > c.cooldownUntil).length;
     const stats = {
         ...globalStats,
@@ -343,7 +370,7 @@ app.get('/admin', basicAuth, (req, res) => {
 });
 
 // API: Get Model Config & Otak Status
-app.get('/api/admin/models', basicAuth, (req, res) => {
+app.get('/api/admin/models', apiAuth, (req, res) => {
     res.json({
         config: aiConfig,
         otak: groqClients.map(c => ({
@@ -356,7 +383,7 @@ app.get('/api/admin/models', basicAuth, (req, res) => {
 });
 
 // API: Toggle Otak
-app.post('/api/admin/models/toggle', basicAuth, (req, res) => {
+app.post('/api/admin/models/toggle', apiAuth, (req, res) => {
     const { id, enabled } = req.body;
     const otak = groqClients.find(c => c.id === id);
     if (otak) {
@@ -368,7 +395,7 @@ app.post('/api/admin/models/toggle', basicAuth, (req, res) => {
 });
 
 // API: Switch Primary Model
-app.post('/api/admin/models/switch', basicAuth, (req, res) => {
+app.post('/api/admin/models/switch', apiAuth, (req, res) => {
     const { primaryModel } = req.body;
     if (primaryModel) {
         aiConfig.primaryModel = primaryModel;

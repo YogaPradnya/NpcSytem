@@ -333,11 +333,19 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
             });
         }
 
-        const fullResponse = completion.choices[0].message.content;
+        let fullResponse = completion.choices[0].message.content;
         
-        // Pecah menjadi kalimat HANYA saat ada Enter (newline)
+        // Hard limit: 300 Karakter (Programmatic safety)
+        if (fullResponse.length > 300) {
+            fullResponse = fullResponse.substring(0, 300);
+            // Coba potong di spasi terakhir agar tidak terputus di tengah kata
+            const lastSpace = fullResponse.lastIndexOf(' ');
+            if (lastSpace > 200) fullResponse = fullResponse.substring(0, lastSpace) + '...';
+        }
+
+        // Pecah menjadi kalimat secara cerdas (Enter atau Titik/Tanda Tanya/Seru/Elipsis)
         let sentences = fullResponse
-            .split(/\n+/)
+            .split(/(?<=[.!?]|[\.]{3})\s+|\n+/)
             .map(s => s.trim())
             .filter(s => s.length > 0)
             .slice(0, 5); // Maksimal 5 sentence (pesan terpisah)

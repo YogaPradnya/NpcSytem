@@ -232,6 +232,7 @@ if (groqClients.length === 0) {
 }   
 
 app.post('/api/npc/v1/chat', async (req, res) => {
+    const startTime = Date.now();
     try {
         const { user, message, context, system } = req.body;
 
@@ -262,8 +263,8 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 ${getLevelGuide(user?.level)}
 
 [GAYA BICARA]:
-- Gunakan 'Enter' (newline) HANYA untuk memisahkan pemikiran yang berbeda atau paragraf baru.
-- MAKSIMAL 5 bagian per jawaban. JANGAN menulis terlalu panjang.
+- Gunakan 'Enter' (newline) untuk memisahkan responmu menjadi 2 sampai 5 bagian (kalimat/paragraf pendek). JANGAN mengirim hanya 1 baris panjang.
+- MAKSIMAL 5 bagian per jawaban.
 - Gunakan elipsis (...) untuk jeda perasaan dalam satu baris.
 - JANGAN GUNAKAN ASTERISK atau 'ANDA'. Pakai 'Kamu/Kau'.
 - Fokus pada pembicaraan tatap muka yang bermakna.
@@ -370,12 +371,17 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
             console.error("[DB LOG ERROR]:", logErr.message);
         }
 
+        const endTime = Date.now();
         const result = {
+            ai_name: aiKey,
+            level: currentHeartLv,
+            model_used: completion.model,
+            processing_time_ms: endTime - startTime,
             sentence_count: sentences.length,
             sentences: sentences
         };
 
-        console.log(`[NPC] Name: ${char.npc_name} | Lv: ${Number(user?.level) || 0} | Sentences: ${sentences.length} | Tokens: ${tokens}`);
+        console.log(`[NPC] Name: ${char.npc_name} | Lv: ${currentHeartLv} | Sentences: ${sentences.length} | Tokens: ${tokens} | ${endTime - startTime}ms`);
         res.json(result);
 
     } catch (e) {

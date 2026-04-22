@@ -1,0 +1,1 @@
+{"ai_name":"emilia","level":2,"model_used":"llama-3.3-70b-versatile","processing_time_ms":1167,"sentence_count":1,"sentences":["Halo... Yogaa, senang bertemu denganmu lagi, aku sedang menikmati pemandangan hutan yang indah ini... bagaimana hari mu hari ini?"]}

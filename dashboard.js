@@ -52,7 +52,6 @@ function getAdminDashboardHTML(stats) {
                 <h1>NPC ENGINE DASHBOARD</h1>
                 <div>
                     <button class="btn" style="background:var(--accent); color:#fff" onclick="openModal()">+ Add character</button>
-                    <button class="btn edit" onclick="location.href='/'">View Chat</button>
                 </div>
             </header>
 

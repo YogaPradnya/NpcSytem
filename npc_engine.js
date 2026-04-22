@@ -13,17 +13,10 @@ app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     next();
 });
-// Redirect root ke Admin
+// Redirect root ke Admin Dashboard
 app.get('/', (req, res) => {
     res.redirect('/admin');
 });
-
-// Route untuk Chat UI
-app.get('/chat', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.use(express.static('public')); // Serve static files (CSS, JS)
 
 // Middleware Basic Auth untuk Admin Dashboard
 const basicAuth = (req, res, next) => {

@@ -405,16 +405,22 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
 
 // API: Get Stats
 app.get('/api/stats', (req, res) => {
-    const active = groqClients.filter(c => Date.now() > c.cooldownUntil).length;
-    const cooldown = groqClients.length - active;
+    const active = groqClients.filter(c => Date.now() > c.cooldownUntil && c.isEnabled).length;
+    const cooldown = groqClients.filter(c => Date.now() <= c.cooldownUntil).length;
     
+    // Get top usage
+    const topChars = Object.entries(globalStats.charUsage)
+        .sort((a,b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, toks]) => ({ name, toks }));
+
     res.json({
         ...globalStats,
         uptime: Math.floor((new Date() - globalStats.startTime) / 1000) + "s",
-        model_primary: 'llama-3.3-70b-versatile',
         available_keys: groqClients.length,
         active_keys: active,
-        cooldown_keys: cooldown
+        cooldown_keys: cooldown,
+        topChars
     });
 });
 
@@ -551,6 +557,22 @@ app.get('/api/characters', (req, res) => {
         ...characters[key]
     }));
     res.json({ success: true, characters: list });
+});
+
+// API: Update User Heart Level
+app.post('/api/admin/users/update-heart', async (req, res) => {
+    const { username, heart_level } = req.body;
+    if (!username) return res.status(400).json({ error: "Missing data" });
+
+    try {
+        await db.execute({
+            sql: "UPDATE users SET heart_level = ? WHERE username = ?",
+            args: [Number(heart_level) || 0, username]
+        });
+        res.json({ success: true, message: `Heart level updated for ${username}` });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.listen(PORT, () => {

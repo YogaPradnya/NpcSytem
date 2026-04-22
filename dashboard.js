@@ -129,7 +129,7 @@ function getAdminDashboardHTML(stats) {
 
             /* Modal */
             .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); justify-content:center; align-items:center; z-index:100; }
-            .modal-content { background:#fff; padding:2rem; border-radius:1rem; width:100%; max-width:600px; max-height: 90vh; overflow-y: auto; border: 1px solid var(--border); }
+            .modal-content { background:#fff; padding:2rem; border-radius:1rem; width:100%; max-width:600px; max-height: 90vh; overflow-y: auto; border: 1px solid var(--border); position: relative; }
             .form-group { margin-bottom: 1.25rem; }
             .form-group label { display:block; margin-bottom:0.5rem; color:var(--text-muted); font-size:0.85rem; font-weight: 500; }
             .form-group input, .form-group textarea, .form-group select { width:100%; padding:0.75rem; background:#fff; border:1px solid var(--border); color:var(--text-main); border-radius:0.5rem; font-family: inherit; }
@@ -171,6 +171,21 @@ function getAdminDashboardHTML(stats) {
                     <div class="stat-card"><h3>Total Tokens</h3><p id="s-tok">${stats.totalTokens}</p></div>
                     <div class="stat-card"><h3>Active Otak</h3><p id="s-active">${stats.active_keys}/${stats.available_keys}</p></div>
                     <div class="stat-card"><h3>Cooldown</h3><p id="s-cooldown" style="color:#ef4444">${stats.cooldown_keys}</p></div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1.5fr 1fr; gap:1.5rem">
+                    <div class="card-section">
+                        <h3 style="font-size:0.9rem; margin-bottom:1rem; color:var(--text-muted)">Top Characters Usage</h3>
+                        <table id="top-char-table">
+                            <thead><tr><th>NPC NAME</th><th style="text-align:right">TOKENS</th></tr></thead>
+                            <tbody id="top-char-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="card-section">
+                        <h3 style="font-size:0.9rem; margin-bottom:1rem; color:var(--text-muted)">System Info</h3>
+                        <div style="font-size:0.9rem; margin-bottom:0.5rem"><b>Uptime:</b> <span id="s-uptime">-</span></div>
+                        <div style="font-size:0.9rem; margin-bottom:0.5rem"><b>Platform:</b> Render / Turso</div>
+                    </div>
                 </div>
             </div>
 
@@ -238,7 +253,10 @@ function getAdminDashboardHTML(stats) {
 
         <!-- USER DETAIL MODAL -->
         <div id="user-modal" class="modal"><div class="modal-content" style="max-width:800px">
-            <h2 id="u-title" style="margin-bottom:1rem">Riwayat Percakapan User</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem">
+                <h2 id="u-title">Riwayat Percakapan User</h2>
+                <button class="btn-outline" style="padding:0.3rem 0.6rem" onclick="document.getElementById('user-modal').style.display='none'">✕</button>
+            </div>
             <div id="user-log-container" style="display:flex; flex-direction:column; gap:1rem"></div>
             <div style="margin-top:1.5rem; text-align:right">
                 <button class="btn" onclick="document.getElementById('user-modal').style.display='none'">Tutup</button>
@@ -291,7 +309,7 @@ function getAdminDashboardHTML(stats) {
                     d.users.forEach(u => {
                         b.innerHTML += '<tr>' +
                             '<td style="font-weight:600">' + u.username + '</td>' +
-                            '<td><span class="badge badge-orange">Lv ' + u.heart_level + '</span></td>' +
+                            '<td><span class="badge badge-orange" style="cursor:pointer" onclick="editHeart(\\''+u.username+'\\', '+u.heart_level+')" title="Click to edit">Lv ' + u.heart_level + ' ✎</span></td>' +
                             '<td style="font-size:0.8rem; color:var(--text-muted)">' + new Date(u.last_seen).toLocaleString('id-ID') + '</td>' +
                             '<td style="text-align:right"><button class="btn btn-outline" onclick="viewUserDetail(\\''+u.username+'\\')">Detail Log</button></td>' +
                         '</tr>';
@@ -385,6 +403,18 @@ function getAdminDashboardHTML(stats) {
             async function toggleOtak(id, enabled) { await fetch('/api/admin/models/toggle', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, enabled}) }); loadModels(); }
             async function switchModel(m) { await fetch('/api/admin/models/switch', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({primaryModel:m}) }); }
 
+            async function editHeart(username, current) {
+                const newVal = prompt('Ubah Level Hati untuk ' + username + ':', current);
+                if (newVal !== null && newVal !== '') {
+                    await fetch('/api/admin/users/update-heart', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, heart_level: newVal })
+                    });
+                    loadUsers();
+                }
+            }
+
             setInterval(async () => {
                 try {
                     const r = await fetch('/api/stats');
@@ -393,6 +423,16 @@ function getAdminDashboardHTML(stats) {
                     document.getElementById('s-tok').innerText = d.totalTokens;
                     document.getElementById('s-active').innerText = d.active_keys + '/' + d.available_keys;
                     document.getElementById('s-cooldown').innerText = d.cooldown_keys;
+                    document.getElementById('s-uptime').innerText = d.uptime;
+
+                    // Update Top Chars
+                    const tb = document.getElementById('top-char-body');
+                    if (tb) {
+                        tb.innerHTML = '';
+                        d.topChars.forEach(c => {
+                            tb.innerHTML += '<tr><td>' + c.name.toUpperCase() + '</td><td style="text-align:right">' + c.toks + '</td></tr>';
+                        });
+                    }
                 } catch(e) {}
             }, 5000);
 

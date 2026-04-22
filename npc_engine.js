@@ -343,9 +343,9 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
             if (lastSpace > 200) fullResponse = fullResponse.substring(0, lastSpace) + '...';
         }
 
-        // Pecah menjadi kalimat secara cerdas (Enter atau Titik/Tanda Tanya/Seru/Elipsis)
+        // Pecah menjadi kalimat secara cerdas (Enter atau Titik/Tanda Tanya/Seru)
         let sentences = fullResponse
-            .split(/(?<=[.!?]|[\.]{3})\s+|\n+/)
+            .split(/(?<=[.!?])\s+|\n+/)
             .map(s => s.trim())
             .filter(s => s.length > 0)
             .slice(0, 5); // Maksimal 5 sentence (pesan terpisah)

@@ -339,6 +339,9 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
             .filter(s => s.length > 0);
 
         // Update Statistik
+        const tokens = completion.usage?.total_tokens || 0;
+        globalStats.totalRequests++;
+        globalStats.totalTokens += tokens;
         if (!globalStats.charUsage[aiKey]) globalStats.charUsage[aiKey] = 0;
         globalStats.charUsage[aiKey] += tokens;
 

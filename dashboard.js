@@ -213,7 +213,7 @@ function getAdminDashboardHTML(stats) {
                 <header><h1>Daftar User Aktif</h1><button class="btn btn-outline" onclick="loadUsers()">Refresh</button></header>
                 <div class="card-section">
                     <table>
-                        <thead><tr><th>USERNAME</th><th>LV HATI</th><th>TERAKHIR AKTIF</th><th style="text-align:right">LOGS</th></tr></thead>
+                        <thead><tr><th>USERNAME</th><th>TERAKHIR AKTIF</th><th style="text-align:right">LOGS</th></tr></thead>
                         <tbody id="user-body"></tbody>
                     </table>
                 </div>
@@ -309,7 +309,6 @@ function getAdminDashboardHTML(stats) {
                     d.users.forEach(u => {
                         b.innerHTML += '<tr>' +
                             '<td style="font-weight:600">' + u.username + '</td>' +
-                            '<td><span class="badge badge-orange" style="cursor:pointer" onclick="editHeart(\\''+u.username+'\\', '+u.heart_level+')" title="Click to edit">Lv ' + u.heart_level + ' ✎</span></td>' +
                             '<td style="font-size:0.8rem; color:var(--text-muted)">' + new Date(u.last_seen).toLocaleString('id-ID') + '</td>' +
                             '<td style="text-align:right"><button class="btn btn-outline" onclick="viewUserDetail(\\''+u.username+'\\')">Detail Log</button></td>' +
                         '</tr>';
@@ -403,17 +402,7 @@ function getAdminDashboardHTML(stats) {
             async function toggleOtak(id, enabled) { await fetch('/api/admin/models/toggle', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, enabled}) }); loadModels(); }
             async function switchModel(m) { await fetch('/api/admin/models/switch', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({primaryModel:m}) }); }
 
-            async function editHeart(username, current) {
-                const newVal = prompt('Ubah Level Hati untuk ' + username + ':', current);
-                if (newVal !== null && newVal !== '') {
-                    await fetch('/api/admin/users/update-heart', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username, heart_level: newVal })
-                    });
-                    loadUsers();
-                }
-            }
+
 
             setInterval(async () => {
                 try {

@@ -159,7 +159,6 @@ async function initDB() {
         await db.execute(`
             CREATE TABLE IF NOT EXISTS users (
                 username TEXT PRIMARY KEY,
-                heart_level INTEGER DEFAULT 0,
                 last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         `);
@@ -363,8 +362,8 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
         
         try {
             await db.execute({
-                sql: "INSERT INTO users (username, heart_level, last_seen) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(username) DO UPDATE SET heart_level=excluded.heart_level, last_seen=CURRENT_TIMESTAMP",
-                args: [currentUsername, currentHeartLv]
+                sql: "INSERT INTO users (username, last_seen) VALUES (?, CURRENT_TIMESTAMP) ON CONFLICT(username) DO UPDATE SET last_seen=CURRENT_TIMESTAMP",
+                args: [currentUsername]
             });
         } catch (uErr) {
             console.error("[DB USER SYNC ERROR]:", uErr.message);
@@ -559,21 +558,7 @@ app.get('/api/characters', (req, res) => {
     res.json({ success: true, characters: list });
 });
 
-// API: Update User Heart Level
-app.post('/api/admin/users/update-heart', async (req, res) => {
-    const { username, heart_level } = req.body;
-    if (!username) return res.status(400).json({ error: "Missing data" });
 
-    try {
-        await db.execute({
-            sql: "UPDATE users SET heart_level = ? WHERE username = ?",
-            args: [Number(heart_level) || 0, username]
-        });
-        res.json({ success: true, message: `Heart level updated for ${username}` });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
 
 app.listen(PORT, () => {
     console.log(`------------------------------------------`);

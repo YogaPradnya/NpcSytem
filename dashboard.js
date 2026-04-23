@@ -419,6 +419,24 @@ function getAdminDashboardHTML(stats) {
             </form>
         </div></div>
 
+        <!-- MODAL: User Logs Popup -->
+        <div id="modal-logs" class="modal">
+            <div class="modal-content" style="max-width: 800px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem">
+                    <h2 id="log-popup-title" style="margin:0">User Logs</h2>
+                    <button class="btn btn-outline" onclick="closeLogModal()" style="border:none; font-size:1.4rem; padding:0">×</button>
+                </div>
+                <div class="card-section" style="max-height: 500px; overflow-y: auto; padding: 0.5rem; border:none; box-shadow:none">
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>TIMESTAMP</th><th>NPC</th><th>DIALOGUE</th></tr></thead>
+                            <tbody id="log-popup-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <script>
             let allLogs = []; let characters = [];
             function toggleMobileMenu() { document.getElementById('sidebar').classList.toggle('mobile-open'); }
@@ -490,8 +508,37 @@ function getAdminDashboardHTML(stats) {
             async function loadUsers() {
                 const r = await fetch('/api/admin/users'); const d = await r.json();
                 const b = document.getElementById('user-body'); b.innerHTML = '';
-                d.users.forEach(u => { b.innerHTML += '<tr><td><strong>'+u.username+'</strong></td><td>'+new Date(u.last_seen).toLocaleString()+'</td><td style="text-align:right"><button class="btn btn-outline" onclick="viewUserDetail(\\''+u.username+'\\')">Details</button></td></tr>'; });
+                d.users.forEach(u => { b.innerHTML += '<tr><td><strong>'+u.username+'</strong></td><td>'+new Date(u.last_seen).toLocaleString()+'</td><td style="text-align:right"><button class="btn btn-outline" onclick="viewUserDetail(\\''+u.username+'\\')">View Logs</button></td></tr>'; });
             }
+
+            async function viewUserDetail(username) {
+                showToast('Fetching logs for ' + username + '...', 'success');
+                const r = await fetch('/api/admin/logs'); 
+                const d = await r.json();
+                const userLogs = d.logs.filter(l => l.username === username);
+                
+                document.getElementById('log-popup-title').innerText = 'Logs for @' + username;
+                const b = document.getElementById('log-popup-body');
+                b.innerHTML = '';
+                
+                if(userLogs.length === 0) {
+                    b.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:2rem">No logs found for this user.</td></tr>';
+                } else {
+                    userLogs.forEach(l => {
+                        b.innerHTML += \`<tr>
+                            <td style="font-size:0.7rem">\${new Date(l.timestamp).toLocaleString()}</td>
+                            <td><strong>\${l.ai_name}</strong></td>
+                            <td>
+                                <div style="background:#f1f5f9; padding:0.4rem; border-radius:5px; font-size:0.8rem; margin-bottom:2px">U: \${l.user_message}</div>
+                                <div style="background:#fff7ed; padding:0.4rem; border-radius:5px; font-size:0.8rem">A: \${l.bot_response}</div>
+                            </td>
+                        </tr>\`;
+                    });
+                }
+                document.getElementById('modal-logs').style.display = 'flex';
+            }
+
+            function closeLogModal() { document.getElementById('modal-logs').style.display = 'none'; }
 
             function loadSimSelect() { document.getElementById('sim-char-select').innerHTML = characters.map(c => c.is_enabled ? '<option value="'+c.id+'">'+c.npc_name+'</option>' : '').join(''); }
             async function sendSim() {

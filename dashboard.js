@@ -436,17 +436,31 @@ function getAdminDashboardHTML(stats, user) {
             </div>
             ` : ''}
 
-            <div id="page-simulator" class="hidden">
-                <header><h1>Simulation Room</h1></header>
-                <div class="sim-container">
-                    <div style="padding:1rem; border-bottom:1px solid #eee; display:flex; justify-content:space-between">
-                        <select id="sim-char-select" style="padding:0.4rem; border-radius:5px"></select>
-                        <button onclick="clearSim()" class="btn-danger">Reset</button>
+            <div id="page-simulator" class="hidden" style="max-width: 800px; margin: 0 auto;">
+                <div class="card" style="padding: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                        <h2 style="margin:0">Live Simulator</h2>
+                        <div style="display: flex; gap: 1rem; align-items: center;">
+                            <div style="display: flex; flex-direction: column;">
+                                <label style="font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Pilih Karakter</label>
+                                <select id="sim-select" style="padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid var(--border); font-family: inherit; font-weight: 600; min-width: 150px; cursor: pointer;"></select>
+                            </div>
+                            <div style="display: flex; flex-direction: column;">
+                                <label style="font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Heart Lv</label>
+                                <input type="number" id="sim-heart" value="0" min="0" max="5" style="width: 70px; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border); font-family: inherit; font-weight: 700; text-align: center;">
+                            </div>
+                            <button class="btn btn-outline" style="align-self: flex-end; padding: 0.65rem 1rem;" onclick="document.getElementById('sim-messages').innerHTML=''">Clear</button>
+                        </div>
                     </div>
-                    <div id="sim-messages"></div>
-                    <div style="padding:1rem; border-top:1px solid #eee; display:flex; gap:0.5rem">
-                        <input type="text" id="sim-input" style="flex:1; padding:0.6rem; border-radius:8px; border:1px solid #ddd" placeholder="Say something..." onkeypress="if(event.key==='Enter') sendSim()">
-                        <button class="btn" onclick="sendSim()">Send</button>
+                    
+                    <div class="sim-container">
+                        <div id="sim-messages">
+                            <div class="msg msg-bot">Halo! Silakan pilih karakter dan ketik pesan untuk mulai simulasi.</div>
+                        </div>
+                        <div style="padding: 1.25rem; background: #f8fafc; border-top: 1px solid var(--border); display: flex; gap: 0.8rem;">
+                            <input type="text" id="sim-input" placeholder="Ketik pesan di sini..." style="flex:1; padding: 0.8rem 1.2rem; border-radius: 12px; border: 1.5px solid var(--border); font-family: inherit; font-weight: 600; outline: none; transition: border-color 0.2s;" onkeypress="if(event.key==='Enter') sendMessage()">
+                            <button onclick="sendMessage()" style="padding: 0.8rem 1.5rem; background: var(--primary); color: #fff; border: none; border-radius: 12px; font-weight: 800; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">KIRIM</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -606,15 +620,51 @@ function getAdminDashboardHTML(stats, user) {
 
             function closeLogModal() { document.getElementById('modal-logs').style.display = 'none'; }
 
-            function loadSimSelect() { document.getElementById('sim-char-select').innerHTML = characters.map(c => c.is_enabled ? '<option value="'+c.id+'">'+c.npc_name+'</option>' : '').join(''); }
-            async function sendSim() {
-                const char = document.getElementById('sim-char-select').value; const msg = document.getElementById('sim-input').value; if(!char || !msg) return;
-                appendMsg('user', msg); document.getElementById('sim-input').value = ''; showToast('Sending message...', 'success');
-                const res = await fetch('/api/npc/v1/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ user: { username: 'Admin', level: 3 }, message: msg, system: { ai_name: char }, context: { history: [] } }) });
-                const d = await res.json(); appendMsg('bot', d.sentences.join('\\n'));
+            function loadSimSelect() {
+                const s = document.getElementById('sim-select'); 
+                s.innerHTML = '';
+                if(window.characters && window.characters.length > 0) {
+                    window.characters.forEach(c => { 
+                        if(c.is_enabled) s.innerHTML += \`<option value="\${c.id}">\${c.npc_name}</option>\`; 
+                    });
+                } else {
+                    fetch('/api/characters').then(r => r.json()).then(d => {
+                        window.characters = d.characters;
+                        window.characters.forEach(c => { 
+                            if(c.is_enabled) s.innerHTML += \`<option value="\${c.id}">\${c.npc_name}</option>\`; 
+                        });
+                    });
+                }
             }
-            function appendMsg(role, text) { const div=document.createElement('div'); div.className='msg msg-'+role; div.innerHTML=text.replace(/\\n/g,'<br>'); document.getElementById('sim-messages').appendChild(div); document.getElementById('sim-messages').scrollTop=9999; }
-            function clearSim() { document.getElementById('sim-messages').innerHTML = ''; }
+
+            async function sendMessage() {
+                const text = document.getElementById('sim-input').value;
+                const heartLv = document.getElementById('sim-heart').value || 0;
+                if(!text) return;
+
+                const box = document.getElementById('sim-messages');
+                box.innerHTML += \`<div class="msg msg-user">\${text}</div>\`;
+                document.getElementById('sim-input').value = '';
+                box.scrollTop = box.scrollHeight;
+
+                try {
+                    const r = await fetch('/api/npc/v1/chat', { 
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            user: { username: 'Admin', level: parseInt(heartLv) }, 
+                            message: text,
+                            system: { ai_name: document.getElementById('sim-select').value }
+                        })
+                    });
+                    const d = await r.json();
+                    const botMsg = d.sentences ? d.sentences.join('\\n') : 'Error: No response';
+                    box.innerHTML += \`<div class="msg msg-bot">\${botMsg.replace(/\\n/g, '<br>')}</div>\`;
+                    box.scrollTop = box.scrollHeight;
+                } catch(e) {
+                    showToast('Failed to send message', 'error');
+                }
+            }
 
             async function toggleChar(id, enabled) { await fetch('/api/characters/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, data:{...characters.find(x=>x.id===id), is_enabled:enabled}}) }); load(); }
             async function deleteChar(id) { 

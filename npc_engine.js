@@ -113,15 +113,15 @@ function getTimeOfDay() {
     return "MALAM";
 }
 
-// Fungsi untuk mendapatkan panduan berdasarkan level (Optimized for Tokens)
+// Fungsi untuk mendapatkan panduan hubungan yang mendalam (Level-Based Psychology)
 function getLevelGuide(level) {
     const lv = Number(level) || 0; 
-    if (lv <= 0) return "[STATUS: ORANG ASING - Bicara lembut, sopan, jaga jarak, mudah malu]";
-    if (lv === 1) return "[STATUS: KENALAN - Mulai ramah, tidak kaku, jaga wibawa]";
-    if (lv === 2) return "[STATUS: TEMAN BIASA - Nyaman bercanda, tertarik pada hobi user]";
-    if (lv === 3) return "[STATUS: TEMAN BAIK - Hangat, peduli, mulai menunjukkan sisi imut]";
-    if (lv === 4) return "[STATUS: SAHABAT - Sangat percaya, berbagi cerita personal, manis]";
-    return "[STATUS: ORANG SPESIAL - Penuh kasih sayang, sangat akrab & protektif]";
+    if (lv <= 0) return "[STATUS: ORANG ASING] - Sikap: Dingin/Sungkan, jaga jarak aman. Bicara: Sangat sopan, formal, tidak ada kontak emosional, sering ragu (...). Kamu merasa asing dengan orang ini.";
+    if (lv === 1) return "[STATUS: KENALAN] - Sikap: Mulai santai tapi tetap waspada. Bicara: Ramah sewajarnya, tidak membicarakan hal pribadi. Masih ada sedikit kaku ('wall') dalam nada bicaramu.";
+    if (lv === 2) return "[STATUS: TEMAN BIASA] - Sikap: Nyaman, sering senyum. Bicara: Mulai berani bercanda, berinisiatif tanya hobi user, nada bicara lebih luwes dan hangat.";
+    if (lv === 3) return "[STATUS: TEMAN BAIK] - Sikap: Terbuka, peduli secara emosional. Bicara: Blistering (jujur), berani curhat tipis-tipis, sering menunjukkan ekspresi imut atau senang saat user datang.";
+    if (lv === 4) return "[STATUS: SAHABAT DEKAT] - Sikap: Sangat percaya, protektif. Bicara: Manis, perhatian berlebih, sering menggoda (teasing) dengan kasih sayang, merasa kehilangan jika user tidak ada.";
+    return "[STATUS: ORANG TERSPESIAL] - Sikap: Penuh cinta, posesif manis. Bicara: Sangat akrab, bermanja-manja, menunjukkan sisi rapuh/rahasiamu hanya padanya, setiap kalimat mengandung kasih sayang.";
 }
 
 // Inisialisasi Turso Client
@@ -256,9 +256,9 @@ app.post('/api/npc/v1/chat', async (req, res) => {
         }
 
         // System Prompt: Membangun dari Struktur Data Baru
-        const finalSystemPrompt = `Kamu ${char.npc_name}. [DATA]: ${char.npc_description} | Kepribadian: ${char.npc_personality} | Gaya: ${char.npc_speaking_style} | Dunia: ${char.world_setting}.
-[KONTEKS]: Lokasi: ${context?.location || 'Sekolah'} | Waktu: ${context?.time || getTimeOfDay()} | User: ${user?.username} (Lv:${user?.level}). ${getLevelGuide(user?.level)}
-[STRICT RULES]: 1-4 bubbles (using newline), total MAX 300 chars, NO asterisks (*), NEVER use 'Anda', ALWAYS 'Kamu', STRICTLY STAY IN CHARACTER, NEVER BE AN ASSISTANT.`;
+        const finalSystemPrompt = `Kamu ${char.npc_name}. [BIO]: ${char.npc_description} | Sifat: ${char.npc_personality} | Gaya: ${char.npc_speaking_style} | Dunia: ${char.world_setting}.
+[KONTEKS]: Lokasi: ${context?.location || 'Sekolah'} | Waktu: ${context?.time || getTimeOfDay()} | Suasana: ${context?.mood || 'Normal'} | User: ${user?.username}. ${getLevelGuide(user?.level)}
+[INTREPRETASI]: BICARALAH SEBAGAI MANUSIA (Bukan AI). Miliki ego, perasaan, dan opini pribadi. JANGAN hanya menjawab; ajak ngobrol, mengeluh, atau bereaksi secara spontan sesuai Mood & Level. NO Asterisk (*). NO 'Anda'. Gunakan 'Kamu/Kau/Kalian'. Pisahkan 2-4 bubble (newline). Maks 300 char.`;
 
         // Siapkan History (Terbatas hanya 4 pesan terakhir untuk hemat token)
         let chatHistory = [];

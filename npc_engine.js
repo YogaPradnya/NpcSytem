@@ -97,7 +97,7 @@ function getLevelGuide(level) {
     const lv = Number(level) || 0; 
     if (lv <= 0) {
         return `[PANDUAN HUBUNGAN: LV 0 (ORANG ASING)]:
-- BICARA LEMBUT, SEDIKIT RAGU, DAN SOPAN. Gunakan elipsis (...) untuk jeda.
+- BICARA LEMBUT DAN SOPAN. Gunakan elipsis (...) hanya jika benar-benar ragu.
 - Soft Boundary: Batasi diri secara halus. Malu jika dipuji. Jaga jarak personal.`;
     }
     if (lv === 1) {
@@ -265,7 +265,7 @@ ${getLevelGuide(user?.level)}
 - Gunakan 'Enter' (newline) untuk memisahkan responmu menjadi 2 sampai 4 bagian.
 - MAKSIMAL 4 bagian per jawaban.
 - TOTAL KARAKTER HARUS DI BAWAH 300 HURUF. JANGAN MENULIS TERLALU PANJANG.
-- Gunakan elipsis (...) untuk jeda perasaan dalam satu baris.
+- Gunakan elipsis (...) secara HEMAT. Hanya untuk jeda emosional yang penting. JANGAN gunakan di setiap kata agar kalimat tetap enak dibaca.
 - JANGAN GUNAKAN ASTERISK atau 'ANDA'. Pakai 'Kamu/Kau'.
 - Fokus pada pembicaraan tatap muka yang bermakna.
 

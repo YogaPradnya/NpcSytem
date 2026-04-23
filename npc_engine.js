@@ -342,12 +342,41 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
             if (lastSpace > 200) fullResponse = fullResponse.substring(0, lastSpace) + '...';
         }
 
-        // Pecah menjadi kalimat secara cerdas (Enter atau Titik/Tanda Tanya/Seru)
-        let sentences = fullResponse
-            .split(/\n+/)
-            .map(s => s.trim())
-            .filter(s => s.length > 0)
-            .slice(0, 4); // Maksimal 4 sentence (pesan terpisah)
+        // Pecah menjadi kalimat (Trigger: Titik atau Koma, abaikan Elipsis ...)
+        const rawFragments = fullResponse
+            .replace(/\.\.\./g, '___ELL___')
+            .split(/(?<=[.!?, \n])/) // Pecah setelah . ! ? , atau \n
+            .map(s => s.replace(/___ELL___/g, '...').trim())
+            .filter(s => s.length > 0);
+
+        let sentences = [];
+        let currentSentence = "";
+
+        for (let fragment of rawFragments) {
+            currentSentence += (currentSentence ? " " : "") + fragment;
+
+            const isStrongBreak = /[.!?]$/.test(fragment); // Titik, Seru, Tanya
+            const isSoftBreak = /[,]$/.test(fragment);    // Koma
+            const isNewline = fragment.includes('\n');    // Enter
+
+            // Logika Cerdas:
+            // - Jika Enter -> Pisah.
+            // - Jika (.!?) dan sudah > 30 karakter -> Pisah (Cukup panjang untuk 1 bubble).
+            // - Jika (,) tapi kalimat sudah kepanjangan (> 60 karakter) -> Pisah agar tidak sesak.
+            if (isNewline || 
+                (isStrongBreak && currentSentence.length >= 30) || 
+                (isSoftBreak && currentSentence.length >= 60) ||
+                currentSentence.length >= 100) {
+                
+                sentences.push(currentSentence.trim());
+                currentSentence = "";
+            }
+        }
+        // Masukkan sisa potongan terakhir jika ada
+        if (currentSentence.trim()) {
+            sentences.push(currentSentence.trim());
+        }
+        sentences = sentences.slice(0, 4); // Maksimal 4 sentence
 
         // Update Statistik
         const tokens = completion.usage?.total_tokens || 0;

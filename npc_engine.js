@@ -379,7 +379,7 @@ app.post('/api/npc/v1/chat', async (req, res) => {
         globalStats.charUsage[aiKey] += tokens;
 
         // Simpan/Update Metadata User
-        const currentUsername = user?.username || 'Guest';
+        const currentUsername = user?.username || system?.user_name || 'Guest';
         const currentHeartLv = Number(user?.level) || 0;
         
         try {

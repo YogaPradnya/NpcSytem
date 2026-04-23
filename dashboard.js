@@ -336,9 +336,12 @@ function getAdminDashboardHTML(stats, user) {
                 ` : ''}
                 <div class="nav-item" onclick="showPage('simulator', this)">Live Simulator</div>
             </nav>
-            <div style="margin-top: auto; padding-top: 2rem;">
+            <div style="margin-top: auto; padding-top: 2rem; border-top: 1px solid rgba(255,255,255,0.05);">
+                <div style="text-align: center; margin-bottom: 1rem;">
+                    <span style="background: rgba(249, 115, 22, 0.1); color: var(--primary); padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.6rem; font-weight: 800; border: 1px solid rgba(249, 115, 22, 0.2);">VERSI 1.0.5</span>
+                </div>
                 <div style="color: var(--text-muted); font-size: 0.65rem; font-weight: 700; margin-bottom: 0.5rem; text-align: center; text-transform: uppercase;">Logged in as ${currentRole}</div>
-                <div style="color: var(--success); font-size: 0.75rem; font-weight: 800; margin-bottom: 1rem; display: flex; align-items: center; padding-left: 0.5rem; letter-spacing: 1px;">
+                <div style="color: var(--success); font-size: 0.75rem; font-weight: 800; margin-bottom: 1rem; display: flex; align-items: center; justify-content: center; letter-spacing: 1px;">
                     ONLINE
                 </div>
                 <button onclick="location.href='/logout'" style="width: 100%; padding: 1rem; background: var(--primary); color: #fff; border: none; border-radius: 0.75rem; font-weight: 800; font-size: 0.95rem; cursor: pointer; transition: all 0.3s;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">

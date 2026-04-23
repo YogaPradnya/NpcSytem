@@ -113,32 +113,15 @@ function getTimeOfDay() {
     return "MALAM";
 }
 
-// Fungsi untuk mendapatkan panduan berdasarkan level (Opsional token)
+// Fungsi untuk mendapatkan panduan berdasarkan level (Optimized for Tokens)
 function getLevelGuide(level) {
     const lv = Number(level) || 0; 
-    if (lv <= 0) {
-        return `[PANDUAN HUBUNGAN: LV 0 (ORANG ASING)]:
-- BICARA LEMBUT DAN SOPAN. Gunakan elipsis (...) hanya jika benar-benar ragu.
-- Soft Boundary: Batasi diri secara halus. Malu jika dipuji. Jaga jarak personal.`;
-    }
-    if (lv === 1) {
-        return `[PANDUAN HUBUNGAN: LV 1 (KENALAN)]:
-- Mulai ramah dan tidak terlalu kaku. Masih menjaga wibawa tapi sudah mau mengobrol santai.`;
-    }
-    if (lv === 2) {
-        return `[PANDUAN HUBUNGAN: LV 2 (TEMAN BIASA)]:
-- Sudah nyaman bercanda sedikit. Menunjukkan ketertarikan pada hobi atau cerita user.`;
-    }
-    if (lv === 3) {
-        return `[PANDUAN HUBUNGAN: LV 3 (TEMAN BAIK)]:
-- Bicara hangat dan peduli. Senang jika user ada di dekatmu. Mulai menunjukkan sisi imut.`;
-    }
-    if (lv === 4) {
-        return `[PANDUAN HUBUNGAN: LV 4 (SAHABAT)]:
-- Sangat percaya pada user. Berbagi cerita personal dan memberikan perhatian ekstra yang manis.`;
-    }
-    return `[PANDUAN HUBUNGAN: LV 5 (ORANG SPESIAL)]:
-- Sangat akrab, penuh kasih sayang, dan protektif. Kamu merasa user adalah orang paling berharga.`;
+    if (lv <= 0) return "[STATUS: ORANG ASING - Bicara lembut, sopan, jaga jarak, mudah malu]";
+    if (lv === 1) return "[STATUS: KENALAN - Mulai ramah, tidak kaku, jaga wibawa]";
+    if (lv === 2) return "[STATUS: TEMAN BIASA - Nyaman bercanda, tertarik pada hobi user]";
+    if (lv === 3) return "[STATUS: TEMAN BAIK - Hangat, peduli, mulai menunjukkan sisi imut]";
+    if (lv === 4) return "[STATUS: SAHABAT - Sangat percaya, berbagi cerita personal, manis]";
+    return "[STATUS: ORANG SPESIAL - Penuh kasih sayang, sangat akrab & protektif]";
 }
 
 // Inisialisasi Turso Client
@@ -273,34 +256,14 @@ app.post('/api/npc/v1/chat', async (req, res) => {
         }
 
         // System Prompt: Membangun dari Struktur Data Baru
-        const finalSystemPrompt = `KAMU ADALAH ${char.npc_name.toUpperCase()} (Bukan AI).
-[PANDUAN KARAKTER]:
-- Deskripsi: ${char.npc_description}
-- Kepribadian: ${char.npc_personality}
-- Gaya Bicara: ${char.npc_speaking_style}
-- Dunia: ${char.world_setting}
-
-[KONTEKS SAAT INI]:
-- Lokasi: ${context?.location || 'Tidak diketahui'}
-- Waktu: ${context?.time || getTimeOfDay()}
-- Suasana: ${context?.mood || 'normal'}
-- User: ${user?.username} (Lv Hati: ${user?.level})
-
-${getLevelGuide(user?.level)}
-
-[GAYA BICARA]:
-- Gunakan 'Enter' (newline) untuk memisahkan responmu menjadi 2 sampai 4 bagian.
-- MAKSIMAL 4 bagian per jawaban.
-- TOTAL KARAKTER HARUS DI BAWAH 300 HURUF. JANGAN MENULIS TERLALU PANJANG.
-- JANGAN GUNAKAN ASTERISK atau 'ANDA'. Pakai 'Kamu/Kau'.
-- Fokus pada pembicaraan tatap muka yang bermakna.
-
-Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEBAGAI ASISTEN.`;
+        const finalSystemPrompt = `Kamu ${char.npc_name}. [DATA]: ${char.npc_description} | Kepribadian: ${char.npc_personality} | Gaya: ${char.npc_speaking_style} | Dunia: ${char.world_setting}.
+[KONTEKS]: Lokasi: ${context?.location || 'Sekolah'} | Waktu: ${context?.time || getTimeOfDay()} | User: ${user?.username} (Lv:${user?.level}). ${getLevelGuide(user?.level)}
+[STRICT RULES]: 1-4 bubbles (using newline), total MAX 300 chars, NO asterisks (*), NEVER use 'Anda', ALWAYS 'Kamu', STRICTLY STAY IN CHARACTER, NEVER BE AN ASSISTANT.`;
 
         // Siapkan History (Terbatas hanya 4 pesan terakhir untuk hemat token)
         let chatHistory = [];
         if (context && Array.isArray(context.history)) {
-            const recentHistory = context.history.slice(-4); 
+            const recentHistory = context.history.slice(-3); 
             chatHistory = recentHistory.map(h => ({
                 role: (h.role === 'bot' || h.role === 'assistant') ? 'assistant' : 'user',
                 content: h.content || h.message || ''
@@ -336,7 +299,7 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
                     ...chatHistory,
                     { role: 'user', content: message }
                 ],
-                max_tokens: 150,
+                max_tokens: 130,
                 temperature: 0.8
             });
             selectedClientObj.stats.success++; // Success!
@@ -408,6 +371,7 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
         sentences = sentences.slice(0, 4); // Maksimal 4 sentence
 
         // Update Statistik
+        const endTime = Date.now();
         const tokens = completion.usage?.total_tokens || 0;
         globalStats.totalRequests++;
         globalStats.totalTokens += tokens;
@@ -437,7 +401,6 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
             console.error("[DB LOG ERROR]:", logErr.message);
         }
 
-        const endTime = Date.now();
         const result = {
             ai_name: aiKey,
             level: currentHeartLv,
@@ -632,13 +595,24 @@ app.post('/api/characters/delete', async (req, res) => {
     }
 });
 
-// API: Get characters list
-app.get('/api/characters', (req, res) => {
-    const list = Object.keys(characters).map(key => ({
-        id: key,
-        ...characters[key]
-    }));
-    res.json({ success: true, characters: list });
+// API: Get characters list (Always get Fresh Data from DB)
+app.get('/api/characters', async (req, res) => {
+    try {
+        const result = await db.execute("SELECT * FROM characters");
+        const list = result.rows.map(row => ({
+            ...row,
+            is_enabled: !!row.is_enabled // Convert 1/0 to true/false
+        }));
+        
+        // Sync back to memory to keep the chat engine fast
+        list.forEach(c => {
+            characters[c.id] = c;
+        });
+
+        res.json({ success: true, characters: list });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 

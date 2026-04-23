@@ -199,6 +199,9 @@ function getAdminDashboardHTML(stats) {
             .otak-stat-label { font-size: 0.6rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
             .otak-stat-value { font-size: 0.91rem; font-weight: 710; }
 
+            /* Mobile Header (Hidden on Desktop) */
+            .mobile-header { display: none; }
+
             /* Switch */
             .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
             .switch input { opacity: 0; width: 0; height: 0; }
@@ -210,7 +213,18 @@ function getAdminDashboardHTML(stats) {
             /* Buttons */
             .btn { background: var(--primary); color:#fff; border:none; padding:0.6rem 1.2rem; border-radius:10px; cursor:pointer; font-weight:600; font-size:0.85rem; }
             .btn-outline { background:#fff; border:1px solid var(--border); color:var(--text-main); }
-            .btn-danger { color:var(--danger); background:transparent; border:none; cursor:pointer; font-weight:600; font-size:0.8rem; }
+            .btn-danger { 
+                background: transparent; 
+                border: 1px solid #fee2e2; 
+                color: var(--danger); 
+                padding: 0.3rem 0.8rem; 
+                border-radius: 8px; 
+                cursor: pointer; 
+                font-weight: 600; 
+                font-size: 0.8rem; 
+                transition: all 0.2s;
+            }
+            .btn-danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
 
             /* Responsive */
             @media (max-width: 1024px) {
@@ -259,9 +273,25 @@ function getAdminDashboardHTML(stats) {
             .form-group label { display:block; margin-bottom:0.5rem; color:var(--text-muted); font-size:0.75rem; font-weight: 700; text-transform: uppercase; }
             .form-group input, .form-group textarea, .form-group select { width:100%; padding:0.75rem; background:#fff; border:1px solid var(--border); color:var(--text-main); border-radius:0.6rem; font-family: inherit; }
             .hidden { display: none !important; }
+
+            /* Toast Notification */
+            #toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+            .toast { 
+                background: #fff; border-radius: 12px; padding: 1rem 1.5rem; 
+                box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); 
+                display: flex; align-items: center; gap: 12px; 
+                min-width: 250px; transform: translateX(120%); transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+                border-left: 4px solid var(--primary);
+            }
+            .toast.show { transform: translateX(0); }
+            .toast.success { border-left-color: var(--success); }
+            .toast.error { border-left-color: var(--danger); }
+            .toast-msg { font-size: 0.85rem; font-weight: 600; color: var(--text-main); }
         </style>
     </head>
     <body>
+        <div id="toast-container"></div>
+
         <div class="mobile-header">
             <div class="brand"><span>NPC</span>SYSTEM</div>
             <button class="menu-toggle" onclick="toggleMobileMenu()" style="color:#fff">☰</button>
@@ -277,8 +307,10 @@ function getAdminDashboardHTML(stats) {
                 <div class="nav-item" onclick="showPage('logs', this)">Log Percakapan</div>
                 <div class="nav-item" onclick="showPage('simulator', this)">Live Simulator</div>
             </nav>
-            <div style="margin-top: auto; padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 12px; margin-bottom: 1rem">
-                <a href="/logout" style="color: #fff; text-decoration: none; font-size: 0.85rem; font-weight: 600;">Logout →</a>
+            <div onclick="location.href='/logout'" style="margin-top: auto; padding: 0.75rem 1rem; background: var(--danger); border-radius: 12px; margin-bottom: 1rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                <a href="/logout" style="color: #fff; text-decoration: none; font-size: 0.85rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+                   <span>Logout</span> <span style="font-size: 1.1rem">→</span>
+                </a>
             </div>
         </aside>
 
@@ -410,7 +442,15 @@ function getAdminDashboardHTML(stats) {
                 const r = await fetch('/api/characters'); const d = await r.json(); (characters = d.characters);
                 const b = document.getElementById('char-body'); b.innerHTML = '';
                 characters.forEach(c => {
-                    b.innerHTML += '<tr><td><b>'+c.npc_name+'</b><br><small>'+c.id+'</small></td><td>'+(c.is_enabled?'ON':'OFF')+'</td><td><label class="switch"><input type="checkbox" '+(c.is_enabled?'checked':'')+' onchange="toggleChar(\\''+c.id+'\\', this.checked)"><span class="slider"></span></label></td><td style="text-align:right"><button class="btn btn-outline" onclick="editChar(\\''+c.id+'\\')">Settings</button></td></tr>';
+                    b.innerHTML += '<tr>' +
+                        '<td><b>' + c.npc_name + '</b><br><small>' + c.id + '</small></td>' +
+                        '<td>' + (c.is_enabled ? '<span style="color:var(--success); font-weight:600">ON</span>' : 'OFF') + '</td>' +
+                        '<td><label class="switch"><input type="checkbox" ' + (c.is_enabled ? 'checked' : '') + ' onchange="toggleChar(\\'' + c.id + '\\', this.checked)"><span class="slider"></span></label></td>' +
+                        '<td style="text-align:right">' +
+                            '<button class="btn btn-outline" style="padding:0.3rem 0.8rem; margin-right:0.5rem" onclick="editChar(\\'' + c.id + '\\')">Settings</button>' +
+                            '<button class="btn-danger" onclick="deleteChar(\\'' + c.id + '\\')">Delete</button>' +
+                        '</td>' +
+                    '</tr>';
                 });
             }
 
@@ -426,7 +466,24 @@ function getAdminDashboardHTML(stats) {
             async function loadLogs() { const r = await fetch('/api/admin/logs'); const d = await r.json(); allLogs = d.logs; renderLogs(allLogs); }
             function renderLogs(logs) {
                 const b = document.getElementById('log-body'); b.innerHTML = '';
-                logs.forEach(l => { b.innerHTML += '<tr><td style="font-size:0.7rem">'+new Date(l.timestamp).toLocaleString()+'</td><td><strong>'+l.ai_name+'</strong><br>@'+l.username+'</td><td style="font-size:0.8rem">U: '+l.user_message+'<br>A: '+l.bot_response+'</td><td style="text-align:right; font-size:0.7rem">'+l.tokens+' toks<br>'+(l.latency||0)+'ms</td></tr>'; });
+                logs.forEach(l => { 
+                    b.innerHTML += \`<tr>
+                        <td style="font-size:0.7rem; color:var(--text-muted)">\${new Date(l.timestamp).toLocaleString()}</td>
+                        <td><strong>\${l.ai_name}</strong><br><span style="color:var(--primary); font-size:0.75rem; font-weight:600">@\${l.username}</span></td>
+                        <td>
+                            <div style="background: #f1f5f9; padding: 0.5rem 0.8rem; border-radius: 8px; margin-bottom: 4px; font-size: 0.8rem; border-left: 3px solid #cbd5e1;">
+                                <small style="color:var(--text-muted); font-weight:700">U:</small> \${l.user_message}
+                            </div>
+                            <div style="background: #fff7ed; padding: 0.5rem 0.8rem; border-radius: 8px; font-size: 0.8rem; border-left: 3px solid var(--primary);">
+                                <small style="color:var(--primary); font-weight:700">A:</small> \${l.bot_response}
+                            </div>
+                        </td>
+                        <td style="text-align:right; font-size:0.7rem; color:var(--text-muted)">
+                            <div style="font-weight:600; color:var(--text-main)">\${l.tokens} toks</div>
+                            <div>\${l.latency||0}ms</div>
+                        </td>
+                    </tr>\`; 
+                });
             }
             function filterLogs() { const q = document.getElementById('log-search').value.toLowerCase(); renderLogs(allLogs.filter(l => l.username.toLowerCase().includes(q) || l.ai_name.toLowerCase().includes(q))); }
 
@@ -439,7 +496,7 @@ function getAdminDashboardHTML(stats) {
             function loadSimSelect() { document.getElementById('sim-char-select').innerHTML = characters.map(c => c.is_enabled ? '<option value="'+c.id+'">'+c.npc_name+'</option>' : '').join(''); }
             async function sendSim() {
                 const char = document.getElementById('sim-char-select').value; const msg = document.getElementById('sim-input').value; if(!char || !msg) return;
-                appendMsg('user', msg); document.getElementById('sim-input').value = '';
+                appendMsg('user', msg); document.getElementById('sim-input').value = ''; showToast('Sending message...', 'success');
                 const res = await fetch('/api/npc/v1/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ user: { username: 'Admin', level: 3 }, message: msg, system: { ai_name: char }, context: { history: [] } }) });
                 const d = await res.json(); appendMsg('bot', d.sentences.join('\\n'));
             }
@@ -447,10 +504,69 @@ function getAdminDashboardHTML(stats) {
             function clearSim() { document.getElementById('sim-messages').innerHTML = ''; }
 
             async function toggleChar(id, enabled) { await fetch('/api/characters/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, data:{...characters.find(x=>x.id===id), is_enabled:enabled}}) }); load(); }
-            async function toggleOtak(id, enabled) { await fetch('/api/admin/models/toggle', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, enabled}) }); loadModels(); }
-            function openModal(id=null) { document.getElementById('modal').style.display='flex'; }
+            async function deleteChar(id) { 
+                if(confirm('Hapus karakter ' + id + ' secara permanen?')) { 
+                    await fetch('/api/characters/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id}) }); 
+                    showToast('Character deleted successfully', 'error');
+                    load(); 
+                } 
+            }
+            async function toggleOtak(id, enabled) { 
+                await fetch('/api/admin/models/toggle', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, enabled}) }); 
+                showToast('AI Node #' + id + ' ' + (enabled ? 'Enabled' : 'Disabled'), enabled ? 'success' : 'error');
+                loadModels(); 
+            }
+            
+            function openModal(id = null) {
+                document.getElementById('modal').style.display = 'flex';
+                const idInput = document.getElementById('f-id');
+                if(id) {
+                    const c = characters.find(x => x.id === id);
+                    if(c) {
+                        idInput.value = c.id; idInput.disabled = true;
+                        document.getElementById('f-name').value = c.npc_name || '';
+                        document.getElementById('f-desc').value = c.npc_description || '';
+                        document.getElementById('f-pers').value = c.npc_personality || '';
+                        document.getElementById('f-style').value = c.npc_speaking_style || '';
+                        document.getElementById('f-world').value = c.world_setting || '';
+                        document.getElementById('m-title').innerText = 'NPC Configuration';
+                    }
+                } else { 
+                    document.getElementById('char-form').reset(); 
+                    idInput.disabled = false; 
+                    document.getElementById('m-title').innerText = 'Create New NPC';
+                }
+            }
             function closeModal() { document.getElementById('modal').style.display='none'; }
             function editChar(id) { openModal(id); }
+
+            document.getElementById('char-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const id = document.getElementById('f-id').value;
+                const c = characters.find(x => x.id === id);
+                const data = { 
+                    npc_name: document.getElementById('f-name').value, 
+                    npc_description: document.getElementById('f-desc').value, 
+                    npc_personality: document.getElementById('f-pers').value, 
+                    npc_speaking_style: document.getElementById('f-style').value, 
+                    world_setting: document.getElementById('f-world').value, 
+                    is_enabled: c ? c.is_enabled : true, 
+                    language: 'id' 
+                };
+                await fetch('/api/characters/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, data}) });
+                showToast('Character saved successfully', 'success');
+                closeModal(); load();
+            };
+
+            function showToast(msg, type = 'success') {
+                const container = document.getElementById('toast-container');
+                const t = document.createElement('div');
+                t.className = \`toast \${type}\`;
+                t.innerHTML = \`<span class="toast-msg">\${msg}</span>\`;
+                container.appendChild(t);
+                setTimeout(() => t.classList.add('show'), 100);
+                setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 500); }, 3000);
+            }
 
             setInterval(async () => {
                 try {
@@ -490,7 +606,7 @@ function getAdminDashboardHTML(stats) {
 }
 
 function getLoginPageHTML(error = '') {
-    return \`
+    return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -513,7 +629,7 @@ function getLoginPageHTML(error = '') {
             <input type="password" name="password" placeholder="Password" required>
             <button type="submit">Login</button>
         </form>
-    </body></html>\`;
+    </body></html>`;
 }
 
 module.exports = { getAdminDashboardHTML, getLoginPageHTML };

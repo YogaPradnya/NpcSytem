@@ -1,4 +1,6 @@
-function getAdminDashboardHTML(stats) {
+function getAdminDashboardHTML(stats, user) {
+    const isAdmin = user && user.role === 'admin';
+    const currentRole = user ? user.role : 'guest';
     return `
     <!DOCTYPE html>
     <html lang="en">
@@ -6,7 +8,7 @@ function getAdminDashboardHTML(stats) {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>NPC SYSTEM - Control Panel</title>
-        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
         <style>
             :root {
                 --primary: #f97316;
@@ -20,6 +22,11 @@ function getAdminDashboardHTML(stats) {
                 --danger: #ef4444;
                 --info: #3b82f6;
             }
+            @keyframes fadeIn { 
+                from { opacity: 0; transform: translateY(8px); } 
+                to { opacity: 1; transform: translateY(0); } 
+            }
+            .animate-fade { animation: fadeIn 0.4s ease-out forwards; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
             body {
                 font-family: 'Outfit', sans-serif;
@@ -31,8 +38,8 @@ function getAdminDashboardHTML(stats) {
             }
 
             aside {
-                width: 260px;
-                background: var(--sidebar-bg);
+                width: 230px;
+                background: #0f172a;
                 color: #fff;
                 display: flex;
                 flex-direction: column;
@@ -40,30 +47,32 @@ function getAdminDashboardHTML(stats) {
                 flex-shrink: 0;
                 z-index: 50;
                 transition: transform 0.3s ease;
+                border-right: 1px solid rgba(255,255,255,0.05);
             }
             .brand {
-                font-size: 1.4rem;
-                font-weight: 700;
-                color: #fff;
-                margin-bottom: 2.5rem;
-                letter-spacing: -0.5px;
-                padding-left: 0.8rem;
+                text-align: center;
+                margin-bottom: 3rem;
+                letter-spacing: 0.5px;
             }
-            .brand span { color: var(--primary); }
-            nav { display: flex; flex-direction: column; gap: 0.4rem; }
+            .brand h1 { font-size: 1.6rem; font-weight: 800; color: #fff; margin-bottom: 4px; text-transform: uppercase; }
+            .brand p { font-size: 0.8rem; color: #64748b; font-weight: 700; letter-spacing: 1px; }
+
+            nav { display: flex; flex-direction: column; gap: 0.8rem; }
             .nav-item {
                 padding: 0.75rem 1rem;
-                border-radius: 0.5rem;
+                border-radius: 0.75rem;
                 cursor: pointer;
                 color: #94a3b8;
-                font-weight: 500;
+                font-weight: 700;
                 transition: all 0.2s;
-                font-size: 0.9rem;
+                font-size: 1rem;
+                text-align: center;
             }
-            .nav-item:hover { background: rgba(255,255,255,0.05); color: #fff; }
+            .nav-item:hover { background: rgba(255,255,255,0.05); color: #fff; transform: translateX(5px); }
             .nav-item.active {
                 background: var(--primary);
                 color: #fff;
+                box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
             }
 
             main {
@@ -73,6 +82,7 @@ function getAdminDashboardHTML(stats) {
                 background: #f8fafc;
                 width: 100%;
             }
+            header h1 { font-size: 2rem; font-weight: 800; }
             header {
                 display: flex;
                 justify-content: space-between;
@@ -103,19 +113,20 @@ function getAdminDashboardHTML(stats) {
             .stat-card.blue { border-left-color: var(--info); }
             .stat-card.green { border-left-color: var(--success); }
             .stat-card.red { border-left-color: var(--danger); }
+            .stat-card:hover { transform: translateY(-5px); box-shadow: 0 12px 20px -5px rgba(0,0,0,0.1); }
             .stat-card.orange { border-left-color: var(--primary); }
 
             .stat-card h3 { 
-                font-size: 0.65rem; 
+                font-size: 0.9rem; 
                 color: var(--text-muted); 
                 text-transform: uppercase; 
-                margin-bottom: 0.75rem; 
-                letter-spacing: 0.5px;
-                font-weight: 700;
+                margin-bottom: 0.5rem; 
+                letter-spacing: 1px;
+                font-weight: 800;
             }
             .stat-card p { 
-                font-size: 1.75rem; 
-                font-weight: 700; 
+                font-size: 2.8rem; 
+                font-weight: 800; 
                 color: #1e293b; 
                 line-height: 1;
             }
@@ -149,36 +160,49 @@ function getAdminDashboardHTML(stats) {
 
             .table-container { overflow-x: auto; }
             table { width: 100%; border-collapse: collapse; }
-            table th { text-align: left; padding: 1rem; color: var(--text-muted); font-size: 0.75rem; border-bottom: 1px solid var(--border); font-weight: 600; text-transform: uppercase; }
-            table td { padding: 1rem; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; vertical-align: middle; }
+            table th { text-align: left; padding: 1rem; color: var(--text-muted); font-size: 0.85rem; border-bottom: 1px solid var(--border); font-weight: 700; text-transform: uppercase; }
+            table td { padding: 1.2rem 1rem; border-bottom: 1px solid #f1f5f9; font-size: 1rem; vertical-align: middle; }
 
             /* Live Feed (Timeline) */
-            .feed-container { display: flex; flex-direction: column; gap: 1rem; }
+            .feed-container { 
+                display: flex; 
+                flex-direction: column; 
+                gap: 1rem; 
+                max-height: 450px; 
+                overflow-y: auto; 
+                padding-right: 10px;
+            }
+            .feed-container::-webkit-scrollbar { width: 5px; }
+            .feed-container::-webkit-scrollbar-track { background: transparent; }
+            .feed-container::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+            .feed-container::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
             .feed-item {
                 display: flex;
-                gap: 1rem;
-                padding-bottom: 1rem;
+                gap: 1.2rem;
+                padding: 1.2rem;
                 border-bottom: 1px solid #f1f5f9;
+                animation: fadeIn 0.5s ease-out;
+                transition: background 0.2s;
             }
-            .feed-item:last-child { border-bottom: none; }
+            .feed-item:hover { background: #f8fafc; }
             .feed-avatar {
-                width: 36px;
-                height: 36px;
-                border-radius: 50%;
+                width: 42px;
+                height: 42px;
+                border-radius: 10px;
                 background: #e2e8f0;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-size: 0.75rem;
-                font-weight: 700;
+                font-size: 0.9rem;
+                font-weight: 800;
                 color: var(--text-muted);
                 flex-shrink: 0;
             }
             .feed-content { flex: 1; }
             .feed-title { font-size: 0.85rem; font-weight: 600; margin-bottom: 2px; }
             .feed-title span { color: var(--primary); font-weight: 700; }
-            .feed-msg { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px; }
-            .feed-time { font-size: 0.65rem; color: #94a3b8; }
+            .feed-msg { font-size: 1rem; color: var(--text-muted); line-height: 1.4; margin: 0.2rem 0; }
+            .feed-time { font-size: 0.75rem; color: #94a3b8; margin-top: 0.4rem; }
 
             /* Otak Card */
             .otak-container { display: flex; flex-direction: column; gap: 0.75rem; }
@@ -298,25 +322,35 @@ function getAdminDashboardHTML(stats) {
         </div>
 
         <aside id="sidebar">
-            <div class="brand"><span>NPC</span>SYSTEM</div>
+            <div class="brand">
+                <h1>ANIMEIN.AI</h1>
+                <p>CONTROL PANEL BY YOGA</p>
+            </div>
             <nav>
-                <div class="nav-item active" onclick="showPage('dashboard', this)">Dashboard</div>
-                <div class="nav-item" onclick="showPage('karakter', this)">Data Karakter</div>
-                <div class="nav-item" onclick="showPage('otak', this)">Manajemen Otak</div>
-                <div class="nav-item" onclick="showPage('users', this)">Daftar User</div>
-                <div class="nav-item" onclick="showPage('logs', this)">Log Percakapan</div>
+                ${isAdmin ? `<div class="nav-item active" onclick="showPage('dashboard', this)">Dashboard</div>` : ''}
+                <div class="nav-item ${!isAdmin ? 'active' : ''}" onclick="showPage('karakter', this)">Data Karakter</div>
+                ${isAdmin ? `
+                    <div class="nav-item" onclick="showPage('otak', this)">Manajemen Otak</div>
+                    <div class="nav-item" onclick="showPage('users', this)">Daftar User</div>
+                    <div class="nav-item" onclick="showPage('logs', this)">Log Percakapan</div>
+                ` : ''}
                 <div class="nav-item" onclick="showPage('simulator', this)">Live Simulator</div>
             </nav>
-            <div onclick="location.href='/logout'" style="margin-top: auto; padding: 0.75rem 1rem; background: var(--danger); border-radius: 12px; margin-bottom: 1rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
-                <a href="/logout" style="color: #fff; text-decoration: none; font-size: 0.85rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
-                   <span>Logout</span> <span style="font-size: 1.1rem">→</span>
-                </a>
+            <div style="margin-top: auto; padding-top: 2rem;">
+                <div style="color: var(--text-muted); font-size: 0.65rem; font-weight: 700; margin-bottom: 0.5rem; text-align: center; text-transform: uppercase;">Logged in as ${currentRole}</div>
+                <div style="color: var(--success); font-size: 0.75rem; font-weight: 800; margin-bottom: 1rem; display: flex; align-items: center; padding-left: 0.5rem; letter-spacing: 1px;">
+                    ONLINE
+                </div>
+                <button onclick="location.href='/logout'" style="width: 100%; padding: 1rem; background: var(--primary); color: #fff; border: none; border-radius: 0.75rem; font-weight: 800; font-size: 0.95rem; cursor: pointer; transition: all 0.3s;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">
+                    LOGOUT
+                </button>
             </div>
         </aside>
 
         <main>
+            ${isAdmin ? `
             <div id="page-dashboard">
-                <header><h1>Dashboard Overview</h1></header>
+                <header><h1>Dashboard</h1></header>
                 
                 <div class="stats-grid">
                     <div class="stat-card orange"><h3>Total Interaction</h3><p id="s-req">${stats.totalRequests}</p></div>
@@ -327,29 +361,36 @@ function getAdminDashboardHTML(stats) {
                 </div>
 
                 <div class="dashboard-bottom">
-                    <!-- Top Usage Table -->
                     <div class="card-section">
-                        <h3><span style="color:var(--primary)">●</span> Top NPCs Usage</h3>
+                        <h3>Top NPCs Usage</h3>
                         <div class="table-container">
                             <table>
                                 <thead><tr><th>NPC NAME</th><th style="text-align:right">TOKENS</th></tr></thead>
-                                <tbody id="top-char-body"></tbody>
+                                <tbody id="top-char-body">${stats.topChars.map(c => '<tr><td>'+c.name.toUpperCase()+'</td><td style="text-align:right">'+c.toks.toLocaleString()+'</td></tr>').join('')}</tbody>
                             </table>
                         </div>
                     </div>
-
-                    <!-- Live Feed Section -->
                     <div class="card-section">
-                        <h3><span style="color:var(--success)">●</span> Recent Activity</h3>
+                        <h3>Recent Activity</h3>
                         <div id="live-feed" class="feed-container">
-                            <div style="text-align:center; padding:2rem; color:var(--text-muted); font-size:0.8rem">Waiting for activity...</div>
+                             ${stats.recentLogs.map(l => `
+                                <div class="feed-item">
+                                    <div class="feed-avatar">${l.ai_name[0].toUpperCase()}</div>
+                                    <div class="feed-content">
+                                        <div class="feed-title"><span>${l.ai_name.toUpperCase()}</span> ← @${l.username}</div>
+                                        <div class="feed-msg" style="color:var(--text-main)"><small style="font-weight:700;color:var(--text-muted)">U:</small> ${l.user_message}</div>
+                                        <div class="feed-msg" style="color:var(--primary)"><small style="font-weight:700">A:</small> ${l.bot_response}</div>
+                                        <div class="feed-time">${new Date(l.timestamp).toLocaleTimeString()}</div>
+                                    </div>
+                                </div>
+                            `).join('')}
                         </div>
                     </div>
                 </div>
             </div>
+            ` : ''}
 
-            <!-- OTHER PAGES (Hidden by default) -->
-            <div id="page-karakter" class="hidden">
+            <div id="page-karakter" class="${isAdmin ? 'hidden' : ''}">
                 <header><h1>Management Karakter</h1><button class="btn" onclick="openModal()">+ Add New NPC</button></header>
                 <div class="card-section"><div class="table-container"><table>
                     <thead><tr><th>CHARACTER</th><th>STATUS</th><th>SWITCH</th><th style="text-align:right">ACTIONS</th></tr></thead>
@@ -357,13 +398,20 @@ function getAdminDashboardHTML(stats) {
                 </table></div></div>
             </div>
 
+            ${isAdmin ? `
             <div id="page-otak" class="hidden">
-                <header><h1>Node Clusters (Otak)</h1></header>
+                <header><h1>Otak</h1></header>
                 <div class="otak-container" id="otak-list"></div>
             </div>
 
             <div id="page-users" class="hidden">
-                <header><h1>User Directory</h1></header>
+                <header>
+                    <h1>User Directory</h1>
+                    <div style="display:flex; gap:1rem; align-items:center">
+                        <input type="text" id="user-search" placeholder="Search username..." onkeyup="filterUsers()" style="padding:0.6rem 1rem; border-radius:10px; border:1px solid var(--border); width:250px; font-size:0.9rem">
+                        <button class="btn btn-outline" onclick="loadUsers()">Refresh</button>
+                    </div>
+                </header>
                 <div class="card-section"><div class="table-container"><table>
                     <thead><tr><th>USERNAME</th><th>LAST ACTIVITY</th><th style="text-align:right">ANALYTICS</th></tr></thead>
                     <tbody id="user-body"></tbody>
@@ -373,8 +421,8 @@ function getAdminDashboardHTML(stats) {
             <div id="page-logs" class="hidden">
                 <header>
                     <h1>Interaction Logs</h1>
-                    <div style="display:flex; gap:0.5rem">
-                        <input type="text" id="log-search" style="padding:0.5rem; border-radius:8px; border:1px solid #ddd" placeholder="Search..." onkeyup="filterLogs()">
+                    <div style="display:flex; gap:1rem; align-items:center">
+                        <input type="text" id="log-search" placeholder="Search actor..." onkeyup="filterLogs()" style="padding:0.6rem 1rem; border-radius:10px; border:1px solid var(--border); width:250px; font-size:0.9rem">
                         <button class="btn btn-outline" onclick="loadLogs()">Sync</button>
                     </div>
                 </header>
@@ -383,6 +431,7 @@ function getAdminDashboardHTML(stats) {
                     <tbody id="log-body"></tbody>
                 </table></div></div>
             </div>
+            ` : ''}
 
             <div id="page-simulator" class="hidden">
                 <header><h1>Simulation Room</h1></header>
@@ -438,13 +487,20 @@ function getAdminDashboardHTML(stats) {
         </div>
 
         <script>
-            let allLogs = []; let characters = [];
+            let allLogs = []; let allUsers = []; let characters = [];
             function toggleMobileMenu() { document.getElementById('sidebar').classList.toggle('mobile-open'); }
 
             function showPage(pageId, el) {
-                document.querySelectorAll('main > div').forEach(p => p.classList.add('hidden'));
+                document.querySelectorAll('main > div').forEach(p => {
+                    p.classList.add('hidden');
+                    p.classList.remove('animate-fade');
+                });
                 const target = document.getElementById('page-' + pageId);
-                if(target) target.classList.remove('hidden');
+                if(target) {
+                    target.classList.remove('hidden');
+                    void target.offsetWidth; // Force reflow for animation
+                    target.classList.add('animate-fade');
+                }
                 document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
                 if(el) el.classList.add('active');
                 if(window.innerWidth < 768 && document.getElementById('sidebar').classList.contains('mobile-open')) toggleMobileMenu();
@@ -506,9 +562,16 @@ function getAdminDashboardHTML(stats) {
             function filterLogs() { const q = document.getElementById('log-search').value.toLowerCase(); renderLogs(allLogs.filter(l => l.username.toLowerCase().includes(q) || l.ai_name.toLowerCase().includes(q))); }
 
             async function loadUsers() {
-                const r = await fetch('/api/admin/users'); const d = await r.json();
+                const r = await fetch('/api/admin/users'); const d = await r.json(); allUsers = d.users;
+                renderUsers(allUsers);
+            }
+            function renderUsers(users) {
                 const b = document.getElementById('user-body'); b.innerHTML = '';
-                d.users.forEach(u => { b.innerHTML += '<tr><td><strong>'+u.username+'</strong></td><td>'+new Date(u.last_seen).toLocaleString()+'</td><td style="text-align:right"><button class="btn btn-outline" onclick="viewUserDetail(\\''+u.username+'\\')">View Logs</button></td></tr>'; });
+                users.forEach(u => { b.innerHTML += '<tr><td><strong>'+u.username+'</strong></td><td>'+new Date(u.last_seen).toLocaleString()+'</td><td style="text-align:right"><button class="btn btn-outline" onclick="viewUserDetail(\\''+u.username+'\\')">View Logs</button></td></tr>'; });
+            }
+            function filterUsers() {
+                const q = document.getElementById('user-search').value.toLowerCase();
+                renderUsers(allUsers.filter(u => u.username.toLowerCase().includes(q)));
             }
 
             async function viewUserDetail(username) {
@@ -636,7 +699,8 @@ function getAdminDashboardHTML(stats) {
                                 <div class="feed-avatar">\${l.ai_name[0].toUpperCase()}</div>
                                 <div class="feed-content">
                                     <div class="feed-title"><span>\${l.ai_name.toUpperCase()}</span> ← @\${l.username}</div>
-                                    <div class="feed-msg">\${l.user_message}</div>
+                                    <div class="feed-msg" style="color:var(--text-main)"><small style="font-weight:700;color:var(--text-muted)">U:</small> \${l.user_message}</div>
+                                    <div class="feed-msg" style="color:var(--primary)"><small style="font-weight:700">A:</small> \${l.bot_response}</div>
                                     <div class="feed-time">\${new Date(l.timestamp).toLocaleTimeString()}</div>
                                 </div>
                             </div>
@@ -645,7 +709,7 @@ function getAdminDashboardHTML(stats) {
                 } catch(e) {}
             }, 5000);
 
-            showPage('dashboard');
+            showPage(isAdmin ? 'dashboard' : 'karakter');
         </script>
     </body>
     </html>
@@ -657,26 +721,44 @@ function getLoginPageHTML(error = '') {
     <!DOCTYPE html>
     <html lang="en">
     <head>
-        <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Login - NPC Engine</title>
-        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600&display=swap" rel="stylesheet">
+        <meta charset="UTF-8">
+        <title>Login - NPC System</title>
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
         <style>
-            body { font-family: 'Outfit', sans-serif; background: #0f172a; height: 100vh; display: flex; align-items:center; justify-content:center; }
-            .card { background: #1e293b; padding: 2.5rem; border-radius: 1.5rem; width: 350px; color: #fff; text-align: center; }
-            input { width: 100%; padding: 0.8rem; margin: 0.5rem 0; border-radius: 0.8rem; border: 1px solid #334155; background: #0f172a; color: #fff; }
-            button { width: 100%; padding: 0.8rem; background: #f97316; border: none; border-radius: 0.8rem; color: #fff; font-weight: 600; margin-top: 1rem; cursor: pointer; }
+            body { font-family: 'Outfit', sans-serif; background: #0f172a; height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; }
+            .login-card { background: #1e293b; padding: 2.5rem; border-radius: 1.5rem; width: 400px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); text-align: center; border: 1px solid rgba(255,255,255,0.05); }
+            h1 { color: #f97316; font-weight: 800; font-size: 1.8rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 1px; }
+            p { color: #64748b; font-size: 0.75rem; font-weight: 600; margin-bottom: 2rem; text-transform: uppercase; letter-spacing: 1px; }
+            .form-group { text-align: left; margin-bottom: 1.25rem; }
+            label { display: block; color: #94a3b8; font-size: 0.75rem; font-weight: 700; margin-bottom: 0.5rem; text-transform: uppercase; }
+            input { width: 100%; padding: 0.85rem 1.2rem; background: #f8fafc; border: 2px solid transparent; border-radius: 0.75rem; font-size: 0.95rem; font-weight: 600; transition: all 0.2s; outline: none; }
+            input:focus { border-color: #f97316; box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1); }
+            button { width: 100%; padding: 1rem; background: #f97316; color: #fff; border: none; border-radius: 0.75rem; font-weight: 800; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; margin-top: 1rem; }
+            button:hover { background: #ea580c; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(249, 115, 22, 0.3); }
+            .error { background: rgba(239, 68, 68, 0.1); color: #ef4444; padding: 0.75rem; border-radius: 0.5rem; font-size: 0.85rem; font-weight: 700; margin-bottom: 1.5rem; border: 1px solid rgba(239, 68, 68, 0.2); }
         </style>
     </head>
     <body>
-        <form class="card" action="/login" method="POST">
-            <h1 style="color:#f97316">NPC SYSTEM</h1>
-            <p style="color:#94a3b8; font-size:0.8rem; margin-bottom:1.5rem">Root Authentication</p>
-            \${error ? \`<p style="color:#ef4444; font-size:0.8rem">\${error}</p>\` : ''}
-            <input type="text" name="username" placeholder="Username" required>
-            <input type="password" name="password" placeholder="Password" required>
-            <button type="submit">Login</button>
-        </form>
-    </body></html>`;
+        <div class="login-card">
+            <h1>NPC SYSTEM</h1>
+            <p>Role Authentication</p>
+            
+            ${error ? `<div class="error">${error}</div>` : ''}
+
+            <form action="/login" method="POST">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" name="username" required placeholder="Enter username">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" name="password" required placeholder="••••••••">
+                </div>
+                <button type="submit">Login</button>
+            </form>
+        </div>
+    </body>
+    </html>`;
 }
 
 module.exports = { getAdminDashboardHTML, getLoginPageHTML };

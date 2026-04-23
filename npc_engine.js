@@ -26,32 +26,53 @@ app.get('/', (req, res) => {
 
 // Middleware Session Auth untuk Admin Dashboard
 const sessionAuth = (req, res, next) => {
-    if (req.signedCookies.isLoggedIn === 'true') {
+    if (req.signedCookies.user) {
+        req.user = JSON.parse(req.signedCookies.user);
         next();
     } else {
         res.redirect('/login');
     }
 };
 
-// Middleware Session Auth khusus API (kembalikan 401, bukan redirect)
+// Middleware Session Auth khusus API
 const apiAuth = (req, res, next) => {
-    if (req.signedCookies.isLoggedIn === 'true') {
+    if (req.signedCookies.user) {
+        req.user = JSON.parse(req.signedCookies.user);
         next();
     } else {
         res.status(401).json({ error: 'Unauthorized. Please login.' });
     }
 };
 
+// Middleware khusus Admin Only
+const adminOnly = (req, res, next) => {
+    if (req.user && req.user.role === 'admin') {
+        next();
+    } else {
+        res.status(403).send("Akses Ditolak: Khusus Admin!");
+    }
+};
+
 // Route Login
 app.get('/login', (req, res) => {
-    if (req.signedCookies.isLoggedIn === 'true') return res.redirect('/admin');
+    if (req.signedCookies.user) return res.redirect('/admin');
     res.send(getLoginPageHTML());
 });
 
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
-    if (username === process.env.DASHBOARD_USER && password === process.env.DASHBOARD_PASS) {
-        res.cookie('isLoggedIn', 'true', { 
+    let role = null;
+    const userIn = (username || '').trim();
+    const passIn = (password || '').trim();
+
+    if (userIn === process.env.ADMIN_USER && passIn === process.env.ADMIN_PASS) {
+        role = 'admin';
+    } else if (userIn === process.env.MOD_USER && passIn === process.env.MOD_PASS) {
+        role = 'asisten';
+    }
+
+    if (role) {
+        res.cookie('user', JSON.stringify({ username, role }), { 
             signed: true, 
             httpOnly: true, 
             maxAge: 86400000 * 7 // 7 hari
@@ -63,7 +84,7 @@ app.post('/login', (req, res) => {
 });
 
 app.get('/logout', (req, res) => {
-    res.clearCookie('isLoggedIn');
+    res.clearCookie('user');
     res.redirect('/login');
 });
 
@@ -453,7 +474,7 @@ app.get('/api/stats', async (req, res) => {
     // Get Recent Logs (Last 5)
     let recentLogs = [];
     try {
-        const logRes = await db.execute("SELECT ai_name, username, user_message, timestamp FROM chat_logs ORDER BY timestamp DESC LIMIT 5");
+        const logRes = await db.execute("SELECT ai_name, username, user_message, bot_response, timestamp FROM chat_logs ORDER BY timestamp DESC LIMIT 5");
         recentLogs = logRes.rows;
     } catch(e) {}
 
@@ -469,20 +490,36 @@ app.get('/api/stats', async (req, res) => {
 });
 
 // Admin Dashboard UI
-app.get('/admin', sessionAuth, (req, res) => {
+app.get('/admin', sessionAuth, async (req, res) => {
     const active = groqClients.filter(c => Date.now() > c.cooldownUntil).length;
+    
+    // Calculate Top Usage for Server Side Rendering
+    const topChars = Object.entries(globalStats.charUsage)
+        .sort((a,b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, toks]) => ({ name, toks }));
+
+    // Get Recent Logs for Server Side Rendering
+    let recentLogs = [];
+    try {
+        const logRes = await db.execute("SELECT ai_name, username, user_message, bot_response, timestamp FROM chat_logs ORDER BY timestamp DESC LIMIT 5");
+        recentLogs = logRes.rows;
+    } catch(e) {}
+
     const stats = {
         ...globalStats,
         uptime: Math.floor((new Date() - globalStats.startTime) / 1000) + "s",
         available_keys: groqClients.length,
         active_keys: active,
-        cooldown_keys: groqClients.length - active
+        cooldown_keys: groqClients.length - active,
+        topChars,
+        recentLogs
     };
-    res.send(getAdminDashboardHTML(stats));
+    res.send(getAdminDashboardHTML(stats, req.user));
 });
 
 // API: Get Model Config & Otak Status
-app.get('/api/admin/models', apiAuth, (req, res) => {
+app.get('/api/admin/models', apiAuth, adminOnly, (req, res) => {
     res.json({
         config: aiConfig,
         otak: groqClients.map(c => ({
@@ -496,7 +533,7 @@ app.get('/api/admin/models', apiAuth, (req, res) => {
 });
 
 // API: Toggle Otak
-app.post('/api/admin/models/toggle', apiAuth, (req, res) => {
+app.post('/api/admin/models/toggle', apiAuth, adminOnly, (req, res) => {
     const { id, enabled } = req.body;
     const otak = groqClients.find(c => c.id === id);
     if (otak) {
@@ -508,7 +545,7 @@ app.post('/api/admin/models/toggle', apiAuth, (req, res) => {
 });
 
 // API: Switch Primary Model
-app.post('/api/admin/models/switch', apiAuth, (req, res) => {
+app.post('/api/admin/models/switch', apiAuth, adminOnly, (req, res) => {
     const { primaryModel } = req.body;
     if (primaryModel) {
         aiConfig.primaryModel = primaryModel;
@@ -519,7 +556,7 @@ app.post('/api/admin/models/switch', apiAuth, (req, res) => {
 });
 
 // API: Get Chat Logs
-app.get('/api/admin/logs', apiAuth, async (req, res) => {
+app.get('/api/admin/logs', apiAuth, adminOnly, async (req, res) => {
     try {
         const result = await db.execute("SELECT * FROM chat_logs ORDER BY timestamp DESC LIMIT 100");
         res.json({ logs: result.rows });
@@ -529,7 +566,7 @@ app.get('/api/admin/logs', apiAuth, async (req, res) => {
 });
 
 // API: Get Users List
-app.get('/api/admin/users', apiAuth, async (req, res) => {
+app.get('/api/admin/users', apiAuth, adminOnly, async (req, res) => {
     try {
         const result = await db.execute("SELECT * FROM users ORDER BY last_seen DESC");
         res.json({ users: result.rows });

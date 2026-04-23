@@ -393,12 +393,14 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 
         // Simpan Log ke Database
         try {
+            const botResponse = sentences.join('\n') || fullResponse; // Fallback ke teks mentah jika pecah kalimat gagal
             await db.execute({
                 sql: "INSERT INTO chat_logs (ai_name, username, user_message, bot_response, tokens, model, latency) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                args: [aiKey, currentUsername, message, sentences.join('\n'), tokens, completion.model, endTime - startTime]
+                args: [aiKey, currentUsername, message, botResponse, tokens, completion.model, endTime - startTime]
             });
+            console.log(`[DB] Log saved successfully for @${currentUsername}`);
         } catch (logErr) {
-            console.error("[DB LOG ERROR]:", logErr.message);
+            console.error("[DB LOG ERROR]: Gagal menyimpan percakapan!", logErr.message);
         }
 
         const result = {
@@ -428,16 +430,19 @@ app.get('/api/stats', async (req, res) => {
     const active = groqClients.filter(c => Date.now() > c.cooldownUntil && c.isEnabled).length;
     const cooldown = groqClients.filter(c => Date.now() <= c.cooldownUntil).length;
     
-    // Get top usage
-    const topChars = Object.entries(globalStats.charUsage)
-        .sort((a,b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([name, toks]) => ({ name, toks }));
+    // Get top usage FROM DATABASE (Persistent)
+    let topChars = [];
+    try {
+        const topRes = await db.execute("SELECT ai_name as name, SUM(tokens) as toks FROM chat_logs GROUP BY ai_name ORDER BY toks DESC LIMIT 5");
+        topChars = topRes.rows;
+    } catch(e) {
+        console.error("[DB STATS ERROR]:", e.message);
+    }
 
     // Get Recent Logs (Last 5)
     let recentLogs = [];
     try {
-        const logRes = await db.execute("SELECT ai_name, username, user_message, bot_response, timestamp FROM chat_logs ORDER BY timestamp DESC LIMIT 5");
+        const logRes = await db.execute("SELECT ai_name, username, user_message, bot_response, timestamp FROM chat_logs ORDER BY id DESC LIMIT 5");
         recentLogs = logRes.rows;
     } catch(e) {}
 
@@ -456,16 +461,17 @@ app.get('/api/stats', async (req, res) => {
 app.get('/admin', sessionAuth, async (req, res) => {
     const active = groqClients.filter(c => Date.now() > c.cooldownUntil).length;
     
-    // Calculate Top Usage for Server Side Rendering
-    const topChars = Object.entries(globalStats.charUsage)
-        .sort((a,b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([name, toks]) => ({ name, toks }));
+    // Calculate Top Usage FROM DATABASE (Persistent)
+    let topChars = [];
+    try {
+        const topRes = await db.execute("SELECT ai_name as name, SUM(tokens) as toks FROM chat_logs GROUP BY ai_name ORDER BY toks DESC LIMIT 5");
+        topChars = topRes.rows;
+    } catch(e) {}
 
     // Get Recent Logs for Server Side Rendering
     let recentLogs = [];
     try {
-        const logRes = await db.execute("SELECT ai_name, username, user_message, bot_response, timestamp FROM chat_logs ORDER BY timestamp DESC LIMIT 5");
+        const logRes = await db.execute("SELECT ai_name, username, user_message, bot_response, timestamp FROM chat_logs ORDER BY id DESC LIMIT 5");
         recentLogs = logRes.rows;
     } catch(e) {}
 

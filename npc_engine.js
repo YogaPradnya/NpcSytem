@@ -153,7 +153,8 @@ async function initDB() {
                 user_message TEXT,
                 bot_response TEXT,
                 tokens INTEGER,
-                model TEXT
+                model TEXT,
+                latency INTEGER
             )
         `);
         await db.execute(`
@@ -223,7 +224,12 @@ const groqClients = keys.map((key, index) => ({
     id: index + 1,
     client: new Groq({ apiKey: key }),
     cooldownUntil: 0,
-    isEnabled: true
+    isEnabled: true,
+    stats: {
+        requests: 0,
+        success: 0,
+        errors: 0
+    }
 }));
 
 if (groqClients.length === 0) {
@@ -265,7 +271,6 @@ ${getLevelGuide(user?.level)}
 - Gunakan 'Enter' (newline) untuk memisahkan responmu menjadi 2 sampai 4 bagian.
 - MAKSIMAL 4 bagian per jawaban.
 - TOTAL KARAKTER HARUS DI BAWAH 300 HURUF. JANGAN MENULIS TERLALU PANJANG.
-- Gunakan elipsis (...) secara HEMAT. Hanya untuk jeda emosional yang penting. JANGAN gunakan di setiap kata agar kalimat tetap enak dibaca.
 - JANGAN GUNAKAN ASTERISK atau 'ANDA'. Pakai 'Kamu/Kau'.
 - Fokus pada pembicaraan tatap muka yang bermakna.
 
@@ -293,6 +298,7 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
 
         const selectedClientObj = availableClients[Math.floor(Math.random() * availableClients.length)];
         const client = selectedClientObj.client;
+        selectedClientObj.stats.requests++; // Increment request count
 
         if (!client) throw new Error("No AI clients available.");
 
@@ -309,10 +315,12 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
                     ...chatHistory,
                     { role: 'user', content: message }
                 ],
-                max_tokens: 150, // Dibatasi agar total karakter di bawah 300
+                max_tokens: 150,
                 temperature: 0.8
             });
+            selectedClientObj.stats.success++; // Success!
         } catch (error) {
+            selectedClientObj.stats.errors++; // Error!
             // Jika error adalah rate limit (token habis)
             if (error.status === 429 || error.message.toLowerCase().includes('rate limit')) {
                 selectedClientObj.cooldownUntil = Date.now() + (3600 * 1000); // Delay 1 jam
@@ -401,8 +409,8 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
         // Simpan Log ke Database
         try {
             await db.execute({
-                sql: "INSERT INTO chat_logs (ai_name, username, user_message, bot_response, tokens, model) VALUES (?, ?, ?, ?, ?, ?)",
-                args: [aiKey, currentUsername, message, sentences.join('\n'), tokens, completion.model]
+                sql: "INSERT INTO chat_logs (ai_name, username, user_message, bot_response, tokens, model, latency) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                args: [aiKey, currentUsername, message, sentences.join('\n'), tokens, completion.model, endTime - startTime]
             });
         } catch (logErr) {
             console.error("[DB LOG ERROR]:", logErr.message);
@@ -473,7 +481,8 @@ app.get('/api/admin/models', apiAuth, (req, res) => {
             id: c.id,
             isEnabled: c.isEnabled,
             isCoolingDown: Date.now() < c.cooldownUntil,
-            cooldownRemaining: Math.max(0, Math.floor((c.cooldownUntil - Date.now()) / 1000))
+            cooldownRemaining: Math.max(0, Math.floor((c.cooldownUntil - Date.now()) / 1000)),
+            stats: c.stats
         }))
     });
 });

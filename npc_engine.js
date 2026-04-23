@@ -440,7 +440,7 @@ Berikan respon yang setara dengan kepribadian ${char.npc_name}. JANGAN JAWAB SEB
 });
 
 // API: Get Stats
-app.get('/api/stats', (req, res) => {
+app.get('/api/stats', async (req, res) => {
     const active = groqClients.filter(c => Date.now() > c.cooldownUntil && c.isEnabled).length;
     const cooldown = groqClients.filter(c => Date.now() <= c.cooldownUntil).length;
     
@@ -450,13 +450,21 @@ app.get('/api/stats', (req, res) => {
         .slice(0, 5)
         .map(([name, toks]) => ({ name, toks }));
 
+    // Get Recent Logs (Last 5)
+    let recentLogs = [];
+    try {
+        const logRes = await db.execute("SELECT ai_name, username, user_message, timestamp FROM chat_logs ORDER BY timestamp DESC LIMIT 5");
+        recentLogs = logRes.rows;
+    } catch(e) {}
+
     res.json({
         ...globalStats,
         uptime: Math.floor((new Date() - globalStats.startTime) / 1000) + "s",
         available_keys: groqClients.length,
         active_keys: active,
         cooldown_keys: cooldown,
-        topChars
+        topChars,
+        recentLogs
     });
 });
 

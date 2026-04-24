@@ -652,7 +652,7 @@ function getAdminDashboardHTML(stats, user) {
                         method: 'POST', 
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ 
-                            user: { username: 'Admin', level: parseInt(heartLv) }, 
+                            user: { username: 'Yogaa', level: parseInt(heartLv) }, 
                             message: text,
                             system: { ai_name: document.getElementById('sim-select').value }
                         })

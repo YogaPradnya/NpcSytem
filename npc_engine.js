@@ -124,6 +124,16 @@ function getLevelGuide(level) {
     return "[STATUS: ORANG TERSPESIAL] - Sikap: Penuh cinta, posesif manis. Bicara: Sangat akrab, bermanja-manja, menunjukkan sisi rapuh/rahasiamu hanya padanya, setiap kalimat mengandung kasih sayang.";
 }
 
+function getDefaultStageLabel(level) {
+    const lv = Number(level) || 0;
+    if (lv === 1) return "kenalan";
+    if (lv === 2) return "teman_biasa";
+    if (lv === 3) return "teman_baik";
+    if (lv === 4) return "sahabat_dekat";
+    if (lv >= 5) return "orang_terspesial";
+    return "belum_kenal";
+}
+
 // Inisialisasi Turso Client
 const db = createClient({
     url: process.env.TURSO_URL,
@@ -303,15 +313,15 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 - Catatan Batasan: ${turnGuide.boundary_note || scene.boundary_note || ''}${dynamicGuardsString}
 
 [STATUS HUBUNGAN DENGAN USER]:
-User: ${user?.username} | Level Kedekatan: ${user?.level || 0} (${relationship.stage_label || 'belum_kenal'})
+User: ${user?.username} | Level Kedekatan: ${user?.level || 0} (${relationship.stage_label || getDefaultStageLabel(user?.level)})
 ${getLevelGuide(user?.level)}
 Gaya bicara & keterbukaan-mu WAJIB sesuai urutan Level Kedekatan ini.
 
 [ATURAN TEKNIS]:
-- BICARALAH SEBAGAI MANUSIA FIKSI, bukan AI.
-- NO Asterisk (*), jangan gunakan aksi roleplay teks, langsung saja ucapannya.
-- DILARANG menggunakan kata 'Anda' dan 'saya' (terlalu kaku/formal). Gunakan 'Aku' untuk dirimu dan 'Kamu/Kau/Kalian' untuk user.
-- Jawab secara natural dan mengalir. Maksimal panjang total: 300 karakter.`;
+- SANGAT PENTING: Kosa kata dan narasi bicaramu WAJIB 100% selaras dengan deskripsi [BIO & SIFAT], gaya bahasa, dan [DUNIA] yang ditetapkan! Sesuaikan juga cara reaksimu dengan Latar Event yang sedang berlangsung!
+- TULISKAN EKSPRESI/AKSI FISIK dengan tanda kurung, misal: (tersipu malu) atau (menunduk).
+- BICARALAH SEBAGAI KARAKTER FIKSI. DILARANG menggunakan kata 'Anda' dan 'saya'. Gunakan panggilan 'Aku' dan 'Kamu/Kau' untuk keakraban.
+- Maksimal panjang total: 500 karakter.`;
 
         // Siapkan History (Terbatas beberapa pesan terakhir untuk hemat token, sekaligus jaga konteks)
         let chatHistory = [];
@@ -378,50 +388,59 @@ Gaya bicara & keterbukaan-mu WAJIB sesuai urutan Level Kedekatan ini.
         }
 
         let fullResponse = completion.choices[0].message.content;
-        
-        // Hard limit: 300 Karakter (Programmatic safety)
-        if (fullResponse.length > 300) {
-            fullResponse = fullResponse.substring(0, 300);
-            // Coba potong di spasi terakhir agar tidak terputus di tengah kata
-            const lastSpace = fullResponse.lastIndexOf(' ');
-            if (lastSpace > 200) fullResponse = fullResponse.substring(0, lastSpace) + '...';
-        }
 
-        // Pecah menjadi kalimat (Trigger: Titik atau Koma, abaikan Elipsis ...)
-        const rawFragments = fullResponse
-            .replace(/\.\.\./g, '___ELL___')
-            .split(/(?<=[.!?, \n])/) // Pecah setelah . ! ? , atau \n
-            .map(s => s.replace(/___ELL___/g, '...').trim())
-            .filter(s => s.length > 0);
-
-        let sentences = [];
-        let currentSentence = "";
-
-        for (let fragment of rawFragments) {
-            currentSentence += (currentSentence ? " " : "") + fragment;
-
-            const isStrongBreak = /[.!?]$/.test(fragment); // Titik, Seru, Tanya
-            const isSoftBreak = /[,]$/.test(fragment);    // Koma
-            const isNewline = fragment.includes('\n');    // Enter
-
-            // Logika Cerdas:
-            // - Jika Enter -> Pisah.
-            // - Jika (.!?) dan sudah > 30 karakter -> Pisah (Cukup panjang untuk 1 bubble).
-            // - Jika (,) tapi kalimat sudah kepanjangan (> 60 karakter) -> Pisah agar tidak sesak.
-            if (isNewline || 
-                (isStrongBreak && currentSentence.length >= 30) || 
-                (isSoftBreak && currentSentence.length >= 60) ||
-                currentSentence.length >= 100) {
-                
-                sentences.push(currentSentence.trim());
-                currentSentence = "";
+        // --- EKSTRAKSI EKSPRESI & AKSI ---
+        // Tangkap teks di dalam tanda () atau [] atau ** untuk dijadikan data terpisah
+        const rpRegex = /[\(\[\*](.*?)[\)\]\*]/g;
+        let extractedExpressions = [];
+        let matchData;
+        while ((matchData = rpRegex.exec(fullResponse)) !== null) {
+            if (matchData[1] && matchData[1].trim().length > 0) {
+                extractedExpressions.push(matchData[1].trim());
             }
         }
-        // Masukkan sisa potongan terakhir jika ada
-        if (currentSentence.trim()) {
-            sentences.push(currentSentence.trim());
+        
+        // Hapus riwayat ekspresi dari balasan utamanya agar tidak merusak bubble percakapan clean text
+        fullResponse = fullResponse.replace(rpRegex, '').replace(/\s{2,}/g, ' ').trim();
+        
+        // Hard limit: 500 Karakter (Programmatic safety)
+        if (fullResponse.length > 500) {
+            fullResponse = fullResponse.substring(0, 500);
+            // Coba potong di spasi terakhir agar tidak terputus di tengah kata
+            const lastSpace = fullResponse.lastIndexOf(' ');
+            if (lastSpace > 400) fullResponse = fullResponse.substring(0, lastSpace) + '...';
         }
-        sentences = sentences.slice(0, 4); // Maksimal 4 sentence
+
+        // Pecah menjadi kalimat penggalan berdasar spasi/panjang teks (Tanpa ketergantungan simbol puitis)
+        const rawLines = fullResponse.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        let sentences = [];
+
+        for (const line of rawLines) {
+            // Jika satu baris sudah cukup ideal (misal < 100 karakter), jadikan 1 bubble utuh
+            if (line.length <= 100) {
+                sentences.push(line);
+                continue;
+            }
+            
+            // Jika barisnya kepanjangan, pecah bersadarkan limit kata demi kata per balon chat
+            const words = line.split(' ');
+            let currentBubble = "";
+            
+            for (const word of words) {
+                // Target sekitar ~95 karakter per bubble supaya pas dibaca di mobile
+                if ((currentBubble.length + word.length) > 95) {
+                    if (currentBubble.trim()) sentences.push(currentBubble.trim());
+                    currentBubble = word;
+                } else {
+                    currentBubble += (currentBubble ? " " : "") + word;
+                }
+            }
+            if (currentBubble.trim()) {
+                sentences.push(currentBubble.trim());
+            }
+        }
+
+        sentences = sentences.slice(0, 4); // Tetap Maksimal 4 sentence sesuai rule
 
         // Update Statistik
         const endTime = Date.now();
@@ -462,7 +481,8 @@ Gaya bicara & keterbukaan-mu WAJIB sesuai urutan Level Kedekatan ini.
             model_used: completion.model,
             processing_time_ms: endTime - startTime,
             sentence_count: sentences.length,
-            sentences: sentences
+            sentences: sentences,
+            expressions: extractedExpressions // <-- Ekspresi karakter terpisah dari chat!
         };
 
         console.log(`[NPC] Name: ${char.npc_name} | Lv: ${currentHeartLv} | Sentences: ${sentences.length} | Tokens: ${tokens} | ${endTime - startTime}ms`);

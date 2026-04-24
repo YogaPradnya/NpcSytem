@@ -255,15 +255,68 @@ app.post('/api/npc/v1/chat', async (req, res) => {
             return res.status(404).json({ success: false, error: `Character '${aiKey}' not found or disabled.` });
         }
 
-        // System Prompt: Membangun dari Struktur Data Baru
-        const finalSystemPrompt = `Kamu ${char.npc_name}. [BIO]: ${char.npc_description} | Sifat: ${char.npc_personality} | Gaya: ${char.npc_speaking_style} | Dunia: ${char.world_setting}.
-[KONTEKS]: Lokasi: ${context?.location || 'Sekolah'} | Waktu: ${context?.time || getTimeOfDay()} | Suasana: ${context?.mood || 'Normal'} | User: ${user?.username}. ${getLevelGuide(user?.level)}
-[INTREPRETASI]: BICARALAH SEBAGAI MANUSIA (Bukan AI). Miliki ego, perasaan, dan opini pribadi. JANGAN hanya menjawab; ajak ngobrol, mengeluh, atau bereaksi secara spontan sesuai Mood & Level. NO Asterisk (*). NO 'Anda'. Gunakan 'Kamu/Kau/Kalian'. Pisahkan 2-4 bubble (newline). Maks 300 char.`;
+        // Extract struktur data baru
+        const scene = context?.scene || {};
+        const story = context?.story || {};
+        const turnGuide = context?.turn_guide || {};
+        const relationship = context?.relationship || {};
+        const opening = context?.opening_narration || {};
 
-        // Siapkan History (Terbatas hanya 4 pesan terakhir untuk hemat token)
+        let dynamicGuards = [];
+        if (story.avoid_reset_to_opening || turnGuide.avoid_resetting_to_opening) {
+            dynamicGuards.push("- JANGAN mengulang konflik/peristiwa awal yang sudah berlalu. Jangan reset ke opener.");
+        }
+        if (turnGuide.on_track) {
+            dynamicGuards.push("- Lanjutkan topik yang sedang berjalan secara natural.");
+        }
+        if (turnGuide.topic_shift) {
+            dynamicGuards.push(`- Arahkan ucapan kembali dengan halus ke topik aktif: ${scene.active_topic || 'utama'}.`);
+        }
+        
+        if (scene.scene_phase === 'closing' || story.story_beat_current === 'closing') {
+            dynamicGuards.push("- Scene sudah mendekati closing. Balasan harus terasa menutup natural, BUKAN membuka konflik baru.");
+        } else {
+            dynamicGuards.push(`- Jangan mengubah masalah kecil menjadi drama besar jika story beat belum mendukung. Jangan buat lompatan emosi mendadak yang tidak sesuai state.`);
+        }
+        
+        if (scene.allowed_npc_poses && scene.allowed_npc_poses.length > 0) {
+            dynamicGuards.push(`- [Wajib Dipatuhi] Gesture tubuh dalam narasi tersirat/feeling pembicaraan: ${scene.allowed_npc_poses.join(', ')}`);
+        }
+
+        const dynamicGuardsString = dynamicGuards.length > 0 ? '\n' + dynamicGuards.join('\n') : '';
+
+        // System Prompt: Membangun dari Struktur Data Baru yang Komprehensif
+        const finalSystemPrompt = `Kamu adalah ${char.npc_name}.
+[BIO & SIFAT]: ${char.npc_description} | Sifat: ${char.npc_personality} | Gaya Bicara: ${char.npc_speaking_style}
+[DUNIA]: ${char.world_setting} | Lokasi: ${context?.location || 'Sekolah'} | Waktu: ${context?.time || getTimeOfDay()}
+
+[LATAR AWAL CERITA] (Hanya Latar): ${opening.story_hook || ''} ${opening.micro_event_hook || ''}
+
+[SITUASI SAAT INI (Kebenaran Utama)]:
+- Ringkasan: ${story.current_scene_summary || ''}
+- Fase Scene: ${scene.scene_phase || ''} | Beat: ${story.story_beat_current || ''}
+- Emosi Berjalan: ${scene.current_emotion || ''}
+- Arah Interaksi: ${scene.interaction_direction || ''}
+
+[PANDUAN BALASAN TURN INI (Prioritas Tertinggi)]:
+- Niat/Intent: ${turnGuide.reply_intent || scene.reply_intent || ''}
+- Catatan Batasan: ${turnGuide.boundary_note || scene.boundary_note || ''}${dynamicGuardsString}
+
+[STATUS HUBUNGAN DENGAN USER]:
+User: ${user?.username} | Level Kedekatan: ${user?.level || 0} (${relationship.stage_label || 'belum_kenal'})
+${getLevelGuide(user?.level)}
+Gaya bicara & keterbukaan-mu WAJIB sesuai urutan Level Kedekatan ini.
+
+[ATURAN TEKNIS]:
+- BICARALAH SEBAGAI MANUSIA FIKSI, bukan AI.
+- NO Asterisk (*), jangan gunakan aksi roleplay teks, langsung saja ucapannya.
+- DILARANG menggunakan kata 'Anda' dan 'saya' (terlalu kaku/formal). Gunakan 'Aku' untuk dirimu dan 'Kamu/Kau/Kalian' untuk user.
+- Jawab secara natural dan mengalir. Maksimal panjang total: 300 karakter.`;
+
+        // Siapkan History (Terbatas beberapa pesan terakhir untuk hemat token, sekaligus jaga konteks)
         let chatHistory = [];
         if (context && Array.isArray(context.history)) {
-            const recentHistory = context.history.slice(-3); 
+            const recentHistory = context.history.slice(-5); // Ambil 5 history terakhir agar lebih nyambung
             chatHistory = recentHistory.map(h => ({
                 role: (h.role === 'bot' || h.role === 'assistant') ? 'assistant' : 'user',
                 content: h.content || h.message || ''

@@ -201,7 +201,7 @@ function getAdminDashboardHTML(stats, user) {
             .feed-content { flex: 1; }
             .feed-title { font-size: 0.85rem; font-weight: 600; margin-bottom: 2px; }
             .feed-title span { color: var(--primary); font-weight: 700; }
-            .feed-msg { font-size: 1rem; color: var(--text-muted); line-height: 1.4; margin: 0.2rem 0; }
+            .feed-msg { font-size: 1rem; color: var(--text-muted); line-height: 1.4; margin: 0.2rem 0; white-space: pre-line; }
             .feed-time { font-size: 0.75rem; color: #94a3b8; margin-top: 0.4rem; }
 
             /* Otak Card */
@@ -565,7 +565,7 @@ function getAdminDashboardHTML(stats, user) {
                             <div style="background: #f1f5f9; padding: 0.5rem 0.8rem; border-radius: 8px; margin-bottom: 4px; font-size: 0.8rem; border-left: 3px solid #cbd5e1;">
                                 <small style="color:var(--text-muted); font-weight:700">U:</small> \${l.user_message}
                             </div>
-                            <div style="background: #fff7ed; padding: 0.5rem 0.8rem; border-radius: 8px; font-size: 0.8rem; border-left: 3px solid var(--primary);">
+                            <div style="background: #fff7ed; padding: 0.5rem 0.8rem; border-radius: 8px; font-size: 0.8rem; border-left: 3px solid var(--primary); white-space: pre-line;">
                                 <small style="color:var(--primary); font-weight:700">A:</small> \${l.bot_response}
                             </div>
                         </td>
@@ -610,7 +610,7 @@ function getAdminDashboardHTML(stats, user) {
                             <td><strong>\${l.ai_name}</strong></td>
                             <td>
                                 <div style="background:#f1f5f9; padding:0.4rem; border-radius:5px; font-size:0.8rem; margin-bottom:2px">U: \${l.user_message}</div>
-                                <div style="background:#fff7ed; padding:0.4rem; border-radius:5px; font-size:0.8rem">A: \${l.bot_response}</div>
+                                <div style="background:#fff7ed; padding:0.4rem; border-radius:5px; font-size:0.8rem; white-space: pre-line;">A: \${l.bot_response}</div>
                             </td>
                         </tr>\`;
                     });

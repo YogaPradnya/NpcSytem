@@ -113,6 +113,14 @@ function getTimeOfDay() {
     return "MALAM";
 }
 
+// Fungsi untuk memformat detik menjadi Jam:Menit:Detik
+function formatUptime(seconds) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return `${h}h ${m}m ${s}s`;
+}
+
 // Fungsi untuk mendapatkan panduan hubungan yang mendalam (Level-Based Psychology)
 function getLevelGuide(level) {
     const lv = Number(level) || 0; 
@@ -521,7 +529,7 @@ app.get('/api/stats', async (req, res) => {
 
     res.json({
         ...globalStats,
-        uptime: Math.floor((new Date() - globalStats.startTime) / 1000) + "s",
+        uptime: formatUptime(Math.floor((new Date() - globalStats.startTime) / 1000)),
         available_keys: groqClients.length,
         active_keys: active,
         cooldown_keys: cooldown,
@@ -550,7 +558,7 @@ app.get('/admin', sessionAuth, async (req, res) => {
 
     const stats = {
         ...globalStats,
-        uptime: Math.floor((new Date() - globalStats.startTime) / 1000) + "s",
+        uptime: formatUptime(Math.floor((new Date() - globalStats.startTime) / 1000)),
         available_keys: groqClients.length,
         active_keys: active,
         cooldown_keys: groqClients.length - active,

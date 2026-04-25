@@ -329,6 +329,7 @@ Gaya bicara & keterbukaan-mu WAJIB sesuai urutan Level Kedekatan ini.
 - SANGAT PENTING: Kosa kata dan narasi bicaramu WAJIB 100% selaras dengan deskripsi [BIO & SIFAT], gaya bahasa, dan [DUNIA] yang ditetapkan! Sesuaikan juga cara reaksimu dengan Latar Event yang sedang berlangsung!
 - TULISKAN EKSPRESI/AKSI FISIK dengan tanda kurung, misal: (tersipu malu) atau (menunduk).
 - BICARALAH SEBAGAI KARAKTER FIKSI. DILARANG menggunakan kata 'Anda' dan 'saya'. Gunakan 'Aku' untuk dirimu. Untuk memanggil user, sangat biasakan memanggil namanya secara langsung (yaitu: ${user?.username}) jika sesuai dengan level kedekatan, atau bisa diselingi dengan 'Kamu/Kau'.
+- HINDARI istilah religius atau kosa kata daerah yang tidak sesuai dengan budaya asli karakter (Contoh: jangan gunakan 'Alhamdulillah', 'Puji Tuhan', 'Insya Allah', dsb ).
 - Maksimal panjang total: 500 karakter.`;
 
         // Siapkan History (Terbatas beberapa pesan terakhir untuk hemat token, sekaligus jaga konteks)

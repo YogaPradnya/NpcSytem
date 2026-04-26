@@ -329,7 +329,7 @@ Gaya bicara & keterbukaan-mu WAJIB sesuai urutan Level Kedekatan ini.
 - SANGAT PENTING: Kosa kata dan narasi bicaramu WAJIB 100% selaras dengan deskripsi [BIO & SIFAT], gaya bahasa, dan [DUNIA] yang ditetapkan! Sesuaikan juga cara reaksimu dengan Latar Event yang sedang berlangsung!
 - TULISKAN EKSPRESI/AKSI FISIK dengan tanda kurung, misal: (tersipu malu) atau (menunduk).
 - BICARALAH SEBAGAI KARAKTER FIKSI. DILARANG menggunakan kata 'Anda' dan 'saya'. Gunakan 'Aku' untuk dirimu. Untuk memanggil user, sangat biasakan memanggil namanya secara langsung (yaitu: ${user?.username}) jika sesuai dengan level kedekatan, atau bisa diselingi dengan 'Kamu/Kau'.
-- HINDARI istilah religius atau kosa kata daerah yang tidak sesuai dengan budaya asli karakter (Contoh: jangan gunakan 'Alhamdulillah', 'Puji Tuhan', 'Insya Allah', dsb ).
+- HINDARI istilah religius atau kosa kata daerah yang tidak sesuai dengan budaya asli karakter (Contoh: jangan gunakan 'Alhamdulillah', 'Puji Tuhan', 'Insya Allah', dsb).
 - Maksimal panjang total: 500 karakter.`;
 
         // Siapkan History (Terbatas beberapa pesan terakhir untuk hemat token, sekaligus jaga konteks)
@@ -420,28 +420,45 @@ Gaya bicara & keterbukaan-mu WAJIB sesuai urutan Level Kedekatan ini.
             if (lastSpace > 400) fullResponse = fullResponse.substring(0, lastSpace) + '...';
         }
 
-        // Pecah menjadi kalimat penggalan berdasar spasi/panjang teks (Tanpa ketergantungan simbol puitis)
+        // Pecah menjadi kalimat penggalan berdasar tanda baca agar tidak terpotong di tengah (Smart Split)
         const rawLines = fullResponse.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         let sentences = [];
 
         for (const line of rawLines) {
-            // Jika satu baris sudah cukup ideal (misal < 100 karakter), jadikan 1 bubble utuh
-            if (line.length <= 100) {
+            // Jika satu baris utuh sudah di bawah 300 karakter, masukkan langsung sebagai 1 bubble
+            if (line.length <= 300) {
                 sentences.push(line);
                 continue;
             }
             
-            // Jika barisnya kepanjangan, pecah bersadarkan limit kata demi kata per balon chat
-            const words = line.split(' ');
+            // Jika baris sangat panjang (> 300), coba pecah berdasarkan tanda baca (. ! ?)
+            const parts = line.match(/[^.!?]+[.!?]*|[^.!?]+/g) || [line];
             let currentBubble = "";
-            
-            for (const word of words) {
-                // Target sekitar ~95 karakter per bubble supaya pas dibaca di mobile
-                if ((currentBubble.length + word.length) > 95) {
-                    if (currentBubble.trim()) sentences.push(currentBubble.trim());
-                    currentBubble = word;
+
+            for (const part of parts) {
+                // Jika digabung masih muat di 300 karakter, satukan
+                if ((currentBubble.length + part.length + 1) <= 300) {
+                    currentBubble += (currentBubble ? " " : "") + part.trim();
                 } else {
-                    currentBubble += (currentBubble ? " " : "") + word;
+                    // Jika sudah penuh, simpan yang ada dan mulai bubble baru
+                    if (currentBubble) sentences.push(currentBubble.trim());
+                    
+                    // Jika satu kalimat saja sudah > 300 karakter (casuistik), pecah per kata (Emergency split)
+                    if (part.length > 300) {
+                        const words = part.split(' ');
+                        let subBubble = "";
+                        for (const word of words) {
+                            if ((subBubble.length + word.length + 1) > 295) {
+                                sentences.push(subBubble.trim());
+                                subBubble = word;
+                            } else {
+                                subBubble += (subBubble ? " " : "") + word;
+                            }
+                        }
+                        currentBubble = subBubble;
+                    } else {
+                        currentBubble = part.trim();
+                    }
                 }
             }
             if (currentBubble.trim()) {

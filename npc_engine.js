@@ -282,8 +282,8 @@ app.post('/api/npc/v1/chat', async (req, res) => {
         const relationship = context?.relationship || {};
 
         let dynamicGuards = [];
-        // Ambil daftar pose dinamis dari FE jika ada, jika tidak gunakan default
-        let allowedPoses = context?.pose || system?.pose || "";
+        // Ambil daftar pose dinamis dari FE (prioritaskan system.ai_pose)
+        let allowedPoses = system?.ai_pose || context?.pose || system?.pose || "";
         if (!Array.isArray(allowedPoses)) allowedPoses = [allowedPoses];
         allowedPoses = allowedPoses.map(p => p.toLowerCase().trim());
 

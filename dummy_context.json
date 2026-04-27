@@ -3,10 +3,31 @@
     "username": "Yogaa",
     "level": 3
   },
+  "message": "Alya, aku baru saja menyelesaikan lukisan ini. Bagaimana menurutmu?",
   "context": {
-    "location": "Taman Sekolah",
+    "location": "Ruang Seni",
     "time": "SORE",
-    "mood": "normal",
-    "topic": "Membicarakan tentang hobi masing-masing"
+    "mood": "creative",
+    "topic": "Hobi Melukis",
+    "problem": "Yogaa ingin menunjukkan hasil karyanya kepada Alya.",
+    "pose": [
+      "smile",
+      "shy",
+      "surprised",
+      "thinking"
+    ],
+    "history": [
+      {
+        "role": "user",
+        "content": "Alya, nanti sore ada waktu?"
+      },
+      {
+        "role": "bot",
+        "content": "Ada apa? Tumben sekali kamu bertanya soal jadwalku."
+      }
+    ]
+  },
+  "system": {
+    "ai_name": "alya"
   }
 }

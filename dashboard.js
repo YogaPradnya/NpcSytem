@@ -338,7 +338,7 @@ function getAdminDashboardHTML(stats, user) {
             </nav>
             <div style="margin-top: auto; padding-top: 2rem; border-top: 1px solid rgba(255,255,255,0.05);">
                 <div style="text-align: center; margin-bottom: 1rem;">
-                    <span style="background: rgba(249, 115, 22, 0.1); color: var(--primary); padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.6rem; font-weight: 800; border: 1px solid rgba(249, 115, 22, 0.2);">VERSI 1.0.5</span>
+                    <span style="background: rgba(249, 115, 22, 0.1); color: var(--primary); padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.6rem; font-weight: 800; border: 1px solid rgba(249, 115, 22, 0.2);">VERSI 1.0.6</span>
                 </div>
                 <div style="color: var(--text-muted); font-size: 0.65rem; font-weight: 700; margin-bottom: 0.5rem; text-align: center; text-transform: uppercase;">Logged in as ${currentRole}</div>
                 <div style="color: var(--success); font-size: 0.75rem; font-weight: 800; margin-bottom: 1rem; display: flex; align-items: center; justify-content: center; letter-spacing: 1px;">
@@ -380,7 +380,11 @@ function getAdminDashboardHTML(stats, user) {
                                 <div class="feed-item">
                                     <div class="feed-avatar">${l.ai_name[0].toUpperCase()}</div>
                                     <div class="feed-content">
-                                        <div class="feed-title"><span>${l.ai_name.toUpperCase()}</span> ← @${l.username}</div>
+                                        <div class="feed-title">
+                                            <span>${l.ai_name.toUpperCase()}</span> 
+                                            <small style="background:var(--primary); color:#fff; padding:1px 4px; border-radius:4px; font-size:0.6rem; vertical-align:middle; margin-left:4px">${l.ai_pose || 'idle'}</small>
+                                            ← @${l.username} <small style="color:var(--text-muted); font-size:0.65rem">Lv.${l.user_level || 0}</small>
+                                        </div>
                                         <div class="feed-msg" style="color:var(--text-main)"><small style="font-weight:700;color:var(--text-muted)">U:</small> ${l.user_message}</div>
                                         <div class="feed-msg" style="color:var(--primary)"><small style="font-weight:700">A:</small> ${l.bot_response}</div>
                                         <div class="feed-time">${new Date(l.timestamp).toLocaleTimeString()}</div>
@@ -558,9 +562,15 @@ function getAdminDashboardHTML(stats, user) {
             function renderLogs(logs) {
                 const b = document.getElementById('log-body'); b.innerHTML = '';
                 logs.forEach(l => { 
-                    b.innerHTML += \`<tr>
+                    b.innerHTML += `<tr>
                         <td style="font-size:0.7rem; color:var(--text-muted)">\${new Date(l.timestamp).toLocaleString()}</td>
-                        <td><strong>\${l.ai_name}</strong><br><span style="color:var(--primary); font-size:0.75rem; font-weight:600">@\${l.username}</span></td>
+                        <td>
+                            <strong>\${l.ai_name.toUpperCase()}</strong> 
+                            <span style="background:var(--primary); color:#fff; padding:2px 6px; border-radius:4px; font-size:0.6rem; margin-left:4px">\${l.ai_pose || 'idle'}</span>
+                            <br>
+                            <span style="color:var(--primary); font-size:0.75rem; font-weight:600">@\${l.username}</span> 
+                            <span style="color:var(--text-muted); font-size:0.65rem; font-weight:700">LV.\${l.user_level || 0}</span>
+                        </td>
                         <td>
                             <div style="background: #f1f5f9; padding: 0.5rem 0.8rem; border-radius: 8px; margin-bottom: 4px; font-size: 0.8rem; border-left: 3px solid #cbd5e1;">
                                 <small style="color:var(--text-muted); font-weight:700">U:</small> \${l.user_message}
@@ -751,7 +761,11 @@ function getAdminDashboardHTML(stats, user) {
                             <div class="feed-item">
                                 <div class="feed-avatar">\${l.ai_name[0].toUpperCase()}</div>
                                 <div class="feed-content">
-                                    <div class="feed-title"><span>\${l.ai_name.toUpperCase()}</span> ← @\${l.username}</div>
+                                    <div class="feed-title">
+                                        <span>\${l.ai_name.toUpperCase()}</span> 
+                                        <small style="background:var(--primary); color:#fff; padding:1px 4px; border-radius:4px; font-size:0.6rem; vertical-align:middle; margin-left:4px">\${l.ai_pose || 'idle'}</small>
+                                        ← @\${l.username} <small style="color:var(--text-muted); font-size:0.65rem">Lv.\${l.user_level || 0}</small>
+                                    </div>
                                     <div class="feed-msg" style="color:var(--text-main)"><small style="font-weight:700;color:var(--text-muted)">U:</small> \${l.user_message}</div>
                                     <div class="feed-msg" style="color:var(--primary)"><small style="font-weight:700">A:</small> \${l.bot_response}</div>
                                     <div class="feed-time">\${new Date(l.timestamp).toLocaleTimeString()}</div>

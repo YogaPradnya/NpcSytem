@@ -176,7 +176,9 @@ async function initDB() {
                 bot_response TEXT,
                 tokens INTEGER,
                 model TEXT,
-                latency INTEGER
+                latency INTEGER,
+                ai_pose TEXT,
+                user_level INTEGER
             )
         `);
         await db.execute(`
@@ -280,8 +282,10 @@ app.post('/api/npc/v1/chat', async (req, res) => {
         const relationship = context?.relationship || {};
 
         let dynamicGuards = [];
-        // Kita gunakan pose whitelist: idle, sad, shy, suprised, smile
-        const allowedPoses = ["idle", "sad", "shy", "suprised", "smile"];
+        // Ambil daftar pose dinamis dari FE jika ada, jika tidak gunakan default
+        let allowedPoses = context?.pose || system?.pose || "";
+        if (!Array.isArray(allowedPoses)) allowedPoses = [allowedPoses];
+        allowedPoses = allowedPoses.map(p => p.toLowerCase().trim());
 
         const dynamicGuardsString = dynamicGuards.length > 0 ? '\n' + dynamicGuards.join('\n') : '';
 
@@ -303,15 +307,11 @@ ${getLevelGuide(user?.level)}
 - DILARANG menggunakan tanda asteris (*) atau tanda kurung untuk gaya narasi. Fokus pada dialog murni.
 
 [ATURAN POSE - WAJIB]:
-Di akhir balasanmu, kamu WAJIB menuliskan satu pose yang paling menggambarkan perasaanmu saat ini dalam format: [POSE: nama_pose]
-Pilihan pose yang tersedia:
-- idle: Netral, tenang, atau sedang mendengarkan.
-- sad: Sedih, kecewa, atau lemas.
-- shy: Malu, tersipu, atau salah tingkah.
-- suprised: Terkejut, kaget, atau heran.
-- smile: Senang, ceria, atau tersenyum ramah.
+Di akhir balasanmu, kamu WAJIB menuliskan satu kode pose yang paling menggambarkan perasaanmu saat ini dalam format: [POSE: nama_pose]
+Kamu HANYA BOLEH memilih satu dari daftar pose berikut:
+${allowedPoses.map(p => `- ${p}`).join('\n')}
 
-Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: smile]"`;
+Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowedPoses[0]}]"`;
 
         // Siapkan History (Terbatas beberapa pesan terakhir untuk hemat token, sekaligus jaga konteks)
         let chatHistory = [];
@@ -379,10 +379,12 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: smile]"`
 
         let fullResponse = completion.choices[0].message.content;
 
-        // --- EKSTRAKSI POSE ---
-        const poseRegex = /\[POSE:\s*(.*?)\]/i;
+        // --- EKSTRAKSI POSE (Lebih Robust) ---
+        let aiPose = allowedPoses[0] || "idle"; // Default ke item pertama dari list yang dibolehkan
+        
+        // Regex untuk mencari [POSE: nama] atau POSE: nama
+        const poseRegex = /(?:\[?\s*POSE\s*[:=]\s*([a-zA-Z0-9_-]+)\s*\]?)/i;
         const poseMatch = fullResponse.match(poseRegex);
-        let aiPose = "idle"; // Fallback
 
         if (poseMatch && poseMatch[1]) {
             const extractedPose = poseMatch[1].toLowerCase().trim();
@@ -391,9 +393,9 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: smile]"`
             }
         }
         
-        // Hapus tag pose dari balasan teks (tapi simpan versi original untuk fallback)
-        const originalWithPose = fullResponse;
-        fullResponse = fullResponse.replace(poseRegex, '').trim();
+        // Hapus tag pose dari balasan teks agar tidak tampil di chat bubble
+        const bracketPoseRegex = /\[?\s*POSE\s*[:=]\s*[a-zA-Z0-9_-]+\s*\]?/gi;
+        fullResponse = fullResponse.replace(bracketPoseRegex, '').trim();
 
         // Hapus juga ekspresi dalam kurung jika ada (untuk keamanan agar chat bubble bersih)
         const rpRegex = /[\(\[\*](.*?)[\)\]\*]/g;
@@ -485,12 +487,12 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: smile]"`
 
         // Simpan Log ke Database
         try {
-            const botResponse = sentences.join('\n') || fullResponse; // Fallback ke teks mentah jika pecah kalimat gagal
+            const botResponse = sentences.join('\n') || fullResponse; 
             await db.execute({
-                sql: "INSERT INTO chat_logs (ai_name, username, user_message, bot_response, tokens, model, latency) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                args: [aiKey, currentUsername, message, botResponse, tokens, completion.model, endTime - startTime]
+                sql: "INSERT INTO chat_logs (ai_name, username, user_message, bot_response, tokens, model, latency, ai_pose, user_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                args: [aiKey, currentUsername, message, botResponse, tokens, completion.model, endTime - startTime, aiPose, currentHeartLv]
             });
-            console.log(`[DB] Log saved successfully for @${currentUsername}`);
+            console.log(`[DB] Log saved for @${currentUsername} | Pose: ${aiPose} | Lv: ${currentHeartLv}`);
         } catch (logErr) {
             console.error("[DB LOG ERROR]: Gagal menyimpan percakapan!", logErr.message);
         }
@@ -534,7 +536,7 @@ app.get('/api/stats', async (req, res) => {
     // Get Recent Logs (Last 5)
     let recentLogs = [];
     try {
-        const logRes = await db.execute("SELECT ai_name, username, user_message, bot_response, timestamp FROM chat_logs ORDER BY id DESC LIMIT 5");
+        const logRes = await db.execute("SELECT ai_name, username, user_message, bot_response, timestamp, ai_pose, user_level FROM chat_logs ORDER BY id DESC LIMIT 5");
         recentLogs = logRes.rows;
     } catch(e) {}
 
@@ -563,7 +565,7 @@ app.get('/admin', sessionAuth, async (req, res) => {
     // Get Recent Logs for Server Side Rendering
     let recentLogs = [];
     try {
-        const logRes = await db.execute("SELECT ai_name, username, user_message, bot_response, timestamp FROM chat_logs ORDER BY id DESC LIMIT 5");
+        const logRes = await db.execute("SELECT ai_name, username, user_message, bot_response, timestamp, ai_pose, user_level FROM chat_logs ORDER BY id DESC LIMIT 5");
         recentLogs = logRes.rows;
     } catch(e) {}
 

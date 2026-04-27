@@ -10,12 +10,6 @@
     "mood": "creative",
     "topic": "Hobi Melukis",
     "problem": "Yogaa ingin menunjukkan hasil karyanya kepada Alya.",
-    "pose": [
-      "smile",
-      "shy",
-      "surprised",
-      "thinking"
-    ],
     "history": [
       {
         "role": "user",
@@ -28,6 +22,11 @@
     ]
   },
   "system": {
-    "ai_name": "alya"
+    "ai_name": "alya",
+    "ai_pose": [
+      "smile",
+      "shy"
+    ],
+    "request_id": "req_575bbce4-bcc3-4cc6-b7d4-43d2f3abc99b"
   }
 }

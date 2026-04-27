@@ -273,64 +273,45 @@ app.post('/api/npc/v1/chat', async (req, res) => {
             return res.status(404).json({ success: false, error: `Character '${aiKey}' not found or disabled.` });
         }
 
-        // Extract struktur data baru
-        const scene = context?.scene || {};
-        const story = context?.story || {};
-        const turnGuide = context?.turn_guide || {};
+        // Extract struktur data baru sesuai request
+        const problem = context?.problem || "";
+        const mood = context?.mood || "";
+        const history = context?.history || [];
         const relationship = context?.relationship || {};
-        const opening = context?.opening_narration || {};
 
         let dynamicGuards = [];
-        if (story.avoid_reset_to_opening || turnGuide.avoid_resetting_to_opening) {
-            dynamicGuards.push("- JANGAN mengulang konflik/peristiwa awal yang sudah berlalu. Jangan reset ke opener.");
-        }
-        if (turnGuide.on_track) {
-            dynamicGuards.push("- Lanjutkan topik yang sedang berjalan secara natural.");
-        }
-        if (turnGuide.topic_shift) {
-            dynamicGuards.push(`- Arahkan ucapan kembali dengan halus ke topik aktif: ${scene.active_topic || 'utama'}.`);
-        }
-        
-        if (scene.scene_phase === 'closing' || story.story_beat_current === 'closing') {
-            dynamicGuards.push("- Scene sudah mendekati closing. Balasan harus terasa menutup natural, BUKAN membuka konflik baru.");
-        } else {
-            dynamicGuards.push(`- Jangan mengubah masalah kecil menjadi drama besar jika story beat belum mendukung. Jangan buat lompatan emosi mendadak yang tidak sesuai state.`);
-        }
-        
-        if (scene.allowed_npc_poses && scene.allowed_npc_poses.length > 0) {
-            dynamicGuards.push(`- [Wajib Dipatuhi] Gesture tubuh dalam narasi tersirat/feeling pembicaraan: ${scene.allowed_npc_poses.join(', ')}`);
-        }
+        // Kita gunakan pose whitelist: idle, sad, shy, suprised, smile
+        const allowedPoses = ["idle", "sad", "shy", "suprised", "smile"];
 
         const dynamicGuardsString = dynamicGuards.length > 0 ? '\n' + dynamicGuards.join('\n') : '';
 
         // System Prompt: Membangun dari Struktur Data Baru yang Komprehensif
         const finalSystemPrompt = `Kamu adalah ${char.npc_name}.
 [BIO & SIFAT]: ${char.npc_description} | Sifat: ${char.npc_personality} | Gaya Bicara: ${char.npc_speaking_style}
-[DUNIA]: ${char.world_setting} | Lokasi: ${context?.location || 'Sekolah'} | Waktu: ${context?.time || getTimeOfDay()}
 
-[LATAR AWAL CERITA] (Hanya Latar): ${opening.story_hook || ''} ${opening.micro_event_hook || ''}
+[KONTEKS UTAMA (Problem)]: ${problem}
+[RESPON/MOOD KAMU]: ${mood}
 
-[SITUASI SAAT INI (Kebenaran Utama)]:
-- Ringkasan: ${story.current_scene_summary || ''}
-- Fase Scene: ${scene.scene_phase || ''} | Beat: ${story.story_beat_current || ''}
-- Emosi Berjalan: ${scene.current_emotion || ''}
-- Arah Interaksi: ${scene.interaction_direction || ''}
-
-[PANDUAN BALASAN TURN INI (Prioritas Tertinggi)]:
-- Niat/Intent: ${turnGuide.reply_intent || scene.reply_intent || ''}
-- Catatan Batasan: ${turnGuide.boundary_note || scene.boundary_note || ''}${dynamicGuardsString}
-
-[STATUS HUBUNGAN DENGAN USER]:
+[STATUS HUBUNGAN]:
 User: ${user?.username} | Level Kedekatan: ${user?.level || 0} (${relationship.stage_label || getDefaultStageLabel(user?.level)})
 ${getLevelGuide(user?.level)}
-Gaya bicara & keterbukaan-mu WAJIB sesuai urutan Level Kedekatan ini.
 
 [ATURAN TEKNIS]:
-- SANGAT PENTING: Kosa kata dan narasi bicaramu WAJIB 100% selaras dengan deskripsi [BIO & SIFAT], gaya bahasa, dan [DUNIA] yang ditetapkan! Sesuaikan juga cara reaksimu dengan Latar Event yang sedang berlangsung!
-- TULISKAN EKSPRESI/AKSI FISIK dengan tanda kurung, misal: (tersipu malu) atau (menunduk).
-- BICARALAH SEBAGAI KARAKTER FIKSI. DILARANG menggunakan kata 'Anda' dan 'saya'. Gunakan 'Aku' untuk dirimu. Untuk memanggil user, sangat biasakan memanggil namanya secara langsung (yaitu: ${user?.username}) jika sesuai dengan level kedekatan, atau bisa diselingi dengan 'Kamu/Kau'.
-- HINDARI istilah religius atau kosa kata daerah yang tidak sesuai dengan budaya asli karakter (Contoh: jangan gunakan 'Alhamdulillah', 'Puji Tuhan', 'Insya Allah', dsb).
-- Maksimal panjang total: 500 karakter.`;
+- BICARALAH SEBAGAI KARAKTER FIKSI. Gunakan 'Aku' untuk dirimu. 
+- CARA MEMANGGIL USER: ${Number(user?.level) >= 2 ? `Sangat disarankan memanggil namanya langsung (${user?.username})` : `Gunakan sebutan umum seperti 'Kamu' atau 'Orang asing'. DILARANG memanggil namanya (${user?.username}) karena kamu belum seakrab itu`}.
+- Maksimal panjang total: 500 karakter.
+- DILARANG menggunakan tanda asteris (*) atau tanda kurung untuk gaya narasi. Fokus pada dialog murni.
+
+[ATURAN POSE - WAJIB]:
+Di akhir balasanmu, kamu WAJIB menuliskan satu pose yang paling menggambarkan perasaanmu saat ini dalam format: [POSE: nama_pose]
+Pilihan pose yang tersedia:
+- idle: Netral, tenang, atau sedang mendengarkan.
+- sad: Sedih, kecewa, atau lemas.
+- shy: Malu, tersipu, atau salah tingkah.
+- suprised: Terkejut, kaget, atau heran.
+- smile: Senang, ceria, atau tersenyum ramah.
+
+Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: smile]"`;
 
         // Siapkan History (Terbatas beberapa pesan terakhir untuk hemat token, sekaligus jaga konteks)
         let chatHistory = [];
@@ -398,19 +379,32 @@ Gaya bicara & keterbukaan-mu WAJIB sesuai urutan Level Kedekatan ini.
 
         let fullResponse = completion.choices[0].message.content;
 
-        // --- EKSTRAKSI EKSPRESI & AKSI ---
-        // Tangkap teks di dalam tanda () atau [] atau ** untuk dijadikan data terpisah
-        const rpRegex = /[\(\[\*](.*?)[\)\]\*]/g;
-        let extractedExpressions = [];
-        let matchData;
-        while ((matchData = rpRegex.exec(fullResponse)) !== null) {
-            if (matchData[1] && matchData[1].trim().length > 0) {
-                extractedExpressions.push(matchData[1].trim());
+        // --- EKSTRAKSI POSE ---
+        const poseRegex = /\[POSE:\s*(.*?)\]/i;
+        const poseMatch = fullResponse.match(poseRegex);
+        let aiPose = "idle"; // Fallback
+
+        if (poseMatch && poseMatch[1]) {
+            const extractedPose = poseMatch[1].toLowerCase().trim();
+            if (allowedPoses.includes(extractedPose)) {
+                aiPose = extractedPose;
             }
         }
         
-        // Hapus riwayat ekspresi dari balasan utamanya agar tidak merusak bubble percakapan clean text
-        fullResponse = fullResponse.replace(rpRegex, '').replace(/\s{2,}/g, ' ').trim();
+        // Hapus tag pose dari balasan teks (tapi simpan versi original untuk fallback)
+        const originalWithPose = fullResponse;
+        fullResponse = fullResponse.replace(poseRegex, '').trim();
+
+        // Hapus juga ekspresi dalam kurung jika ada (untuk keamanan agar chat bubble bersih)
+        const rpRegex = /[\(\[\*](.*?)[\)\]\*]/g;
+        const cleanedText = fullResponse.replace(rpRegex, '').replace(/\s{2,}/g, ' ').trim();
+
+        // FALLBACK: Jika setelah dibersihkan teks jadi kosong, gunakan teks original (tanpa pose)
+        if (!cleanedText || cleanedText.length < 2) {
+            fullResponse = fullResponse || "..."; 
+        } else {
+            fullResponse = cleanedText;
+        }
         
         // Hard limit: 500 Karakter (Programmatic safety)
         if (fullResponse.length > 500) {
@@ -503,12 +497,11 @@ Gaya bicara & keterbukaan-mu WAJIB sesuai urutan Level Kedekatan ini.
 
         const result = {
             ai_name: aiKey,
+            ai_pose: aiPose,
             level: currentHeartLv,
-            model_used: completion.model,
             processing_time_ms: endTime - startTime,
             sentence_count: sentences.length,
-            sentences: sentences,
-            expressions: extractedExpressions // <-- Ekspresi karakter terpisah dari chat!
+            sentences: sentences
         };
 
         console.log(`[NPC] Name: ${char.npc_name} | Lv: ${currentHeartLv} | Sentences: ${sentences.length} | Tokens: ${tokens} | ${endTime - startTime}ms`);

@@ -282,9 +282,11 @@ app.post('/api/npc/v1/chat', async (req, res) => {
         const relationship = context?.relationship || {};
 
         let dynamicGuards = [];
-        // Ambil daftar pose dinamis dari FE (prioritaskan system.ai_pose)
-        let allowedPoses = system?.ai_pose || context?.pose || system?.pose || "";
-        if (!Array.isArray(allowedPoses)) allowedPoses = [allowedPoses];
+        // Ambil daftar pose dinamis dari FE (prioritaskan field di dalam system: ai_pose atau pose)
+        let allowedPoses = system?.ai_pose || system?.pose || context?.pose || "";
+        if (!Array.isArray(allowedPoses) || (Array.isArray(allowedPoses) && allowedPoses.length === 0)) {
+            allowedPoses = ["idle", "sad", "shy", "surprised", "smile"];
+        }
         allowedPoses = allowedPoses.map(p => p.toLowerCase().trim());
 
         const dynamicGuardsString = dynamicGuards.length > 0 ? '\n' + dynamicGuards.join('\n') : '';

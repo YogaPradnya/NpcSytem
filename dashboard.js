@@ -562,7 +562,7 @@ function getAdminDashboardHTML(stats, user) {
             function renderLogs(logs) {
                 const b = document.getElementById('log-body'); b.innerHTML = '';
                 logs.forEach(l => { 
-                    b.innerHTML += `<tr>
+                    b.innerHTML += \`<tr>
                         <td style="font-size:0.7rem; color:var(--text-muted)">\${new Date(l.timestamp).toLocaleString()}</td>
                         <td>
                             <strong>\${l.ai_name.toUpperCase()}</strong> 

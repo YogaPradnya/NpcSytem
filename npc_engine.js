@@ -284,7 +284,7 @@ app.post('/api/npc/v1/chat', async (req, res) => {
         let dynamicGuards = [];
         let allowedPoses = system?.ai_pose || system?.pose || context?.pose || "";
         if (!Array.isArray(allowedPoses) || (Array.isArray(allowedPoses) && allowedPoses.length === 0)) {
-            allowedPoses = ["idle, sad, shy, suprised, smile"];
+            allowedPoses = ["idle", "sad", "shy", "surprised", "smile"];
         }
         allowedPoses = allowedPoses.map(p => p.toLowerCase().trim());
 

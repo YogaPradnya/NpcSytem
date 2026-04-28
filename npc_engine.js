@@ -398,8 +398,8 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
         const bracketPoseRegex = /\[?\s*POSE\s*[:=]\s*[a-zA-Z0-9_-]+\s*\]?/gi;
         fullResponse = fullResponse.replace(bracketPoseRegex, '').trim();
 
-        // Hapus juga ekspresi dalam kurung jika ada (untuk keamanan agar chat bubble bersih)
-        const rpRegex = /[\(\[\*](.*?)[\)\]\*]/g;
+        // Hapus ekspresi narasi [..] dan *..* tetapi biarkan (..) untuk terjemahan
+        const rpRegex = /[\[\*](.*?)[\]\*]/g;
         const cleanedText = fullResponse.replace(rpRegex, '').replace(/\s{2,}/g, ' ').trim();
 
         // FALLBACK: Jika setelah dibersihkan teks jadi kosong, gunakan teks original (tanpa pose)

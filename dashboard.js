@@ -386,7 +386,13 @@ function getAdminDashboardHTML(stats, user) {
                                             ← @${l.username} <small style="color:var(--text-muted); font-size:0.65rem">Lv.${l.user_level || 0}</small>
                                         </div>
                                         <div class="feed-msg" style="color:var(--text-main)"><small style="font-weight:700;color:var(--text-muted)">U:</small> ${l.user_message}</div>
-                                        <div class="feed-msg" style="color:var(--primary)"><small style="font-weight:700">A:</small> ${l.bot_response}</div>
+                                        <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+                                            ${l.bot_response.split('\n').map((s, idx) => 
+                                                '<div class="feed-msg" style="color:var(--primary); margin:0;">' +
+                                                (idx === 0 ? '<small style="font-weight:700">A:</small> ' : '') + s +
+                                                '</div>'
+                                            ).join('')}
+                                        </div>
                                         <div class="feed-time">${new Date(l.timestamp).toLocaleTimeString()}</div>
                                     </div>
                                 </div>
@@ -510,6 +516,14 @@ function getAdminDashboardHTML(stats, user) {
         <script>
             let allLogs = []; let allUsers = []; let characters = [];
             function toggleMobileMenu() { document.getElementById('sidebar').classList.toggle('mobile-open'); }
+            
+            function formatBotMsg(msg) {
+                if (!msg) return '';
+                // Gunakan pemisah string tunggal yang aman untuk di-parse browser
+                return msg.split('\\n').map((s, idx) => {
+                    return '<div style="line-height:1.4">' + (idx === 0 ? '<small style="font-weight:700">A:</small> ' : '') + s + '</div>';
+                }).join('');
+            }
 
             function showPage(pageId, el) {
                 document.querySelectorAll('main > div').forEach(p => {
@@ -575,8 +589,8 @@ function getAdminDashboardHTML(stats, user) {
                             <div style="background: #f1f5f9; padding: 0.5rem 0.8rem; border-radius: 8px; margin-bottom: 4px; font-size: 0.8rem; border-left: 3px solid #cbd5e1;">
                                 <small style="color:var(--text-muted); font-weight:700">U:</small> \${l.user_message}
                             </div>
-                            <div style="background: #fff7ed; padding: 0.5rem 0.8rem; border-radius: 8px; font-size: 0.8rem; border-left: 3px solid var(--primary); white-space: pre-line;">
-                                <small style="color:var(--primary); font-weight:700">A:</small> \${l.bot_response}
+                            <div style="background: #fff7ed; padding: 0.5rem 0.8rem; border-radius: 8px; font-size: 0.8rem; border-left: 3px solid var(--primary); display:flex; flex-direction:column; gap:2px;">
+                                \${formatBotMsg(l.bot_response)}
                             </div>
                         </td>
                         <td style="text-align:right; font-size:0.7rem; color:var(--text-muted)">
@@ -620,7 +634,9 @@ function getAdminDashboardHTML(stats, user) {
                             <td><strong>\${l.ai_name}</strong></td>
                             <td>
                                 <div style="background:#f1f5f9; padding:0.4rem; border-radius:5px; font-size:0.8rem; margin-bottom:2px">U: \${l.user_message}</div>
-                                <div style="background:#fff7ed; padding:0.4rem; border-radius:5px; font-size:0.8rem; white-space: pre-line;">A: \${l.bot_response}</div>
+                                <div style="background:#fff7ed; padding:0.4rem; border-radius:5px; font-size:0.8rem; display:flex; flex-direction:column; gap:2px;">
+                                    \${formatBotMsg(l.bot_response)}
+                                </div>
                             </td>
                         </tr>\`;
                     });
@@ -767,7 +783,9 @@ function getAdminDashboardHTML(stats, user) {
                                         ← @\${l.username} <small style="color:var(--text-muted); font-size:0.65rem">Lv.\${l.user_level || 0}</small>
                                     </div>
                                     <div class="feed-msg" style="color:var(--text-main)"><small style="font-weight:700;color:var(--text-muted)">U:</small> \${l.user_message}</div>
-                                    <div class="feed-msg" style="color:var(--primary)"><small style="font-weight:700">A:</small> \${l.bot_response}</div>
+                                    <div style="display:flex; flex-direction:column; gap:2px; margin-top:4px; color:var(--primary)">
+                                        \${formatBotMsg(l.bot_response)}
+                                    </div>
                                     <div class="feed-time">\${new Date(l.timestamp).toLocaleTimeString()}</div>
                                 </div>
                             </div>

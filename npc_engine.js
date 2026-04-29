@@ -412,40 +412,33 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
         // Hard limit: 500 Karakter (Programmatic safety)
         if (fullResponse.length > 500) {
             fullResponse = fullResponse.substring(0, 500);
-            // Coba potong di spasi terakhir agar tidak terputus di tengah kata
             const lastSpace = fullResponse.lastIndexOf(' ');
             if (lastSpace > 400) fullResponse = fullResponse.substring(0, lastSpace) + '...';
         }
 
-        // Pecah menjadi kalimat penggalan berdasar tanda baca agar tidak terpotong di tengah (Smart Split)
         const rawLines = fullResponse.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         let sentences = [];
 
         for (const line of rawLines) {
-            // Jika satu baris utuh sudah di bawah 300 karakter, masukkan langsung sebagai 1 bubble
-            if (line.length <= 300) {
-                sentences.push(line);
-                continue;
-            }
-            
-            // Jika baris sangat panjang (> 300), coba pecah berdasarkan tanda baca (. ! ?)
             const parts = line.match(/[^.!?]+[.!?]*|[^.!?]+/g) || [line];
             let currentBubble = "";
+            let countInBubble = 0;
 
             for (const part of parts) {
-                // Jika digabung masih muat di 300 karakter, satukan
-                if ((currentBubble.length + part.length + 1) <= 300) {
-                    currentBubble += (currentBubble ? " " : "") + part.trim();
+                const trimmedPart = part.trim();
+                if (!trimmedPart) continue;
+
+                if (currentBubble && (currentBubble.length + trimmedPart.length + 1) <= 150 && countInBubble < 2) {
+                    currentBubble += " " + trimmedPart;
+                    countInBubble++;
                 } else {
-                    // Jika sudah penuh, simpan yang ada dan mulai bubble baru
-                    if (currentBubble) sentences.push(currentBubble.trim());
-                    
-                    // Jika satu kalimat saja sudah > 300 karakter (casuistik), pecah per kata (Emergency split)
-                    if (part.length > 300) {
-                        const words = part.split(' ');
+                    if (currentBubble) sentences.push(currentBubble);
+
+                    if (trimmedPart.length > 200) {
+                        const words = trimmedPart.split(' ');
                         let subBubble = "";
                         for (const word of words) {
-                            if ((subBubble.length + word.length + 1) > 295) {
+                            if ((subBubble.length + word.length + 1) > 200) {
                                 sentences.push(subBubble.trim());
                                 subBubble = word;
                             } else {
@@ -453,8 +446,10 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
                             }
                         }
                         currentBubble = subBubble;
+                        countInBubble = 1;
                     } else {
-                        currentBubble = part.trim();
+                        currentBubble = trimmedPart;
+                        countInBubble = 1;
                     }
                 }
             }
@@ -488,7 +483,7 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
 
         // Simpan Log ke Database
         try {
-            const botResponse = sentences.join('\n') || fullResponse; 
+            const botResponse = (sentences.join('\n') || fullResponse).trim(); 
             await db.execute({
                 sql: "INSERT INTO chat_logs (ai_name, username, user_message, bot_response, tokens, model, latency, ai_pose, user_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 args: [aiKey, currentUsername, message, botResponse, tokens, completion.model, endTime - startTime, aiPose, currentHeartLv]

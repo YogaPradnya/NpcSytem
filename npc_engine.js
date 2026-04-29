@@ -370,7 +370,7 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
                 model: fallbackModel,
                 messages: [
                     { role: 'system', content: finalSystemPrompt },
-                    ...chatHistory,
+                    chatHistory,
                     { role: 'user', content: message }
                 ],
                 max_tokens: 150,
@@ -381,7 +381,7 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
         let fullResponse = completion.choices[0].message.content;
 
         // --- EKSTRAKSI POSE (Lebih Robust) ---
-        let aiPose = allowedPoses[0] || "idle"; // Default ke item pertama dari list yang dibolehkan
+        let aiPose = allowedPoses[0] || ""; 
         
         // Regex untuk mencari [POSE: nama] atau POSE: nama
         const poseRegex = /(?:\[?\s*POSE\s*[:=]\s*([a-zA-Z0-9_-]+)\s*\]?)/i;
@@ -394,11 +394,9 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
             }
         }
         
-        // Hapus tag pose dari balasan teks agar tidak tampil di chat bubble
         const bracketPoseRegex = /\[?\s*POSE\s*[:=]\s*[a-zA-Z0-9_-]+\s*\]?/gi;
         fullResponse = fullResponse.replace(bracketPoseRegex, '').trim();
 
-        // Hapus ekspresi narasi [..] dan *..* tetapi biarkan (..) untuk terjemahan
         const rpRegex = /[\[\*](.*?)[\]\*]/g;
         const cleanedText = fullResponse.replace(rpRegex, '').replace(/\s{2,}/g, ' ').trim();
 
@@ -420,7 +418,7 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
         let sentences = [];
 
         for (const line of rawLines) {
-            const parts = line.match(/[^.!?]+[.!?]*|[^.!?]+/g) || [line];
+            const parts = line.match(/(?:[^.!?]|\.{2,})+[.!?]*|[^.!?]+/g) || [line];
             let currentBubble = "";
             let countInBubble = 0;
 

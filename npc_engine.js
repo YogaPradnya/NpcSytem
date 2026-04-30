@@ -249,6 +249,7 @@ const groqClients = keys.map((key, index) => ({
     client: new Groq({ apiKey: key }),
     cooldownUntil: 0,
     isEnabled: true,
+    requestTimestamps: [], // Track timestamps for rate limiting (5 req/min)
     stats: {
         requests: 0,
         success: 0,
@@ -324,18 +325,38 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
             }));
         }
 
-        // Pilih client yang tidak sedang cooldown & diaktifkan secara manual
-        const availableClients = groqClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil);
+        // Pilih client yang tidak sedang cooldown, aktif, dan belum mencapai rate limit (5 req/min)
+        const now = Date.now();
+        const availableClients = groqClients.filter(c => {
+            if (!c.isEnabled || now <= c.cooldownUntil) return false;
+            
+            // Bersihkan timestamp lama (> 1 menit)
+            c.requestTimestamps = c.requestTimestamps.filter(ts => now - ts < 60000);
+            
+            // Cek apakah sudah mencapai limit 5 request per menit
+            return c.requestTimestamps.length < 5;
+        });
         
         if (availableClients.length === 0) {
+            const isAnyCoolingDown = groqClients.some(c => now <= c.cooldownUntil);
+            const isAnyRateLimited = groqClients.some(c => c.isEnabled && c.requestTimestamps.filter(ts => now - ts < 60000).length >= 5);
+            
+            let errorMessage = 'Semua token/otak sedang sibuk. Silakan coba lagi nanti.';
+            if (isAnyRateLimited && !isAnyCoolingDown) {
+                errorMessage = 'Batas limit request (5 req/menit per key) tercapai. Silakan tunggu sebentar.';
+            }
+
             return res.status(503).json({ 
                 success: false, 
-                error: 'Semua token/otak sedang mencapai batas limit (Exhausted). Silakan coba lagi nanti.' 
+                error: errorMessage
             });
         }
 
         const selectedClientObj = availableClients[Math.floor(Math.random() * availableClients.length)];
         const client = selectedClientObj.client;
+        
+        // Catat timestamp request baru untuk rate limit
+        selectedClientObj.requestTimestamps.push(now);
         selectedClientObj.stats.requests++; // Increment request count
 
         if (!client) throw new Error("No AI clients available.");
@@ -361,8 +382,8 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
             selectedClientObj.stats.errors++; // Error!
             // Jika error adalah rate limit (token habis)
             if (error.status === 429 || error.message.toLowerCase().includes('rate limit')) {
-                selectedClientObj.cooldownUntil = Date.now() + (3600 * 1000); // Delay 1 jam
-                console.warn(`[NPC] Otak ${selectedClientObj.id} Exhausted! Delay 1 jam.`);
+                selectedClientObj.cooldownUntil = Date.now() + (24 * 3600 * 1000); // Delay 24 jam
+                console.warn(`[NPC] Otak ${selectedClientObj.id} Exhausted! Delay 24 jam.`);
             }
 
             console.warn(`[NPC] Model ${primaryModel} gagal, mencoba fallback ke ${fallbackModel}:`, error.message);
@@ -579,13 +600,19 @@ app.get('/admin', sessionAuth, async (req, res) => {
 app.get('/api/admin/models', apiAuth, adminOnly, (req, res) => {
     res.json({
         config: aiConfig,
-        otak: groqClients.map(c => ({
-            id: c.id,
-            isEnabled: c.isEnabled,
-            isCoolingDown: Date.now() < c.cooldownUntil,
-            cooldownRemaining: Math.max(0, Math.floor((c.cooldownUntil - Date.now()) / 1000)),
-            stats: c.stats
-        }))
+        otak: groqClients.map(c => {
+            const now = Date.now();
+            const recentRequests = c.requestTimestamps.filter(ts => now - ts < 60000).length;
+            return {
+                id: c.id,
+                isEnabled: c.isEnabled,
+                isCoolingDown: now < c.cooldownUntil,
+                cooldownRemaining: Math.max(0, Math.floor((c.cooldownUntil - now) / 1000)),
+                rateLimitStatus: `${recentRequests}/5`,
+                isRateLimited: recentRequests >= 5,
+                stats: c.stats
+            };
+        })
     });
 });
 

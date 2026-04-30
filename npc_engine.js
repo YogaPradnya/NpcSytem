@@ -342,13 +342,20 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
             return c.requestTimestamps.length < 5;
         });
         
-        if (availableClients.length === 0) {
-            const isAnyCoolingDown = groqClients.some(c => now <= c.cooldownUntil);
+        // Siapkan client untuk fallback yang mengabaikan cooldown 2 jam (karena limit per model), 
+        // tapi TETAP mematuhi limit 5 request per menit.
+        const fallbackClients = groqClients.filter(c => {
+            if (!c.isEnabled) return false;
+            c.requestTimestamps = c.requestTimestamps.filter(ts => now - ts < 60000);
+            return c.requestTimestamps.length < 5;
+        });
+
+        if (availableClients.length === 0 && fallbackClients.length === 0) {
             const isAnyRateLimited = groqClients.some(c => c.isEnabled && c.requestTimestamps.filter(ts => now - ts < 60000).length >= 5);
             
             let errorMessage = 'Semua token/otak sedang sibuk. Silakan coba lagi nanti.';
-            if (isAnyRateLimited && !isAnyCoolingDown) {
-                errorMessage = 'Batas limit request (5 req/menit per key) tercapai. Silakan tunggu sebentar.';
+            if (isAnyRateLimited) {
+                errorMessage = 'Batas limit request (5 req/menit per key) tercapai di semua key. Silakan tunggu sebentar.';
             }
 
             return res.status(503).json({ 
@@ -357,51 +364,84 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
             });
         }
 
-        const selectedClientObj = availableClients[Math.floor(Math.random() * availableClients.length)];
-        const client = selectedClientObj.client;
-        
-        // Catat timestamp request baru untuk rate limit
-        selectedClientObj.requestTimestamps.push(now);
-        selectedClientObj.stats.requests++; // Increment request count
-
-        if (!client) throw new Error("No AI clients available.");
-
         // Konfigurasi Model (Gunakan pilihan dari config)
         const primaryModel = aiConfig.primaryModel;
         const fallbackModel = aiConfig.fallbackModel;
 
         let completion;
-        try {
-            completion = await client.chat.completions.create({
-                model: primaryModel,
-                messages: [
-                    { role: 'system', content: finalSystemPrompt },
-                    ...chatHistory,
-                    { role: 'user', content: message }
-                ],
-                max_tokens: 130,
-                temperature: 0.8
-            });
-            selectedClientObj.stats.success++; // Success!
-        } catch (error) {
-            selectedClientObj.stats.errors++; // Error!
-            // Jika error adalah rate limit (token habis)
-            if (error.status === 429 || error.message.toLowerCase().includes('rate limit')) {
-                selectedClientObj.cooldownUntil = Date.now() + (24 * 3600 * 1000); // Delay 24 jam
-                console.warn(`[NPC] Otak ${selectedClientObj.id} Exhausted! Delay 24 jam.`);
-            }
+        let success = false;
 
-            console.warn(`[NPC] Model ${primaryModel} gagal, mencoba fallback ke ${fallbackModel}:`, error.message);
-            completion = await client.chat.completions.create({
-                model: fallbackModel,
-                messages: [
-                    { role: 'system', content: finalSystemPrompt },
-                    chatHistory,
-                    { role: 'user', content: message }
-                ],
-                max_tokens: 150,
-                temperature: 0.8
-            });
+        // 1. Coba Primary Model secara berurutan pada availableClients
+        for (let i = 0; i < availableClients.length; i++) {
+            const clientObj = availableClients[i];
+            const client = clientObj.client;
+            
+            // Catat timestamp request baru untuk rate limit
+            clientObj.requestTimestamps.push(now);
+            clientObj.stats.requests++; // Increment request count
+
+            try {
+                completion = await client.chat.completions.create({
+                    model: primaryModel,
+                    messages: [
+                        { role: 'system', content: finalSystemPrompt },
+                        ...chatHistory,
+                        { role: 'user', content: message }
+                    ],
+                    max_tokens: 130,
+                    temperature: 0.8
+                });
+                clientObj.stats.success++; // Success!
+                success = true;
+                break; // Berhasil, keluar dari loop (jadi pakai urutan 1, lalu 2, dst)
+            } catch (error) {
+                clientObj.stats.errors++; // Error!
+                // Jika error adalah rate limit (token habis)
+                if (error.status === 429 || error.message.toLowerCase().includes('rate limit')) {
+                    clientObj.cooldownUntil = Date.now() + (2 * 3600 * 1000); // Delay 2 jam
+                    console.warn(`[NPC] Otak ${clientObj.id} Exhausted! Delay 2 jam.`);
+                } else {
+                    console.warn(`[NPC] Otak ${clientObj.id} error:`, error.message);
+                }
+            }
+        }
+
+        // 2. Jika semua key available gagal untuk Primary Model, coba Fallback Model
+        if (!success) {
+            console.warn(`[NPC] Semua key gagal untuk ${primaryModel}, mencoba fallback ke ${fallbackModel}`);
+            
+            for (let i = 0; i < fallbackClients.length; i++) {
+                const clientObj = fallbackClients[i];
+                const client = clientObj.client;
+                
+                // Catat timestamp request baru untuk rate limit fallback
+                clientObj.requestTimestamps.push(now);
+                clientObj.stats.requests++;
+
+                try {
+                    completion = await client.chat.completions.create({
+                        model: fallbackModel,
+                        messages: [
+                            { role: 'system', content: finalSystemPrompt },
+                            ...chatHistory,
+                            { role: 'user', content: message }
+                        ],
+                        max_tokens: 150,
+                        temperature: 0.8
+                    });
+                    clientObj.stats.success++;
+                    success = true;
+                    break;
+                } catch (error) {
+                    clientObj.stats.errors++;
+                    console.warn(`[NPC] Otak ${clientObj.id} fallback error:`, error.message);
+                }
+            }
+        }
+
+
+        if (!success) {
+            throw new Error("Semua key (Primary maupun Fallback) sedang kehabisan token atau error.");
         }
 
         let fullResponse = completion.choices[0].message.content;

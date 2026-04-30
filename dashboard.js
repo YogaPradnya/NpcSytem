@@ -8,6 +8,7 @@ function getAdminDashboardHTML(stats, user) {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>NPC SYSTEM - Control Panel</title>
+        <link rel="icon" type="image/png" href="/favicon.png?v=2">
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
         <style>
             :root {
@@ -311,18 +312,55 @@ function getAdminDashboardHTML(stats, user) {
             .toast.success { border-left-color: var(--success); }
             .toast.error { border-left-color: var(--danger); }
             .toast-msg { font-size: 0.85rem; font-weight: 600; color: var(--text-main); }
+
+            /* Terminal Style */
+            .terminal-container {
+                background: #0f172a;
+                color: #38bdf8;
+                font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+                padding: 1.5rem;
+                border-radius: 1rem;
+                height: 600px;
+                overflow-y: auto;
+                font-size: 0.85rem;
+                line-height: 1.5;
+                box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
+                border: 1px solid #1e293b;
+            }
+            .terminal-line { margin-bottom: 4px; display: flex; gap: 10px; }
+            .term-time { color: #64748b; min-width: 80px; }
+            .term-type { font-weight: 800; min-width: 60px; text-transform: uppercase; }
+            .type-log { color: #22c55e; }
+            .type-warn { color: #eab308; }
+            .type-error { color: #ef4444; }
+            .type-system { color: #a855f7; }
+            .term-msg { color: #e2e8f0; flex: 1; white-space: pre-wrap; }
+
+            /* Debug Panel */
+            .debug-panel {
+                background: #fff;
+                border: 1px solid var(--border);
+                border-radius: 1rem;
+                padding: 1rem;
+                font-size: 0.75rem;
+            }
+            .debug-header { font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem; display: flex; justify-content: space-between; }
+            .debug-item { margin-bottom: 0.5rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.4rem; }
+            .debug-label { color: var(--text-muted); font-weight: 600; }
+            .debug-value { color: var(--primary); font-weight: 700; font-family: monospace; }
         </style>
     </head>
     <body>
         <div id="toast-container"></div>
 
         <div class="mobile-header">
-            <div class="brand"><span>NPC</span>SYSTEM</div>
+            <div class="brand" style="display:flex; align-items:center; gap:8px"><img src="/logo.png" style="width:30px; height:30px; border-radius:6px"><span>NPC</span>SYSTEM</div>
             <button class="menu-toggle" onclick="toggleMobileMenu()" style="color:#fff">☰</button>
         </div>
 
         <aside id="sidebar">
             <div class="brand">
+                <img src="/logo.png" style="width:60px; height:60px; border-radius:12px; margin-bottom:1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3)">
                 <h1>ANIMEIN.AI</h1>
                 <p>CONTROL PANEL BY YOGA</p>
             </div>
@@ -332,9 +370,12 @@ function getAdminDashboardHTML(stats, user) {
                 ${isAdmin ? `
                     <div class="nav-item" onclick="showPage('otak', this)">Manajemen Otak</div>
                     <div class="nav-item" onclick="showPage('users', this)">Daftar User</div>
-                    <div class="nav-item" onclick="showPage('logs', this)">Log Percakapan</div>
                 ` : ''}
                 <div class="nav-item" onclick="showPage('simulator', this)">Live Simulator</div>
+                ${isAdmin ? `
+                    <div class="nav-item" onclick="showPage('logs', this)">Log Percakapan</div>
+                    <div class="nav-item" onclick="showPage('terminal', this)">Logs</div>
+                ` : ''}
             </nav>
             <div style="margin-top: auto; padding-top: 2rem; border-top: 1px solid rgba(255,255,255,0.05);">
                 <div style="text-align: center; margin-bottom: 1rem;">
@@ -444,9 +485,22 @@ function getAdminDashboardHTML(stats, user) {
                     <tbody id="log-body"></tbody>
                 </table></div></div>
             </div>
+
+            <div id="page-terminal" class="hidden">
+                <header>
+                    <h1>Realtime Engine Terminal</h1>
+                    <div style="display:flex; gap:1rem; align-items:center">
+                        <span id="terminal-status" style="font-size:0.7rem; font-weight:800; color:var(--danger)">● DISCONNECTED</span>
+                        <button class="btn btn-outline" onclick="clearTerminal()">Clear</button>
+                    </div>
+                </header>
+                <div class="terminal-container" id="terminal-output">
+                    <div class="terminal-line"><span class="term-msg">Waiting for logs...</span></div>
+                </div>
+            </div>
             ` : ''}
 
-            <div id="page-simulator" class="hidden" style="max-width: 800px; margin: 0 auto;">
+            <div id="page-simulator" class="hidden" style="max-width: 1100px; margin: 0 auto;">
                 <div class="card" style="padding: 1.5rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
                         <h2 style="margin:0">Live Simulator</h2>
@@ -459,17 +513,30 @@ function getAdminDashboardHTML(stats, user) {
                                 <label style="font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Heart Lv</label>
                                 <input type="number" id="sim-heart" value="0" min="0" max="5" style="width: 70px; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border); font-family: inherit; font-weight: 700; text-align: center;">
                             </div>
-                            <button class="btn btn-outline" style="align-self: flex-end; padding: 0.65rem 1rem;" onclick="document.getElementById('sim-messages').innerHTML=''">Clear</button>
+                            <button class="btn btn-outline" style="align-self: flex-end; padding: 0.65rem 1rem;" onclick="document.getElementById('sim-messages').innerHTML=''; document.getElementById('sim-debug-content').innerHTML='<div class=\'debug-item\'>Waiting for interaction...</div>'">Clear</button>
                         </div>
                     </div>
                     
-                    <div class="sim-container">
-                        <div id="sim-messages">
-                            <div class="msg msg-bot">Halo! Silakan pilih karakter dan ketik pesan untuk mulai simulasi.</div>
+                    <div style="display: grid; grid-template-columns: 1fr 320px; gap: 1.5rem; align-items: start;">
+                        <div class="sim-container">
+                            <div id="sim-messages">
+                                <div class="msg msg-bot">Halo! Silakan pilih karakter dan ketik pesan untuk mulai simulasi.</div>
+                            </div>
+                            <div style="padding: 1.25rem; background: #f8fafc; border-top: 1px solid var(--border); display: flex; gap: 0.8rem;">
+                                <input type="text" id="sim-input" placeholder="Ketik pesan di sini..." style="flex:1; padding: 0.8rem 1.2rem; border-radius: 12px; border: 1.5px solid var(--border); font-family: inherit; font-weight: 600; outline: none; transition: border-color 0.2s;" onkeypress="if(event.key==='Enter') sendMessage()">
+                                <button id="sim-send-btn" onclick="sendMessage()" style="padding: 0.8rem 1.5rem; background: var(--primary); color: #fff; border: none; border-radius: 12px; font-weight: 800; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">KIRIM</button>
+                            </div>
                         </div>
-                        <div style="padding: 1.25rem; background: #f8fafc; border-top: 1px solid var(--border); display: flex; gap: 0.8rem;">
-                            <input type="text" id="sim-input" placeholder="Ketik pesan di sini..." style="flex:1; padding: 0.8rem 1.2rem; border-radius: 12px; border: 1.5px solid var(--border); font-family: inherit; font-weight: 600; outline: none; transition: border-color 0.2s;" onkeypress="if(event.key==='Enter') sendMessage()">
-                            <button onclick="sendMessage()" style="padding: 0.8rem 1.5rem; background: var(--primary); color: #fff; border: none; border-radius: 12px; font-weight: 800; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">KIRIM</button>
+
+                        <div class="debug-panel">
+                            <div class="debug-header"><span>Debug Info / Chain of Thought</span></div>
+                            <div id="sim-debug-content">
+                                <div class="debug-item">Waiting for interaction...</div>
+                            </div>
+                            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--border);">
+                                <div class="debug-header"><span>Alur Pemikiran (System Prompt)</span></div>
+                                <div id="sim-prompt-content" style="font-family: monospace; font-size: 0.65rem; color: var(--text-muted); background: #f8fafc; padding: 0.5rem; border-radius: 0.5rem; max-height: 200px; overflow-y: auto; white-space: pre-wrap;">-</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -519,8 +586,8 @@ function getAdminDashboardHTML(stats, user) {
             
             function formatBotMsg(msg) {
                 if (!msg) return '';
-                // Gunakan pemisah string tunggal yang aman untuk di-parse browser
-                return msg.split('\\n').map((s, idx) => {
+                // Menggunakan charCode(10) adalah cara paling aman untuk newline
+                return msg.split(String.fromCharCode(10)).map((s, idx) => {
                     return '<div style="line-height:1.4">' + (idx === 0 ? '<small style="font-weight:700">A:</small> ' : '') + s + '</div>';
                 }).join('');
             }
@@ -545,6 +612,66 @@ function getAdminDashboardHTML(stats, user) {
                 if(pageId === 'users') loadUsers();
                 if(pageId === 'logs') loadLogs();
                 if(pageId === 'simulator') loadSimSelect();
+                if(pageId === 'terminal') initTerminal();
+            }
+
+            let logEventSource = null;
+            function initTerminal() {
+                if (logEventSource) return;
+                
+                const statusEl = document.getElementById('terminal-status');
+                statusEl.innerText = '● CONNECTING...';
+                statusEl.style.color = 'var(--info)';
+
+                logEventSource = new EventSource('/api/admin/logs/stream');
+                
+                logEventSource.onopen = () => {
+                    statusEl.innerText = '● LIVE CONNECTED';
+                    statusEl.style.color = 'var(--success)';
+                    appendTerminalLog({ message: 'Engine connection established.', type: 'system' });
+                };
+
+                logEventSource.onmessage = (e) => {
+                    const data = JSON.parse(e.data);
+                    appendTerminalLog(data);
+                };
+
+                logEventSource.onerror = (e) => {
+                    console.error('SSE Error:', e);
+                    statusEl.innerText = '● DISCONNECTED';
+                    statusEl.style.color = 'var(--danger)';
+                    logEventSource.close();
+                    logEventSource = null;
+                    setTimeout(initTerminal, 5000); // Reconnect
+                };
+            }
+
+            function appendTerminalLog(data) {
+                const term = document.getElementById('terminal-output');
+                if (!term) return;
+
+                const line = document.createElement('div');
+                line.className = 'terminal-line';
+                
+                const time = new Date(data.timestamp || Date.now()).toLocaleTimeString();
+                const type = data.type || 'log';
+                
+                line.innerHTML = \`
+                    <span class="term-time">[\${time}]</span>
+                    <span class="term-type type-\${type}">\${type}</span>
+                    <span class="term-msg">\${data.message}</span>
+                \`;
+                
+                term.appendChild(line);
+                term.scrollTop = term.scrollHeight;
+                
+                // Limit lines to 200
+                if (term.children.length > 200) term.removeChild(term.firstChild);
+            }
+
+            function clearTerminal() {
+                const term = document.getElementById('terminal-output');
+                if (term) term.innerHTML = '<div class="terminal-line"><span class="term-msg">Terminal cleared.</span></div>';
             }
 
             async function load() {
@@ -676,10 +803,14 @@ function getAdminDashboardHTML(stats, user) {
                 }
             }
 
-            async function sendMessage() {
+              async function sendMessage() {
                 const text = document.getElementById('sim-input').value;
                 const heartLv = document.getElementById('sim-heart').value || 0;
                 if(!text) return;
+
+                const btn = document.getElementById('sim-send-btn');
+                btn.disabled = true;
+                btn.innerText = '...';
 
                 const box = document.getElementById('sim-messages');
                 box.innerHTML += \`<div class="msg msg-user">\${text}</div>\`;
@@ -697,13 +828,30 @@ function getAdminDashboardHTML(stats, user) {
                         })
                     });
                     const d = await r.json();
-                    const botMsg = d.sentences ? d.sentences.join('\\n') : 'Error: No response';
-                    box.innerHTML += \`<div class="msg msg-bot">\${botMsg.replace(/\\n/g, '<br>')}</div>\`;
+                    const botMsg = d.sentences ? d.sentences.join(String.fromCharCode(10)) : 'Error: No response';
+                    box.innerHTML += \`<div class="msg msg-bot">\${botMsg.split(String.fromCharCode(10)).join('<br>')}</div>\`;
                     box.scrollTop = box.scrollHeight;
+
+                    // Update Debug Info
+                    if (d.debug) {
+                        const dbg = document.getElementById('sim-debug-content');
+                        dbg.innerHTML = \`
+                            <div class="debug-item"><span class="debug-label">Model:</span> <span class="debug-value">\${d.debug.model}</span></div>
+                            <div class="debug-item"><span class="debug-label">Otak ID:</span> <span class="debug-value">#\${d.debug.otak_id}</span></div>
+                            <div class="debug-item"><span class="debug-label">Tokens:</span> <span class="debug-value">\${d.debug.tokens}</span></div>
+                            <div class="debug-item"><span class="debug-label">Latency:</span> <span class="debug-value">\${d.debug.latency}ms</span></div>
+                            <div class="debug-item"><span class="debug-label">Pose:</span> <span class="debug-value">\${d.ai_pose}</span></div>
+                        \`;
+                        document.getElementById('sim-prompt-content').innerText = d.debug.system_prompt;
+                    }
                 } catch(e) {
                     showToast('Failed to send message', 'error');
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = 'KIRIM';
                 }
             }
+           
 
             async function toggleChar(id, enabled) { await fetch('/api/characters/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, data:{...characters.find(x=>x.id===id), is_enabled:enabled}}) }); load(); }
             async function deleteChar(id) { 
@@ -807,7 +955,8 @@ function getAdminDashboardHTML(stats, user) {
                 } catch(e) {}
             }, 5000);
 
-            showPage(isAdmin ? 'dashboard' : 'karakter');
+            showPage(${isAdmin} ? 'dashboard' : 'karakter');
+
         </script>
     </body>
     </html>
@@ -821,6 +970,7 @@ function getLoginPageHTML(error = '') {
     <head>
         <meta charset="UTF-8">
         <title>Login - NPC System</title>
+        <link rel="icon" type="image/png" href="/favicon.png?v=2">
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
         <style>
             body { font-family: 'Outfit', sans-serif; background: #0f172a; height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; }
@@ -838,6 +988,7 @@ function getLoginPageHTML(error = '') {
     </head>
     <body>
         <div class="login-card">
+            <img src="/logo.png" style="width:80px; height:80px; border-radius:16px; margin-bottom:1.5rem; box-shadow: 0 8px 16px rgba(0,0,0,0.4)">
             <h1>NPC SYSTEM</h1>
             <p>Role Authentication</p>
             

@@ -12,6 +12,7 @@ const app = express();
 app.use(cors()); // Mengizinkan akses dari aplikasi luar (APK/Web)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static('public'));
 app.use(cookieParser('npc-system-secret-88'));
 
 // Tambahkan middleware no-cache agar perubahan UI langsung terlihat
@@ -96,6 +97,33 @@ let globalStats = {
     totalTokens: 0,
     startTime: new Date(),
     charUsage: {} // Track tokens per character
+};
+
+// Real-time Log Stream (SSE)
+let logListeners = [];
+function broadcastLog(data) {
+    const logEntry = typeof data === 'string' ? { message: data, type: 'info' } : data;
+    logEntry.timestamp = new Date().toISOString();
+    const payload = `data: ${JSON.stringify(logEntry)}\n\n`;
+    logListeners.forEach(res => res.write(payload));
+}
+
+// Override console.log to also broadcast
+const originalLog = console.log;
+const originalWarn = console.warn;
+const originalError = console.error;
+
+console.log = (...args) => {
+    originalLog(...args);
+    broadcastLog({ message: args.join(' '), type: 'log' });
+};
+console.warn = (...args) => {
+    originalWarn(...args);
+    broadcastLog({ message: args.join(' '), type: 'warn' });
+};
+console.error = (...args) => {
+    originalError(...args);
+    broadcastLog({ message: args.join(' '), type: 'error' });
 };
 
 // Konfigurasi Model AI
@@ -445,8 +473,9 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
         }
 
         let fullResponse = completion.choices[0].message.content;
-
+        console.log(`[DEBUG] MODEL USED: ${completion.model}`);
         // --- EKSTRAKSI POSE (Lebih Robust) ---
+
         let aiPose = allowedPoses[0] || ""; 
         
         // Regex untuk mencari [POSE: nama] atau POSE: nama
@@ -522,8 +551,7 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
             }
         }
 
-        sentences = sentences.slice(0, 4); // Tetap Maksimal 4 sentence sesuai rule
-
+        sentences = sentences.slice(0, 4);
         // Update Statistik
         const endTime = Date.now();
         const tokens = completion.usage?.total_tokens || 0;
@@ -563,7 +591,14 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
             level: currentHeartLv,
             processing_time_ms: endTime - startTime,
             sentence_count: sentences.length,
-            sentences: sentences
+            sentences: sentences,
+            debug: {
+                model: completion.model,
+                tokens: tokens,
+                otak_id: success ? (availableClients.find(c => c.client.apiKey === completion._options?.apiKey)?.id || 'Fallback') : 'N/A',
+                system_prompt: finalSystemPrompt,
+                latency: endTime - startTime
+            }
         };
 
         console.log(`[NPC] Name: ${char.npc_name} | Lv: ${currentHeartLv} | Sentences: ${sentences.length} | Tokens: ${tokens} | ${endTime - startTime}ms`);
@@ -577,6 +612,21 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
             message: e.message 
         });
     }
+});
+
+// API: SSE Log Stream
+app.get('/api/admin/logs/stream', apiAuth, adminOnly, (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    logListeners.push(res);
+    broadcastLog({ message: `Admin connected to log stream (@${req.user.username})`, type: 'system' });
+
+    req.on('close', () => {
+        logListeners = logListeners.filter(l => l !== res);
+    });
 });
 
 // API: Get Stats

@@ -181,6 +181,11 @@ async function initDB() {
                 user_level INTEGER
             )
         `);
+
+        // Migration: Add new columns if they don't exist
+        try { await db.execute("ALTER TABLE chat_logs ADD COLUMN ai_pose TEXT"); } catch (e) {}
+        try { await db.execute("ALTER TABLE chat_logs ADD COLUMN user_level INTEGER"); } catch (e) {}
+
         await db.execute(`
             CREATE TABLE IF NOT EXISTS users (
                 username TEXT PRIMARY KEY,

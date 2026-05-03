@@ -339,7 +339,8 @@ ${getLevelGuide(user?.level)}
 - BICARALAH SEBAGAI KARAKTER FIKSI. Gunakan 'Aku' untuk dirimu. 
 - CARA MEMANGGIL USER: ${Number(user?.level) >= 2 ? `Sangat disarankan memanggil namanya langsung (${user?.username})` : `Gunakan sebutan umum seperti 'Kamu' atau 'Orang asing'. DILARANG memanggil namanya (${user?.username}) karena kamu belum seakrab itu`}.
 - Maksimal panjang total: 500 karakter.
-- DILARANG menggunakan tanda asteris (*) atau tanda kurung untuk gaya narasi. Fokus pada dialog murni.
+- [SANGAT PENTING] DILARANG KERAS menggunakan tanda kurung (), tanda asteris (*), atau tanda kurung siku [] untuk menggambarkan ekspresi, tindakan, narasi, atau perasaan.
+- Fokus HANYA pada dialog murni yang diucapkan. Jangan sertakan teks deskriptif seperti (tersenyum), *tertawa*, atau [sedih].
 
 [ATURAN POSE - WAJIB]:
 Di akhir balasanmu, kamu WAJIB menuliskan satu kode pose yang paling menggambarkan perasaanmu saat ini dalam format: [POSE: nama_pose]
@@ -492,12 +493,12 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
         const bracketPoseRegex = /\[?\s*POSE\s*[:=]\s*[a-zA-Z0-9_-]+\s*\]?/gi;
         fullResponse = fullResponse.replace(bracketPoseRegex, '').trim();
 
-        const rpRegex = /[\[\*](.*?)[\]\*]/g;
+        const rpRegex = /\((.*?)\)|\[(.*?)\]|\*(.*?)\*/g;
         const cleanedText = fullResponse.replace(rpRegex, '').replace(/\s{2,}/g, ' ').trim();
 
-        // FALLBACK: Jika setelah dibersihkan teks jadi kosong, gunakan teks original (tanpa pose)
-        if (!cleanedText || cleanedText.length < 2) {
-            fullResponse = fullResponse || "..."; 
+        // FALLBACK: Jika setelah dibersihkan teks jadi kosong, gunakan teks original (HANYA JIKA TIDAK ADA TANDA KURUNG) atau "..."
+        if (!cleanedText || cleanedText.length < 1) {
+            fullResponse = "..."; 
         } else {
             fullResponse = cleanedText;
         }

@@ -586,8 +586,11 @@ function getAdminDashboardHTML(stats, user) {
             
             function formatBotMsg(msg) {
                 if (!msg) return '';
-                // Menggunakan charCode(10) adalah cara paling aman untuk newline
-                return msg.split(String.fromCharCode(10)).map((s, idx) => {
+                // Filter tambahan di frontend untuk menghapus (ekspresi), *aksi*, atau [teks]
+                const cleanMsg = msg.replace(/\((.*?)\)|\[(.*?)\]|\*(.*?)\*/g, '').replace(/\s{2,}/g, ' ').trim();
+                if (!cleanMsg) return '...';
+
+                return cleanMsg.split(String.fromCharCode(10)).map((s, idx) => {
                     return '<div style="line-height:1.4">' + (idx === 0 ? '<small style="font-weight:700">A:</small> ' : '') + s + '</div>';
                 }).join('');
             }

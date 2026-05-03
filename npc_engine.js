@@ -337,7 +337,7 @@ ${getLevelGuide(user?.level)}
 [ATURAN TEKNIS]:
 - BICARALAH SEBAGAI KARAKTER FIKSI. Gunakan 'Aku' untuk dirimu. 
 - CARA MEMANGGIL USER: ${Number(user?.level) >= 2 ? `Sangat disarankan memanggil namanya langsung (${user?.username})` : `Gunakan sebutan umum seperti 'Kamu' atau 'Orang asing'. DILARANG memanggil namanya (${user?.username}) karena kamu belum seakrab itu`}.
-- Maksimal panjang total: 500 karakter.
+- Maksimal panjang total: 350 karakter.
 - [SANGAT PENTING] DILARANG KERAS menggunakan tanda kurung (), tanda asteris (*), atau tanda kurung siku [] untuk menggambarkan ekspresi, tindakan, narasi, atau perasaan.
 - Fokus HANYA pada dialog murni yang diucapkan. Jangan sertakan teks deskriptif seperti (tersenyum), *tertawa*, atau [sedih].
 
@@ -481,11 +481,11 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
             fullResponse = cleanedText;
         }
         
-        // Hard limit: 500 Karakter (Programmatic safety)
-        if (fullResponse.length > 500) {
-            fullResponse = fullResponse.substring(0, 500);
+        // Hard limit: 350 Karakter (Programmatic safety)
+        if (fullResponse.length > 350) {
+            fullResponse = fullResponse.substring(0, 350);
             const lastSpace = fullResponse.lastIndexOf(' ');
-            if (lastSpace > 400) fullResponse = fullResponse.substring(0, lastSpace) + '...';
+            if (lastSpace > 300) fullResponse = fullResponse.substring(0, lastSpace) + '...';
         }
 
         const rawLines = fullResponse.split('\n').map(l => l.trim()).filter(l => l.length > 0);

@@ -513,7 +513,7 @@ function getAdminDashboardHTML(stats, user) {
                                 <label style="font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Heart Lv</label>
                                 <input type="number" id="sim-heart" value="0" min="0" max="5" style="width: 70px; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border); font-family: inherit; font-weight: 700; text-align: center;">
                             </div>
-                            <button class="btn btn-outline" style="align-self: flex-end; padding: 0.65rem 1rem;" onclick="document.getElementById('sim-messages').innerHTML=''; document.getElementById('sim-debug-content').innerHTML='<div class=\'debug-item\'>Waiting for interaction...</div>'">Clear</button>
+                            <button class="btn btn-outline" style="align-self: flex-end; padding: 0.65rem 1rem;" onclick="document.getElementById('sim-messages').innerHTML=''; document.getElementById('sim-debug-content').innerHTML='<div class=\\\'debug-item\\\'>Waiting for interaction...</div>'">Clear</button>
                         </div>
                     </div>
                     
@@ -587,7 +587,7 @@ function getAdminDashboardHTML(stats, user) {
             function formatBotMsg(msg) {
                 if (!msg) return '';
                 // Filter tambahan di frontend untuk menghapus (ekspresi), *aksi*, atau [teks]
-                const cleanMsg = msg.replace(/\((.*?)\)|\[(.*?)\]|\*(.*?)\*/g, '').replace(/\s{2,}/g, ' ').trim();
+                const cleanMsg = msg.replace(/\\((.*?)\\)|\\s*\\[(.*?)\\]|\\*(.*?)\\*/g, '').replace(/\\s{2,}/g, ' ').trim();
                 if (!cleanMsg) return '...';
 
                 return cleanMsg.split(String.fromCharCode(10)).map((s, idx) => {

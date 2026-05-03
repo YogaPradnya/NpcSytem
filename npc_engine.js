@@ -282,7 +282,6 @@ const groqClients = keys.map((key, index) => ({
     client: new Groq({ apiKey: key }),
     cooldownUntil: 0,
     isEnabled: true,
-    requestTimestamps: [], // Track timestamps for rate limiting (5 req/min)
     stats: {
         requests: 0,
         success: 0,
@@ -361,31 +360,14 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
 
         // Pilih client yang tidak sedang cooldown, aktif, dan belum mencapai rate limit (5 req/min)
         const now = Date.now();
-        const availableClients = groqClients.filter(c => {
-            if (!c.isEnabled || now <= c.cooldownUntil) return false;
-            
-            // Bersihkan timestamp lama (> 1 menit)
-            c.requestTimestamps = c.requestTimestamps.filter(ts => now - ts < 60000);
-            
-            // Cek apakah sudah mencapai limit 5 request per menit
-            return c.requestTimestamps.length < 5;
-        });
+        const availableClients = groqClients.filter(c => c.isEnabled && now > c.cooldownUntil);
         
         // Siapkan client untuk fallback yang mengabaikan cooldown 2 jam (karena limit per model), 
         // tapi TETAP mematuhi limit 5 request per menit.
-        const fallbackClients = groqClients.filter(c => {
-            if (!c.isEnabled) return false;
-            c.requestTimestamps = c.requestTimestamps.filter(ts => now - ts < 60000);
-            return c.requestTimestamps.length < 5;
-        });
+        const fallbackClients = groqClients.filter(c => c.isEnabled);
 
         if (availableClients.length === 0 && fallbackClients.length === 0) {
-            const isAnyRateLimited = groqClients.some(c => c.isEnabled && c.requestTimestamps.filter(ts => now - ts < 60000).length >= 5);
-            
             let errorMessage = 'Semua token/otak sedang sibuk. Silakan coba lagi nanti.';
-            if (isAnyRateLimited) {
-                errorMessage = 'Batas limit request (5 req/menit per key) tercapai di semua key. Silakan tunggu sebentar.';
-            }
 
             return res.status(503).json({ 
                 success: false, 
@@ -405,8 +387,6 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
             const clientObj = availableClients[i];
             const client = clientObj.client;
             
-            // Catat timestamp request baru untuk rate limit
-            clientObj.requestTimestamps.push(now);
             clientObj.stats.requests++; // Increment request count
 
             try {
@@ -443,8 +423,6 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
                 const clientObj = fallbackClients[i];
                 const client = clientObj.client;
                 
-                // Catat timestamp request baru untuk rate limit fallback
-                clientObj.requestTimestamps.push(now);
                 clientObj.stats.requests++;
 
                 try {
@@ -698,14 +676,11 @@ app.get('/api/admin/models', apiAuth, adminOnly, (req, res) => {
         config: aiConfig,
         otak: groqClients.map(c => {
             const now = Date.now();
-            const recentRequests = c.requestTimestamps.filter(ts => now - ts < 60000).length;
             return {
                 id: c.id,
                 isEnabled: c.isEnabled,
                 isCoolingDown: now < c.cooldownUntil,
                 cooldownRemaining: Math.max(0, Math.floor((c.cooldownUntil - now) / 1000)),
-                rateLimitStatus: `${recentRequests}/5`,
-                isRateLimited: recentRequests >= 5,
                 stats: c.stats
             };
         })

@@ -698,15 +698,11 @@ function getAdminDashboardHTML(stats, user) {
                 const list = document.getElementById('otak-list'); list.innerHTML = '';
                 d.otak.forEach(o => {
                     const s = o.stats || {requests:0, success:0, errors:0};
-                    const rateColor = o.isRateLimited ? 'var(--danger)' : (o.rateLimitStatus.startsWith('0') ? 'var(--text-muted)' : 'var(--success)');
                     list.innerHTML += '<div class="otak-row '+(o.isEnabled?"active":"")+'">' +
                         '<div class="otak-name">OTAK #'+o.id+'</div>' +
                         '<div class="otak-stats">' +
                             '<div class="otak-stat-item"><span class="otak-stat-label">Requests</span><span class="otak-stat-value">'+s.requests+'</span></div>' +
-                            '<div class="otak-stat-item">' +
-                                '<span class="otak-stat-label">Limit (1m)</span>' +
-                                '<span class="otak-stat-value" style="color:'+rateColor+'">'+o.rateLimitStatus+'</span>' +
-                            '</div>' +
+                            '<div class="otak-stat-item"><span class="otak-stat-label">Status</span><span class="otak-stat-value" style="color:'+(o.isEnabled?'var(--success)':'var(--danger)')+'">'+(o.isEnabled ? (o.isCoolingDown ? 'COOLDOWN' : 'READY') : 'DISABLED')+'</span></div>' +
                             '<div class="otak-stat-item"><span class="otak-stat-label">Success</span><span class="otak-stat-value">'+s.success+'</span></div>' +
                             '<div class="otak-stat-item"><span class="otak-stat-label">Errors</span><span class="otak-stat-value">'+s.errors+'</span></div>' +
                         '</div>' +

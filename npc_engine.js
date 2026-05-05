@@ -128,7 +128,7 @@ console.error = (...args) => {
 
 // Konfigurasi Model AI
 let aiConfig = {
-    primaryModel: 'llama-3.3-70b-versatile',
+    primaryModel: 'llama-3.1-8b-instant',
     fallbackModel: 'llama-3.1-8b-instant'
 };
 

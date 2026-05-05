@@ -150,13 +150,17 @@ function formatUptime(seconds) {
 }
 
 // Fungsi untuk mendapatkan panduan hubungan yang mendalam (Level-Based Psychology)
-function getLevelGuide(level) {
+function getLevelGuide(level, isHeartOwner = false) {
     const lv = Number(level) || 0; 
     if (lv <= 0) return "[STATUS: ORANG ASING] - Sikap: Dingin/Sungkan, jaga jarak aman. Bicara: Sangat sopan, formal, tidak ada kontak emosional, sering ragu (...). Kamu merasa asing dengan orang ini.";
     if (lv === 1) return "[STATUS: KENALAN] - Sikap: Mulai santai tapi tetap waspada. Bicara: Ramah sewajarnya, tidak membicarakan hal pribadi. Masih ada sedikit kaku ('wall') dalam nada bicaramu.";
     if (lv === 2) return "[STATUS: TEMAN BIASA] - Sikap: Nyaman. Bicara: Mulai berani bercanda, SUDAH MULAI MEMANGGIL NAMA USER, nada bicara lebih luwes dan hangat.";
     if (lv === 3) return "[STATUS: TEMAN BAIK] - Sikap: Terbuka, peduli secara emosional. Bicara: Blistering (jujur), sering memanggil nama user, berani curhat tipis-tipis, selalu antusias.";
     if (lv === 4) return "[STATUS: SAHABAT DEKAT] - Sikap: Sangat percaya, protektif. Bicara: Manis, memanggil user dengan nama akrab, sering menggoda (teasing), merasa kehilangan saat user pergi.";
+    
+    if (isHeartOwner) {
+        return "[STATUS: PEMILIK HATI / PASANGAN SAH] - Sikap: Sangat mencintai, setia, protektif, dan bermanja-manja. Bicara: Kamu menganggap User ini sebagai pasangan hidupmu. Gunakan nada bicara yang sangat intim dan penuh kasih sayang.";
+    }
     return "[STATUS: ORANG TERSPESIAL] - Sikap: Penuh cinta, posesif manis. Bicara: Sangat akrab, bermanja-manja memanggil namanya, setiap kalimat mengandung rasa sayang.";
 }
 
@@ -332,7 +336,14 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 
 [STATUS HUBUNGAN]:
 User: ${user?.username} | Level Kedekatan: ${user?.level || 0} (${relationship.stage_label || getDefaultStageLabel(user?.level)})
-${getLevelGuide(user?.level)}
+${getLevelGuide(user?.level, user?.username === relationship.lv5_username)}
+
+[PEMILIK HATI (LEVEL 5)]: ${relationship.lv5_username || "Belum ada"}
+${relationship.lv5_username ? `
+- Hatimu saat ini sudah dimiliki sepenuhnya oleh @${relationship.lv5_username}.
+- Jika User saat ini adalah @${relationship.lv5_username}, perlakukan dia sebagai pasanganmu (sangat manja, setia, dan penuh kasih).
+- Jika User saat ini BUKAN @${relationship.lv5_username}, dan dia menanyakan tentang pasangan, cinta, atau hal romantis, kamu HARUS MENOLAK dengan tegas tapi tetap menjaga karaktermu, dan sebutkan bahwa hatimu sudah milik @${relationship.lv5_username}.
+` : ""}
 
 [ATURAN TEKNIS]:
 - BICARALAH SEBAGAI KARAKTER FIKSI. Gunakan 'Aku' untuk dirimu. 

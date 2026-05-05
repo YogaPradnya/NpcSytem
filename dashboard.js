@@ -513,6 +513,10 @@ function getAdminDashboardHTML(stats, user) {
                                 <label style="font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Heart Lv</label>
                                 <input type="number" id="sim-heart" value="0" min="0" max="5" style="width: 70px; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border); font-family: inherit; font-weight: 700; text-align: center;">
                             </div>
+                            <div style="display: flex; flex-direction: column;">
+                                <label style="font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Lv5 Owner</label>
+                                <input type="text" id="sim-lv5-owner" placeholder="Username..." style="width: 120px; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border); font-family: inherit; font-weight: 700;">
+                            </div>
                             <button class="btn btn-outline" style="align-self: flex-end; padding: 0.65rem 1rem;" onclick="document.getElementById('sim-messages').innerHTML=''; document.getElementById('sim-debug-content').innerHTML='<div class=\\\'debug-item\\\'>Waiting for interaction...</div>'">Clear</button>
                         </div>
                     </div>
@@ -823,6 +827,11 @@ function getAdminDashboardHTML(stats, user) {
                         body: JSON.stringify({ 
                             user: { username: 'Yogaa', level: parseInt(heartLv) }, 
                             message: text,
+                            context: {
+                                relationship: {
+                                    lv5_username: document.getElementById('sim-lv5-owner').value
+                                }
+                            },
                             system: { ai_name: document.getElementById('sim-select').value }
                         })
                     });

@@ -418,8 +418,8 @@ Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowe
                 clientObj.stats.errors++; // Error!
                 // Jika error adalah rate limit (token habis)
                 if (error.status === 429 || error.message.toLowerCase().includes('rate limit')) {
-                    clientObj.cooldownUntil = Date.now() + (2 * 3600 * 1000); // Delay 2 jam
-                    console.warn(`[NPC] Otak ${clientObj.id} Exhausted! Delay 2 jam.`);
+                    clientObj.cooldownUntil = Date.now() + (1 * 3600 * 1000); // Delay 1 jam
+                    console.warn(`[NPC] Otak ${clientObj.id} Exhausted! Delay 1 jam.`);
                 } else {
                     console.warn(`[NPC] Otak ${clientObj.id} error:`, error.message);
                 }

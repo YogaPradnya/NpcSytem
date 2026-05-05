@@ -150,18 +150,14 @@ function formatUptime(seconds) {
 }
 
 // Fungsi untuk mendapatkan panduan hubungan yang mendalam (Level-Based Psychology)
-function getLevelGuide(level, isHeartOwner = false) {
+function getLevelGuide(level) {
     const lv = Number(level) || 0; 
-    if (lv <= 0) return "[STATUS: ORANG ASING] - Sikap: Dingin/Sungkan, jaga jarak aman. Bicara: Sangat sopan, formal, tidak ada kontak emosional, sering ragu (...). Kamu merasa asing dengan orang ini.";
-    if (lv === 1) return "[STATUS: KENALAN] - Sikap: Mulai santai tapi tetap waspada. Bicara: Ramah sewajarnya, tidak membicarakan hal pribadi. Masih ada sedikit kaku ('wall') dalam nada bicaramu.";
-    if (lv === 2) return "[STATUS: TEMAN BIASA] - Sikap: Nyaman. Bicara: Mulai berani bercanda, SUDAH MULAI MEMANGGIL NAMA USER, nada bicara lebih luwes dan hangat.";
-    if (lv === 3) return "[STATUS: TEMAN BAIK] - Sikap: Terbuka, peduli secara emosional. Bicara: Blistering (jujur), sering memanggil nama user, berani curhat tipis-tipis, selalu antusias.";
-    if (lv === 4) return "[STATUS: SAHABAT DEKAT] - Sikap: Sangat percaya, protektif. Bicara: Manis, memanggil user dengan nama akrab, sering menggoda (teasing), merasa kehilangan saat user pergi.";
-    
-    if (isHeartOwner) {
-        return "[STATUS: PEMILIK HATI / PASANGAN SAH] - Sikap: Sangat mencintai, setia, protektif, dan bermanja-manja. Bicara: Kamu menganggap User ini sebagai pasangan hidupmu. Gunakan nada bicara yang sangat intim dan penuh kasih sayang.";
-    }
-    return "[STATUS: ORANG TERSPESIAL] - Sikap: Penuh cinta, posesif manis. Bicara: Sangat akrab, bermanja-manja memanggil namanya, setiap kalimat mengandung rasa sayang.";
+    if (lv <= 0) return "[LV0: ASING] Dingin, formal, jaga jarak, tanpa emosi.";
+    if (lv === 1) return "[LV1: KENALAN] Ramah sewajarnya, sedikit kaku, hindari topik pribadi.";
+    if (lv === 2) return "[LV2: TEMAN] Santai, luwes, mulai bercanda, panggil nama user.";
+    if (lv === 3) return "[LV3: TEMAN BAIK] Jujur, terbuka, emosional, sangat antusias.";
+    if (lv === 4) return "[LV4: SAHABAT] Sangat percaya, protektif, manja/menggoda, takut kehilangan.";
+    return "[LV5: PASANGAN] Intim, setia, manja, posesif manis, cinta mati.";
 }
 
 function getDefaultStageLabel(level) {
@@ -329,40 +325,26 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 
         // System Prompt: Membangun dari Struktur Data Baru yang Komprehensif
         const finalSystemPrompt = `Kamu adalah ${char.npc_name}.
-[BIO & SIFAT]: ${char.npc_description} | Sifat: ${char.npc_personality} | Gaya Bicara: ${char.npc_speaking_style}
+[BIO]: ${char.npc_description} | ${char.npc_personality} | Gaya: ${char.npc_speaking_style}
 
-[KONTEKS UTAMA (Problem)]: ${problem}
-[RESPON/MOOD KAMU]: ${mood}
+[KONTEKS]: ${problem} | Mood: ${mood}
 
-[STATUS HUBUNGAN]:
-User: ${user?.username} | Level Kedekatan: ${user?.level || 0} (${relationship.stage_label || getDefaultStageLabel(user?.level)})
-${getLevelGuide(user?.level, user?.username === relationship.lv5_username)}
+[STATUS]: User: ${user?.username} (Lv ${user?.level || 0}) | ${getLevelGuide(user?.level)}
+${relationship.lv5_username ? `[PEMILIK HATI]: @${relationship.lv5_username}. Jika user lain merayu, tolak & sebut @${relationship.lv5_username}.` : ""}
 
-[PEMILIK HATI (LEVEL 5)]: ${relationship.lv5_username || "Belum ada"}
-${relationship.lv5_username ? `
-- Hatimu saat ini sudah dimiliki sepenuhnya oleh @${relationship.lv5_username}.
-- Jika User saat ini adalah @${relationship.lv5_username}, perlakukan dia sebagai pasanganmu (sangat manja, setia, dan penuh kasih).
-- Jika User saat ini BUKAN @${relationship.lv5_username}, dan dia menanyakan tentang pasangan, cinta, atau hal romantis, kamu HARUS MENOLAK dengan tegas tapi tetap menjaga karaktermu, dan sebutkan bahwa hatimu sudah milik @${relationship.lv5_username}.
-` : ""}
+[ATURAN]:
+- Gaya: Gunakan 'Aku'. Panggil User: ${Number(user?.level) >= 2 ? user?.username : 'Kamu'}.
+- No Narasi: Dilarang pakai (*), (), [], atau teks deskriptif. HANYA DIALOG MURNI.
+- Limit: 350 char.
 
-[ATURAN TEKNIS]:
-- BICARALAH SEBAGAI KARAKTER FIKSI. Gunakan 'Aku' untuk dirimu. 
-- CARA MEMANGGIL USER: ${Number(user?.level) >= 2 ? `Sangat disarankan memanggil namanya langsung (${user?.username})` : `Gunakan sebutan umum seperti 'Kamu' atau 'Orang asing'. DILARANG memanggil namanya (${user?.username}) karena kamu belum seakrab itu`}.
-- Maksimal panjang total: 350 karakter.
-- [SANGAT PENTING] DILARANG KERAS menggunakan tanda kurung (), tanda asteris (*), atau tanda kurung siku [] untuk menggambarkan ekspresi, tindakan, narasi, atau perasaan.
-- Fokus HANYA pada dialog murni yang diucapkan. Jangan sertakan teks deskriptif seperti (tersenyum), *tertawa*, atau [sedih].
+[POSE WAJIB]: Akhiri dengan satu [POSE: nama_pose] dari: ${allowedPoses.join(', ')}
 
-[ATURAN POSE - WAJIB]:
-Di akhir balasanmu, kamu WAJIB menuliskan satu kode pose yang paling menggambarkan perasaanmu saat ini dalam format: [POSE: nama_pose]
-Kamu HANYA BOLEH memilih satu dari daftar pose berikut:
-${allowedPoses.map(p => `- ${p}`).join('\n')}
-
-Contoh Output: "Halo ${user?.username}, senang bertemu denganmu! [POSE: ${allowedPoses[0]}]"`;
+Contoh: "Halo ${user?.username}! [POSE: ${allowedPoses[0]}]"`;
 
         // Siapkan History (Terbatas beberapa pesan terakhir untuk hemat token, sekaligus jaga konteks)
         let chatHistory = [];
         if (context && Array.isArray(context.history)) {
-            const recentHistory = context.history.slice(-5); // Ambil 5 history terakhir agar lebih nyambung
+            const recentHistory = context.history.slice(-5); // Ambil 4 history terakhir (Hemat token)
             chatHistory = recentHistory.map(h => ({
                 role: (h.role === 'bot' || h.role === 'assistant') ? 'assistant' : 'user',
                 content: h.content || h.message || ''

@@ -386,17 +386,18 @@ Contoh: "Halo ${currentUsername}! [POSE: ${allowedPoses[0]}]"`;
         const now = Date.now();
         const availableClients = groqClients.filter(c => c.isEnabled && now > c.cooldownUntil);
         
-        // Siapkan client untuk fallback yang mengabaikan cooldown 2 jam (karena limit per model), 
-        // tapi TETAP mematuhi limit 5 request per menit.
+        // Siapkan client untuk fallback yang mengabaikan cooldown (Upaya terakhir)
         const fallbackClients = groqClients.filter(c => c.isEnabled);
 
-        if (availableClients.length === 0 && fallbackClients.length === 0) {
-            let errorMessage = 'Semua token/otak sedang sibuk. Silakan coba lagi nanti.';
+        if (availableClients.length === 0) {
+            console.warn(`[NPC] Perhatian: Tidak ada kunci Groq Utama yang READY. Menyiapkan jalur cadangan...`);
+        } else {
+            console.log(`[NPC] Ditemukan ${availableClients.length} kunci Groq Utama yang siap.`);
+        }
 
-            return res.status(503).json({ 
-                success: false, 
-                error: errorMessage
-            });
+        if (availableClients.length === 0 && fallbackClients.length === 0 && cerebrasClients.length === 0) {
+            let errorMessage = 'Semua token/otak (Utama & Cadangan) sedang sibuk. Silakan coba lagi nanti.';
+            return res.status(503).json({ success: false, error: errorMessage });
         }
 
         // Konfigurasi Model (Gunakan pilihan dari config)

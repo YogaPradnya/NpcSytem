@@ -215,6 +215,22 @@ async function initDB() {
         try { await db.execute("ALTER TABLE chat_logs ADD COLUMN ai_pose TEXT"); } catch (e) {}
         try { await db.execute("ALTER TABLE chat_logs ADD COLUMN user_level INTEGER"); } catch (e) {}
 
+        await db.execute(`CREATE TABLE IF NOT EXISTS banned_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+
+        await db.execute(`CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )`);
+
+        // Insert default ban message if not exists
+        await db.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('ban_message', 'Aku malas berbicara dengan kamu.')");
+
+        console.log("[DB] Tables 'characters', 'chat_logs', 'users', 'banned_users', & 'settings' ready.");
+
         await db.execute(`
             CREATE TABLE IF NOT EXISTS users (
                 username TEXT PRIMARY KEY,
@@ -323,6 +339,35 @@ app.post('/api/npc/v1/chat', async (req, res) => {
     const startTime = Date.now();
     try {
         const { user, message, context, system } = req.body;
+        let currentUsername = user?.username || system?.user_name || 'Guest';
+        currentUsername = currentUsername.toString().trim().replace(/^@/, ''); // Hapus prefix @ jika ada
+
+        // 0. CEK APAKAH USER DI-BAN
+        const banCheck = await db.execute({
+            sql: "SELECT * FROM banned_users WHERE LOWER(TRIM(username)) = LOWER(?)",
+            args: [currentUsername]
+        });
+
+        if (banCheck.rows.length > 0) {
+            const banMsgSetting = await db.execute({
+                sql: "SELECT value FROM settings WHERE key = 'ban_message'",
+                args: []
+            });
+            const banMsg = banMsgSetting.rows[0]?.value || "Aku malas berbicara dengan kamu.";
+            
+            return res.json({
+                ai_name: system?.ai_name || "NPC",
+                ai_pose: "sad",
+                sentences: [banMsg],
+                debug: {
+                    model: "BLOCKED",
+                    tokens: 0,
+                    otak_id: "BAN-SYSTEM",
+                    system_prompt: "USER BANNED",
+                    latency: Date.now() - startTime
+                }
+            });
+        }
 
         if (!message) return res.status(400).json({ success: false, error: 'Message is required' });
 
@@ -349,28 +394,27 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 
         const dynamicGuardsString = dynamicGuards.length > 0 ? '\n' + dynamicGuards.join('\n') : '';
 
-        const currentUsername = user?.username || system?.user_name || 'Guest';
         // Ambil data Pemilik Hati (Lv 5) dari berbagai kemungkinan field FE agar akurat
         const lv5Owner = relationship.lv5_username || system?.lv5_username || context?.lv5_username || "";
         const isOwner = lv5Owner && currentUsername.toLowerCase() === lv5Owner.toLowerCase();
 
         // System Prompt: Membangun dari Struktur Data Baru yang Komprehensif
         const finalSystemPrompt = `Kamu adalah ${char.npc_name}.
-[BIO]: ${char.npc_description} | ${char.npc_personality} | Gaya: ${char.npc_speaking_style}
+[BIO]: ${char.npc_description} | ${char.npc_personality} | Gaya Bicara: ${char.npc_speaking_style}
 
 [KONTEKS]: ${problem} | Mood: ${mood}
 
 [STATUS]: User: ${currentUsername} (Lv ${user?.level || 0}) | ${getLevelGuide(user?.level)}
-${lv5Owner ? `[PASANGAN HIDUP]: @${lv5Owner}. Kamu sangat mencintai @${lv5Owner} lebih dari siapa pun. ${!isOwner ? `Jika ${currentUsername} merayu atau bersikap romantis, TOLAK DENGAN TEGAS. Katakan bahwa hatimu hanya milik @${lv5Owner} dan Kamu tidak tertarik pada orang lain.` : `Saat ini Kamu sedang berbicara dengan @${lv5Owner}, orang yang paling Kamu cintai.`}` : ""}
+${lv5Owner ? `[LOYALITAS MUTLAK]: Pasangan hidupmu adalah @${lv5Owner}. ${!isOwner ? `Jika ${currentUsername} bicara santai, responlah sewajarnya sesuai Level ${user?.level || 0}. Namun, JIKA ${currentUsername} mulai merayu, bersikap romantis, atau bicara soal perasaan cinta, Kamu WAJIB menolaknya dan langsung membelokkan pembicaraan tentang betapa Kamu hanya mencintai @${lv5Owner}. Jangan beri harapan sedikit pun pada ${currentUsername}.` : `Kamu sedang berbicara dengan @${lv5Owner}, orang yang paling Kamu puja dan cintai di semesta ini. Bersikaplah sangat manja.`}` : ""}
 
-[ATURAN]:
-- Gaya: Gunakan 'Aku'. Panggil User: ${Number(user?.level) >= 2 ? currentUsername : 'Kamu'}.
-- No Narasi: Dilarang pakai (*), (), [], atau teks deskriptif. HANYA DIALOG MURNI.
-- Limit: 350 char.
+[ATURAN TEGAS]:
+1. Gaya Bicara: WAJIB konsisten dengan karakter ${char.npc_name}. Jangan keluar dari karakter!
+2. No Narasi: Dilarang pakai (*), (), [], atau teks deskriptif. HANYA DIALOG MURNI.
+3. Limit: 350 karakter.
+4. POSE WAJIB: Setiap satu pesan balasan, Kamu WAJIB mengakhirinya dengan tepat satu [POSE: nama_pose] di akhir kalimat.
+   Pose tersedia: ${allowedPoses.join(', ')}
 
-[POSE WAJIB]: Akhiri dengan satu [POSE: nama_pose] dari: ${allowedPoses.join(', ')}
-
-Contoh: "Halo ${currentUsername}! [POSE: ${allowedPoses[0]}]"`;
+Contoh Respon: "Halo ${currentUsername}, apa yang kamu lakukan di sini? [POSE: ${allowedPoses[0]}]"`;
 
         // Siapkan History (Terbatas beberapa pesan terakhir untuk hemat token, sekaligus jaga konteks)
         let chatHistory = [];
@@ -654,7 +698,15 @@ Contoh: "Halo ${currentUsername}! [POSE: ${allowedPoses[0]}]"`;
             debug: {
                 model: completion.model,
                 tokens: tokens,
-                otak_id: success ? (availableClients.find(c => c.client.apiKey === completion._options?.apiKey)?.id || 'Fallback') : 'N/A',
+                otak_id: success ? (
+                    (() => {
+                        const groqMatch = groqClients.find(c => c.client.apiKey === completion._options?.apiKey);
+                        if (groqMatch) return `UTAMA #${groqMatch.id}`;
+                        const cerebrasMatch = cerebrasClients.find(c => c.client.apiKey === completion._options?.apiKey);
+                        if (cerebrasMatch) return `CADANGAN #${cerebrasMatch.id}`;
+                        return 'FALLBACK';
+                    })()
+                ) : 'N/A',
                 system_prompt: finalSystemPrompt,
                 latency: endTime - startTime
             }
@@ -972,7 +1024,57 @@ app.get('/api/characters', async (req, res) => {
     }
 });
 
+// API BAN MANAGEMENT
+app.get('/api/admin/ban-list', async (req, res) => {
+    try {
+        const bans = await db.execute("SELECT * FROM banned_users ORDER BY created_at DESC");
+        const settings = await db.execute("SELECT value FROM settings WHERE key = 'ban_message'");
+        res.json({ success: true, list: bans.rows, ban_message: settings.rows[0]?.value });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
+app.post('/api/admin/ban-user', async (req, res) => {
+    let { username } = req.body;
+    username = username.toString().trim().replace(/^@/, ''); // Sanitize input
+    try {
+        await db.execute({
+            sql: "INSERT OR IGNORE INTO banned_users (username) VALUES (?)",
+            args: [username]
+        });
+        res.json({ success: true, message: `User ${username} berhasil di-ban.` });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/admin/unban-user', async (req, res) => {
+    let { username } = req.body;
+    username = username.toString().trim().replace(/^@/, ''); // Sanitize input
+    try {
+        await db.execute({
+            sql: "DELETE FROM banned_users WHERE username = ?",
+            args: [username]
+        });
+        res.json({ success: true, message: `User ${username} berhasil dilepas dari ban.` });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/admin/update-ban-message', async (req, res) => {
+    const { message } = req.body;
+    try {
+        await db.execute({
+            sql: "UPDATE settings SET value = ? WHERE key = 'ban_message'",
+            args: [message]
+        });
+        res.json({ success: true, message: "Pesan ban berhasil diperbarui." });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 app.listen(PORT, () => {
     console.log(`------------------------------------------`);

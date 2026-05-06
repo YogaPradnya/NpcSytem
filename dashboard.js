@@ -432,6 +432,7 @@ function getAdminDashboardHTML(stats, user) {
                 ${isAdmin ? `
                     <div class="nav-item" onclick="showPage('otak', this)">Manajemen Otak</div>
                     <div class="nav-item" onclick="showPage('users', this)">Daftar User</div>
+                    <div class="nav-item" onclick="showPage('banlist', this)">Daftar Ban</div>
                 ` : ''}
                 <div class="nav-item" onclick="showPage('simulator', this)">Live Simulator</div>
                 ${isAdmin ? `
@@ -547,11 +548,45 @@ function getAdminDashboardHTML(stats, user) {
                 </div>
             </div>
 
+            <div id="page-banlist" class="hidden">
+                <header>
+                    <h1>Daftar Ban User</h1>
+                </header>
+                <div style="display: grid; grid-template-columns: 350px 1fr; gap: 2rem;">
+                    <!-- Bagian Kiri: Form & Setting -->
+                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                        <div class="card-section" style="padding: 1.5rem;">
+                            <h2 style="font-size: 1rem; margin-bottom: 1rem; color: var(--danger);">Ban User Baru</h2>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="text" id="ban-username-input" placeholder="Username..." style="flex: 1; padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid var(--border); outline: none;">
+                                <button class="btn btn-danger" onclick="banUser()" style="border-radius: 8px;">Ban</button>
+                            </div>
+                        </div>
+                        
+                        <div class="card-section" style="padding: 1.5rem;">
+                            <h2 style="font-size: 1rem; margin-bottom: 1rem;">Pengaturan Pesan Ban</h2>
+                            <textarea id="ban-message-input" rows="3" style="width: 100%; padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border); outline: none; margin-bottom: 0.8rem; resize: vertical;"></textarea>
+                            <button class="btn" style="width: 100%;" onclick="updateBanMessage()">Simpan Pesan</button>
+                        </div>
+                    </div>
+
+                    <!-- Bagian Kanan: List Banned Users -->
+                    <div class="card-section" style="height: fit-content;">
+                        <div class="table-container">
+                            <table>
+                                <thead><tr><th>BANNED USERNAME</th><th>TANGGAL BAN</th><th style="text-align:right">AKSI</th></tr></thead>
+                                <tbody id="banlist-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div id="page-logs" class="hidden">
                 <header>
                     <h1>Interaction Logs</h1>
                     <div style="display:flex; gap:1rem; align-items:center">
-                        <input type="text" id="log-search" placeholder="Search actor..." onkeyup="filterLogs()" style="padding:0.6rem 1rem; border-radius:10px; border:1px solid var(--border); width:250px; font-size:0.9rem">
+                        <input type="text" id="log-search" placeholder="Search actor or chat..." onkeyup="filterLogs()" style="padding:0.6rem 1rem; border-radius:10px; border:1px solid var(--border); width:250px; font-size:0.9rem">
                         <button class="btn btn-outline" onclick="loadLogs()">Sync</button>
                     </div>
                 </header>
@@ -584,11 +619,16 @@ function getAdminDashboardHTML(stats, user) {
                     <div style="display: flex; gap: 0.75rem;">
                         <div style="background: #fff; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 10px;">
                             <label style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Karakter</label>
-                            <select id="sim-select" style="border: none; font-weight: 700; outline: none; cursor: pointer; color: var(--primary);"></select>
+                            <select id="sim-select" style="border: none; font-weight: 700; outline: none; cursor: pointer; color: var(--primary); background: transparent; padding-right: 5px; font-size: 14px; -webkit-appearance: none; -moz-appearance: none; appearance: none;"></select>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none; margin-left: -5px;"><path d="m6 9 6 6 6-6"/></svg>
                         </div>
                         <div style="background: #fff; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 10px;">
                             <label style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Heart</label>
                             <input type="number" id="sim-heart" value="0" min="0" max="5" style="border: none; width: 35px; font-weight: 800; outline: none; text-align: center;">
+                        </div>
+                        <div style="background: #fff; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 10px;">
+                            <label style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Lv5 Owner</label>
+                            <input type="text" id="sim-lv5-owner" placeholder="Username..." style="border: none; width: 100px; font-weight: 700; outline: none; color: var(--info);">
                         </div>
                         <button class="btn btn-outline" style="padding: 0.65rem 1rem; border-radius: 12px;" onclick="document.getElementById('sim-messages').innerHTML='<div class=\'msg msg-bot\'>Silakan pilih karakter dan ketik pesan untuk mulai simulasi.</div>'; document.getElementById('sim-debug-content').innerHTML='<div class=\'debug-item\'>Waiting for interaction...</div>'">Clear</button>
                     </div>
@@ -857,7 +897,15 @@ function getAdminDashboardHTML(stats, user) {
                     </tr>\`; 
                 });
             }
-            function filterLogs() { const q = document.getElementById('log-search').value.toLowerCase(); renderLogs(allLogs.filter(l => l.username.toLowerCase().includes(q) || l.ai_name.toLowerCase().includes(q))); }
+            function filterLogs() { 
+                const q = document.getElementById('log-search').value.toLowerCase(); 
+                renderLogs(allLogs.filter(l => 
+                    (l.username && l.username.toLowerCase().includes(q)) || 
+                    (l.ai_name && l.ai_name.toLowerCase().includes(q)) ||
+                    (l.user_message && l.user_message.toLowerCase().includes(q)) ||
+                    (l.bot_response && l.bot_response.toLowerCase().includes(q))
+                )); 
+            }
 
             async function loadUsers(page = 1) {
                 userPage = page;
@@ -889,9 +937,9 @@ function getAdminDashboardHTML(stats, user) {
 
             async function viewUserDetail(username) {
                 showToast('Fetching logs for ' + username + '...', 'success');
-                const r = await fetch('/api/admin/logs'); 
+                const r = await fetch('/api/admin/user-logs/' + encodeURIComponent(username));
                 const d = await r.json();
-                const userLogs = d.logs.filter(l => l.username === username);
+                const userLogs = d.logs || [];
                 
                 document.getElementById('log-popup-title').innerText = 'Logs for @' + username;
                 const b = document.getElementById('log-popup-body');
@@ -967,6 +1015,11 @@ function getAdminDashboardHTML(stats, user) {
                         body: JSON.stringify({ 
                             user: { username: 'Yogaa', level: parseInt(heartLv) }, 
                             message: text,
+                            context: {
+                                relationship: {
+                                    lv5_username: document.getElementById('sim-lv5-owner').value
+                                }
+                            },
                             system: { ai_name: document.getElementById('sim-select').value }
                         })
                     });
@@ -984,7 +1037,7 @@ function getAdminDashboardHTML(stats, user) {
                     if (d.debug) {
                         const dbg = document.getElementById('sim-debug-content');
                         dbg.innerHTML = \`
-                            <div class="debug-item"><span class="debug-label">Otak Terpilih</span><span class="debug-value">#\${d.debug.otak_id} (\${d.debug.model})</span></div>
+                            <div class="debug-item"><span class="debug-label">Otak Terpilih</span><span class="debug-value">\${d.debug.otak_id} (\${d.debug.model})</span></div>
                             <div class="debug-item"><span class="debug-label">Total Token</span><span class="debug-value">\${d.debug.tokens} toks</span></div>
                             <div class="debug-item"><span class="debug-label">Kecepatan (Latency)</span><span class="debug-value">\${d.debug.latency}ms</span></div>
                             <div class="debug-item"><span class="debug-label">Ekspresi / Pose</span><span class="debug-value" style="color:var(--primary)">\${d.ai_pose || 'idle'}</span></div>
@@ -1102,6 +1155,99 @@ function getAdminDashboardHTML(stats, user) {
                     }
                 } catch(e) {}
             }, 5000);
+
+            // --- BAN LIST MANAGEMENT ---
+            async function loadBanList() {
+                try {
+                    const res = await fetch('/api/admin/ban-list');
+                    const data = await res.json();
+                    if (data.success) {
+                        const tbody = document.getElementById('banlist-body');
+                        tbody.innerHTML = data.list.map(b => \`
+                            <tr>
+                                <td style="font-weight: 700;">\${b.username}</td>
+                                <td style="color: var(--text-muted);">\${new Date(b.created_at).toLocaleString('id-ID')}</td>
+                                <td style="text-align: right;">
+                                    <button class="btn btn-danger" onclick="unbanUser('\${b.username}')">Unban</button>
+                                </td>
+                            </tr>
+                        \`).join('');
+                        document.getElementById('ban-message-input').value = data.ban_message || 'Aku malas berbicara dengan kamu.';
+                    }
+                } catch (e) {
+                    console.error("Failed to load ban list", e);
+                }
+            }
+
+            async function banUser() {
+                const username = document.getElementById('ban-username-input').value.trim();
+                if (!username) return showToast('Username tidak boleh kosong', 'error');
+                
+                try {
+                    const res = await fetch('/api/admin/ban-user', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast(data.message, 'success');
+                        document.getElementById('ban-username-input').value = '';
+                        loadBanList();
+                    } else {
+                        showToast(data.error, 'error');
+                    }
+                } catch (e) {
+                    showToast('Gagal memblokir user', 'error');
+                }
+            }
+
+            async function unbanUser(username) {
+                if (!confirm(\`Apakah kamu yakin ingin melepas ban untuk \${username}?\`)) return;
+                
+                try {
+                    const res = await fetch('/api/admin/unban-user', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast(data.message, 'success');
+                        loadBanList();
+                    } else {
+                        showToast(data.error, 'error');
+                    }
+                } catch (e) {
+                    showToast('Gagal melepas ban user', 'error');
+                }
+            }
+
+            async function updateBanMessage() {
+                const message = document.getElementById('ban-message-input').value.trim();
+                if (!message) return showToast('Pesan ban tidak boleh kosong', 'error');
+                
+                try {
+                    const res = await fetch('/api/admin/update-ban-message', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast(data.message, 'success');
+                    } else {
+                        showToast(data.error, 'error');
+                    }
+                } catch (e) {
+                    showToast('Gagal memperbarui pesan ban', 'error');
+                }
+            }
+
+            // Hook loadBanList to be called on start or when page is shown
+            document.addEventListener('DOMContentLoaded', () => {
+                if (${isAdmin}) loadBanList();
+            });
 
             showPage(${isAdmin} ? 'dashboard' : 'karakter');
 

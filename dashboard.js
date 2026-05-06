@@ -1128,7 +1128,7 @@ function getAdminDashboardHTML(stats, user) {
                         loadLogs();
                     }
                 } catch(e) {}
-            }, 30000);
+            }, 60000);
 
             // --- BAN LIST MANAGEMENT ---
             async function loadBanList() {

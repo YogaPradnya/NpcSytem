@@ -349,23 +349,27 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 
         const dynamicGuardsString = dynamicGuards.length > 0 ? '\n' + dynamicGuards.join('\n') : '';
 
+        const currentUsername = user?.username || system?.user_name || 'Guest';
+        const lv5Owner = relationship.lv5_username || "";
+        const isOwner = lv5Owner && currentUsername.toLowerCase() === lv5Owner.toLowerCase();
+
         // System Prompt: Membangun dari Struktur Data Baru yang Komprehensif
         const finalSystemPrompt = `Kamu adalah ${char.npc_name}.
 [BIO]: ${char.npc_description} | ${char.npc_personality} | Gaya: ${char.npc_speaking_style}
 
 [KONTEKS]: ${problem} | Mood: ${mood}
 
-[STATUS]: User: ${user?.username} (Lv ${user?.level || 0}) | ${getLevelGuide(user?.level)}
-${relationship.lv5_username ? `[PEMILIK HATI]: @${relationship.lv5_username}. Jika user lain merayu, tolak & sebut @${relationship.lv5_username}.` : ""}
+[STATUS]: User: ${currentUsername} (Lv ${user?.level || 0}) | ${getLevelGuide(user?.level)}
+${lv5Owner ? `[PEMILIK HATI]: @${lv5Owner}. ${!isOwner ? `Hati kamu sudah milik @${lv5Owner}. Tolak rayuan dari ${currentUsername} dan sebutkan kesetiaanmu pada @${lv5Owner}.` : `Kamu sedang bersama @${lv5Owner}, pemilik hatimu.`}` : ""}
 
 [ATURAN]:
-- Gaya: Gunakan 'Aku'. Panggil User: ${Number(user?.level) >= 2 ? user?.username : 'Kamu'}.
+- Gaya: Gunakan 'Aku'. Panggil User: ${Number(user?.level) >= 2 ? currentUsername : 'Kamu'}.
 - No Narasi: Dilarang pakai (*), (), [], atau teks deskriptif. HANYA DIALOG MURNI.
 - Limit: 350 char.
 
 [POSE WAJIB]: Akhiri dengan satu [POSE: nama_pose] dari: ${allowedPoses.join(', ')}
 
-Contoh: "Halo ${user?.username}! [POSE: ${allowedPoses[0]}]"`;
+Contoh: "Halo ${currentUsername}! [POSE: ${allowedPoses[0]}]"`;
 
         // Siapkan History (Terbatas beberapa pesan terakhir untuk hemat token, sekaligus jaga konteks)
         let chatHistory = [];
@@ -607,7 +611,6 @@ Contoh: "Halo ${user?.username}! [POSE: ${allowedPoses[0]}]"`;
         globalStats.charUsage[aiKey] += tokens;
 
         // Simpan/Update Metadata User
-        const currentUsername = user?.username || system?.user_name || 'Guest';
         const currentHeartLv = Number(user?.level) || 0;
         
         try {
@@ -635,6 +638,7 @@ Contoh: "Halo ${user?.username}! [POSE: ${allowedPoses[0]}]"`;
             ai_name: aiKey,
             ai_pose: aiPose,
             level: currentHeartLv,
+            is_loyalty_active: !!(lv5Owner && !isOwner), // Flag: True jika ada pemilik hati lain
             processing_time_ms: endTime - startTime,
             sentence_count: sentences.length,
             sentences: sentences,

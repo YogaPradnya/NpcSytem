@@ -350,7 +350,8 @@ app.post('/api/npc/v1/chat', async (req, res) => {
         const dynamicGuardsString = dynamicGuards.length > 0 ? '\n' + dynamicGuards.join('\n') : '';
 
         const currentUsername = user?.username || system?.user_name || 'Guest';
-        const lv5Owner = relationship.lv5_username || "";
+        // Ambil data Pemilik Hati (Lv 5) dari berbagai kemungkinan field FE agar akurat
+        const lv5Owner = relationship.lv5_username || system?.lv5_username || context?.lv5_username || "";
         const isOwner = lv5Owner && currentUsername.toLowerCase() === lv5Owner.toLowerCase();
 
         // System Prompt: Membangun dari Struktur Data Baru yang Komprehensif
@@ -360,7 +361,7 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 [KONTEKS]: ${problem} | Mood: ${mood}
 
 [STATUS]: User: ${currentUsername} (Lv ${user?.level || 0}) | ${getLevelGuide(user?.level)}
-${lv5Owner ? `[PEMILIK HATI]: @${lv5Owner}. ${!isOwner ? `Hati kamu sudah milik @${lv5Owner}. Tolak rayuan dari ${currentUsername} dan sebutkan kesetiaanmu pada @${lv5Owner}.` : `Kamu sedang bersama @${lv5Owner}, pemilik hatimu.`}` : ""}
+${lv5Owner ? `[PASANGAN HIDUP]: @${lv5Owner}. Kamu sangat mencintai @${lv5Owner} lebih dari siapa pun. ${!isOwner ? `Jika ${currentUsername} merayu atau bersikap romantis, TOLAK DENGAN TEGAS. Katakan bahwa hatimu hanya milik @${lv5Owner} dan Kamu tidak tertarik pada orang lain.` : `Saat ini Kamu sedang berbicara dengan @${lv5Owner}, orang yang paling Kamu cintai.`}` : ""}
 
 [ATURAN]:
 - Gaya: Gunakan 'Aku'. Panggil User: ${Number(user?.level) >= 2 ? currentUsername : 'Kamu'}.

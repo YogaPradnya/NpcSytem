@@ -3,6 +3,7 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const Groq = require('groq-sdk');
+const Cerebras = require('@cerebras/cerebras_cloud_sdk');
 const cookieParser = require('cookie-parser');
 require('dotenv').config();
 const { createClient } = require('@libsql/client');
@@ -290,8 +291,32 @@ const groqClients = keys.map((key, index) => ({
 }));
 
 if (groqClients.length === 0) {
-    console.warn("[NPC] Peringatan: Tidak ada API Key Groq yang ditemukan di .env!");
-}   
+    console.warn("[NPC] Peringatan: Tidak ada API Key Utama yang ditemukan di .env!");
+}
+
+// Inisialisasi Cerebras Clients (Ultimate Fallback)
+const cerebrasKeys = [
+    process.env.CEREBRAS_API_KEY,
+    process.env.CEREBRAS_API_KEY_2,
+    process.env.CEREBRAS_API_KEY_3,
+    process.env.CEREBRAS_API_KEY_4,
+    process.env.CEREBRAS_API_KEY_5,
+    process.env.CEREBRAS_API_KEY_6,
+    process.env.CEREBRAS_API_KEY_7,
+].filter(Boolean);
+
+const cerebrasClients = cerebrasKeys.map((key, index) => ({
+    id: index + 1,
+    client: new Cerebras({ apiKey: key }),
+    cooldownUntil: 0,
+    isEnabled: true,
+    stats: {
+        requests: 0,
+        success: 0,
+        errors: 0,
+        tokens: 0
+    }
+}));
 
 app.post('/api/npc/v1/chat', async (req, res) => {
     const startTime = Date.now();
@@ -440,8 +465,49 @@ Contoh: "Halo ${user?.username}! [POSE: ${allowedPoses[0]}]"`;
         }
 
 
+        // 3. Ultimate Fallback: Cerebras (Jika Groq benar-benar mati/limit)
+        if (!success && cerebrasClients.length > 0) {
+            const availableCerebras = cerebrasClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil);
+            
+            if (availableCerebras.length > 0) {
+                console.warn(`[NPC] API Utama lumpuh, mencoba API Cadangan...`);
+                
+                for (let i = 0; i < availableCerebras.length; i++) {
+                    const clientObj = availableCerebras[i];
+                    const client = clientObj.client;
+                    clientObj.stats.requests++;
+
+                    try {
+                        completion = await client.chat.completions.create({
+                            model: 'llama3.1-8b',
+                            messages: [
+                                { role: 'system', content: finalSystemPrompt },
+                                ...chatHistory,
+                                { role: 'user', content: message }
+                            ],
+                            max_tokens: 150,
+                            temperature: 0.8
+                        });
+                        
+                        const cTokens = completion.usage?.total_tokens || 0;
+                        clientObj.stats.success++;
+                        clientObj.stats.tokens += cTokens;
+                        success = true;
+                        console.log(`[NPC] Berhasil diselamatkan oleh API Cadangan #\${clientObj.id}!`);
+                        break;
+                    } catch (cErr) {
+                        clientObj.stats.errors++;
+                        console.error(`[NPC] API Cadangan #\${clientObj.id} error:`, cErr.message);
+                        if (cErr.status === 429) {
+                            clientObj.cooldownUntil = Date.now() + (30 * 60 * 1000); // 30 menit cooldown
+                        }
+                    }
+                }
+            }
+        }
+
         if (!success) {
-            throw new Error("Semua key (Primary maupun Fallback) sedang kehabisan token atau error.");
+            throw new Error("Semua key (Groq & Cerebras) sedang kehabisan token atau error.");
         }
 
         let fullResponse = completion.choices[0].message.content;
@@ -471,7 +537,12 @@ Contoh: "Halo ${user?.username}! [POSE: ${allowedPoses[0]}]"`;
         if (!cleanedText || cleanedText.length < 1) {
             fullResponse = "..."; 
         } else {
-            fullResponse = cleanedText;
+            // Hapus tanda kutip jika memicu wrapping (AI seringkali membungkus dialog dengan ")
+            let processedText = cleanedText;
+            if (processedText.startsWith('"') && processedText.endsWith('"')) {
+                processedText = processedText.substring(1, processedText.length - 1).trim();
+            }
+            fullResponse = processedText;
         }
         
         // Hard limit: 350 Karakter (Programmatic safety)
@@ -609,7 +680,16 @@ app.get('/api/stats', async (req, res) => {
     // Get top usage FROM DATABASE (Persistent)
     let topChars = [];
     try {
-        const topRes = await db.execute("SELECT ai_name as name, SUM(tokens) as toks FROM chat_logs GROUP BY ai_name ORDER BY toks DESC LIMIT 5");
+        const topRes = await db.execute(`
+            SELECT 
+                COALESCE(c.npc_name, l.ai_name) as name, 
+                SUM(l.tokens) as toks 
+            FROM chat_logs l
+            LEFT JOIN characters c ON l.ai_name = c.id
+            GROUP BY l.ai_name 
+            ORDER BY toks DESC 
+            LIMIT 10
+        `);
         topChars = topRes.rows;
     } catch(e) {
         console.error("[DB STATS ERROR]:", e.message);
@@ -628,6 +708,11 @@ app.get('/api/stats', async (req, res) => {
         available_keys: groqClients.length,
         active_keys: active,
         cooldown_keys: cooldown,
+        cerebras_stats: {
+            available: cerebrasClients.length,
+            active: cerebrasClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil).length,
+            total_tokens: cerebrasClients.reduce((acc, c) => acc + c.stats.tokens, 0)
+        },
         topChars,
         recentLogs
     });
@@ -640,7 +725,16 @@ app.get('/admin', sessionAuth, async (req, res) => {
     // Calculate Top Usage FROM DATABASE (Persistent)
     let topChars = [];
     try {
-        const topRes = await db.execute("SELECT ai_name as name, SUM(tokens) as toks FROM chat_logs GROUP BY ai_name ORDER BY toks DESC LIMIT 5");
+        const topRes = await db.execute(`
+            SELECT 
+                COALESCE(c.npc_name, l.ai_name) as name, 
+                SUM(l.tokens) as toks 
+            FROM chat_logs l
+            LEFT JOIN characters c ON l.ai_name = c.id
+            GROUP BY l.ai_name 
+            ORDER BY toks DESC 
+            LIMIT 10
+        `);
         topChars = topRes.rows;
     } catch(e) {}
 
@@ -657,6 +751,11 @@ app.get('/admin', sessionAuth, async (req, res) => {
         available_keys: groqClients.length,
         active_keys: active,
         cooldown_keys: groqClients.length - active,
+        cerebras_stats: {
+            available: cerebrasClients.length,
+            active: cerebrasClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil).length,
+            total_tokens: cerebrasClients.reduce((acc, c) => acc + c.stats.tokens, 0)
+        },
         topChars,
         recentLogs
     };
@@ -671,6 +770,18 @@ app.get('/api/admin/models', apiAuth, adminOnly, (req, res) => {
             const now = Date.now();
             return {
                 id: c.id,
+                type: 'GROQ',
+                isEnabled: c.isEnabled,
+                isCoolingDown: now < c.cooldownUntil,
+                cooldownRemaining: Math.max(0, Math.floor((c.cooldownUntil - now) / 1000)),
+                stats: c.stats
+            };
+        }),
+        cerebras: cerebrasClients.map(c => {
+            const now = Date.now();
+            return {
+                id: c.id,
+                type: 'CEREBRAS',
                 isEnabled: c.isEnabled,
                 isCoolingDown: now < c.cooldownUntil,
                 cooldownRemaining: Math.max(0, Math.floor((c.cooldownUntil - now) / 1000)),
@@ -682,11 +793,17 @@ app.get('/api/admin/models', apiAuth, adminOnly, (req, res) => {
 
 // API: Toggle Otak
 app.post('/api/admin/models/toggle', apiAuth, adminOnly, (req, res) => {
-    const { id, enabled } = req.body;
-    const otak = groqClients.find(c => c.id === id);
+    const { id, enabled, type } = req.body;
+    let otak;
+    if (type === 'CEREBRAS') {
+        otak = cerebrasClients.find(c => c.id === id);
+    } else {
+        otak = groqClients.find(c => c.id === id);
+    }
+
     if (otak) {
         otak.isEnabled = enabled;
-        res.json({ success: true, id, enabled });
+        res.json({ success: true, id, enabled, type });
     } else {
         res.status(404).json({ error: "Otak not found" });
     }
@@ -713,11 +830,31 @@ app.get('/api/admin/logs', apiAuth, adminOnly, async (req, res) => {
     }
 });
 
-// API: Get Users List
+// API: Get Users List (Paginated)
 app.get('/api/admin/users', apiAuth, adminOnly, async (req, res) => {
     try {
-        const result = await db.execute("SELECT * FROM users ORDER BY last_seen DESC");
-        res.json({ users: result.rows });
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 30;
+        const offset = (page - 1) * limit;
+
+        const result = await db.execute({
+            sql: "SELECT * FROM users ORDER BY last_seen DESC LIMIT ? OFFSET ?",
+            args: [limit, offset]
+        });
+
+        // Get total count for pagination UI
+        const countRes = await db.execute("SELECT COUNT(*) as total FROM users");
+        const total = countRes.rows[0].total;
+
+        res.json({ 
+            users: result.rows,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit)
+            }
+        });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -731,6 +868,25 @@ app.get('/api/admin/user-logs/:username', apiAuth, async (req, res) => {
             args: [req.params.username]
         });
         res.json({ logs: result.rows });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// API: Get Daily Usage Stats
+app.get('/api/admin/usage', apiAuth, adminOnly, async (req, res) => {
+    try {
+        const result = await db.execute(`
+            SELECT 
+                strftime('%Y-%m-%d', timestamp) as day, 
+                SUM(tokens) as total_tokens, 
+                COUNT(*) as total_requests 
+            FROM chat_logs 
+            GROUP BY day 
+            ORDER BY day DESC 
+            LIMIT 7
+        `);
+        res.json({ usage: result.rows });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

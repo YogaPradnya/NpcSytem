@@ -36,6 +36,7 @@ function getAdminDashboardHTML(stats, user) {
                 height: 100vh;
                 display: flex;
                 overflow: hidden;
+                font-size: 14px;
             }
 
             aside {
@@ -55,8 +56,8 @@ function getAdminDashboardHTML(stats, user) {
                 margin-bottom: 3rem;
                 letter-spacing: 0.5px;
             }
-            .brand h1 { font-size: 1.6rem; font-weight: 800; color: #fff; margin-bottom: 4px; text-transform: uppercase; }
-            .brand p { font-size: 0.8rem; color: #64748b; font-weight: 700; letter-spacing: 1px; }
+            .brand h1 { font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 4px; text-transform: uppercase; }
+            .brand p { font-size: 12px; color: #64748b; font-weight: 700; letter-spacing: 1px; }
 
             nav { display: flex; flex-direction: column; gap: 0.8rem; }
             .nav-item {
@@ -66,7 +67,7 @@ function getAdminDashboardHTML(stats, user) {
                 color: #94a3b8;
                 font-weight: 700;
                 transition: all 0.2s;
-                font-size: 1rem;
+                font-size: 14px;
                 text-align: center;
             }
             .nav-item:hover { background: rgba(255,255,255,0.05); color: #fff; transform: translateX(5px); }
@@ -83,7 +84,7 @@ function getAdminDashboardHTML(stats, user) {
                 background: #f8fafc;
                 width: 100%;
             }
-            header h1 { font-size: 2rem; font-weight: 800; }
+            header h1 { font-size: 16px; font-weight: 800; }
             header {
                 display: flex;
                 justify-content: space-between;
@@ -118,7 +119,7 @@ function getAdminDashboardHTML(stats, user) {
             .stat-card.orange { border-left-color: var(--primary); }
 
             .stat-card h3 { 
-                font-size: 0.9rem; 
+                font-size: 14px; 
                 color: var(--text-muted); 
                 text-transform: uppercase; 
                 margin-bottom: 0.5rem; 
@@ -126,7 +127,7 @@ function getAdminDashboardHTML(stats, user) {
                 font-weight: 800;
             }
             .stat-card p { 
-                font-size: 2.8rem; 
+                font-size: 24px; 
                 font-weight: 800; 
                 color: #1e293b; 
                 line-height: 1;
@@ -144,20 +145,11 @@ function getAdminDashboardHTML(stats, user) {
                 background: #fff;
                 border: 1px solid var(--border);
                 border-radius: 1rem;
-                padding: 1.5rem;
-                margin-bottom: 2rem;
+                padding: 1.25rem;
+                margin-bottom: 1.5rem;
                 box-shadow: 0 1px 3px rgba(0,0,0,0.02);
             }
-            .card-section h3 {
-                font-size: 0.8rem;
-                margin-bottom: 1.5rem;
-                color: var(--text-muted);
-                text-transform: uppercase;
-                font-weight: 700;
-                display: flex;
-                align-items: center;
-                gap: 0.5rem;
-            }
+            .card-section h3 { font-size: 16px; margin-bottom: 1.25rem; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 0.5rem; }
 
             .table-container { overflow-x: auto; }
             table { width: 100%; border-collapse: collapse; }
@@ -336,18 +328,88 @@ function getAdminDashboardHTML(stats, user) {
             .type-system { color: #a855f7; }
             .term-msg { color: #e2e8f0; flex: 1; white-space: pre-wrap; }
 
-            /* Debug Panel */
+            /* Simulator Specific */
+            .sim-container {
+                background: #fff;
+                border: 1px solid var(--border);
+                border-radius: 1.25rem;
+                overflow: hidden;
+                box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);
+                display: flex;
+                flex-direction: column;
+                height: calc(100vh - 180px);
+                min-height: 500px;
+                max-height: 700px;
+            }
+            #sim-messages {
+                flex: 1;
+                overflow-y: auto;
+                padding: 1.5rem;
+                display: flex;
+                flex-direction: column;
+                gap: 1rem;
+                background-color: #fcfcfc;
+                background-image: radial-gradient(#e2e8f0 0.5px, transparent 0.5px);
+                background-size: 20px 20px;
+            }
+            .msg {
+                max-width: 85%;
+                padding: 0.9rem 1.25rem;
+                border-radius: 1.25rem;
+                font-size: 14px;
+                line-height: 1.6;
+                position: relative;
+                animation: msgSlide 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            }
+            @keyframes msgSlide { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+            .msg-user {
+                align-self: flex-end;
+                background: var(--primary);
+                color: #fff;
+                border-bottom-right-radius: 0.2rem;
+                box-shadow: 0 4px 12px rgba(249, 115, 22, 0.2);
+            }
+            .msg-bot {
+                align-self: flex-start;
+                background: #fff;
+                color: var(--text-main);
+                border-bottom-left-radius: 0.2rem;
+                border: 1px solid var(--border);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            }
+            .msg-typing {
+                font-style: italic;
+                color: var(--text-muted);
+                font-size: 0.75rem;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+            .dot { width: 4px; height: 4px; background: #94a3b8; border-radius: 50%; animation: dotBounce 1.4s infinite ease-in-out; }
+            .dot:nth-child(2) { animation-delay: 0.2s; }
+            .dot:nth-child(3) { animation-delay: 0.4s; }
+            @keyframes dotBounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+            /* Debug Panel Enhancement */
             .debug-panel {
                 background: #fff;
                 border: 1px solid var(--border);
-                border-radius: 1rem;
-                padding: 1rem;
-                font-size: 0.75rem;
+                border-radius: 1.25rem;
+                padding: 1.25rem;
+                font-size: 13px;
+                height: calc(100vh - 180px);
+                min-height: 500px;
+                max-height: 700px;
+                display: flex;
+                flex-direction: column;
+                box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);
             }
-            .debug-header { font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem; display: flex; justify-content: space-between; }
-            .debug-item { margin-bottom: 0.5rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.4rem; }
-            .debug-label { color: var(--text-muted); font-weight: 600; }
-            .debug-value { color: var(--primary); font-weight: 700; font-family: monospace; }
+            .debug-header { font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 8px; font-size: 11px; }
+            .debug-header i { color: var(--primary); }
+            .debug-content { flex: 1; overflow-y: auto; }
+            .debug-item { margin-bottom: 0.75rem; background: #f8fafc; padding: 0.75rem; border-radius: 0.75rem; border: 1px solid #f1f5f9; }
+            .debug-label { color: var(--text-muted); font-weight: 700; display: block; margin-bottom: 2px; font-size: 11px; }
+            .debug-value { color: var(--text-main); font-weight: 700; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
         </style>
     </head>
     <body>
@@ -400,8 +462,18 @@ function getAdminDashboardHTML(stats, user) {
                     <div class="stat-card orange"><h3>Total Interaction</h3><p id="s-req">${stats.totalRequests}</p></div>
                     <div class="stat-card blue"><h3>Uptime Session</h3><p id="s-uptime" class="uptime-val">${stats.uptime}</p></div>
                     <div class="stat-card blue"><h3>Tokens Consumed</h3><p id="s-tok">${stats.totalTokens.toLocaleString()}</p></div>
-                    <div class="stat-card green"><h3>Cluster Nodes</h3><p id="s-active">${stats.active_keys}/${stats.available_keys}</p></div>
-                    <div class="stat-card red"><h3>Nodes Exhausted</h3><p id="s-cooldown">${stats.cooldown_keys}</p></div>
+                    <div class="stat-card green"><h3>Node Utama</h3><p id="s-active">${stats.active_keys}/${stats.available_keys}</p></div>
+                    <div class="stat-card orange"><h3>Node Cadangan</h3><p id="s-cerebras">${stats.cerebras_stats ? stats.cerebras_stats.active : 0}/${stats.cerebras_stats ? stats.cerebras_stats.available : 0}</p></div>
+                </div>
+
+                <div class="card-section">
+                    <h3>7-Day Usage History (Tokens & Reqs)</h3>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>DATE</th><th style="text-align:right">REQUESTS</th><th style="text-align:right">TOKENS</th></tr></thead>
+                            <tbody id="usage-body"><tr><td colspan="3" style="text-align:center; padding:1rem; color:var(--text-muted)">Loading usage data...</td></tr></tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <div class="dashboard-bottom">
@@ -466,10 +538,13 @@ function getAdminDashboardHTML(stats, user) {
                         <button class="btn btn-outline" onclick="loadUsers()">Refresh</button>
                     </div>
                 </header>
-                <div class="card-section"><div class="table-container"><table>
-                    <thead><tr><th>USERNAME</th><th>LAST ACTIVITY</th><th style="text-align:right">ANALYTICS</th></tr></thead>
-                    <tbody id="user-body"></tbody>
-                </table></div></div>
+                <div class="card-section">
+                    <div class="table-container"><table>
+                        <thead><tr><th>USERNAME</th><th>LAST ACTIVITY</th><th style="text-align:right">ANALYTICS</th></tr></thead>
+                        <tbody id="user-body"></tbody>
+                    </table></div>
+                    <div id="user-pagination" style="margin-top:1.5rem; display:flex; justify-content:center; gap:0.5rem; align-items:center"></div>
+                </div>
             </div>
 
             <div id="page-logs" class="hidden">
@@ -500,49 +575,51 @@ function getAdminDashboardHTML(stats, user) {
             </div>
             ` : ''}
 
-            <div id="page-simulator" class="hidden" style="max-width: 1100px; margin: 0 auto;">
-                <div class="card" style="padding: 1.5rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-                        <h2 style="margin:0">Live Simulator</h2>
-                        <div style="display: flex; gap: 1rem; align-items: center;">
-                            <div style="display: flex; flex-direction: column;">
-                                <label style="font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Pilih Karakter</label>
-                                <select id="sim-select" style="padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid var(--border); font-family: inherit; font-weight: 600; min-width: 150px; cursor: pointer;"></select>
-                            </div>
-                            <div style="display: flex; flex-direction: column;">
-                                <label style="font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Heart Lv</label>
-                                <input type="number" id="sim-heart" value="0" min="0" max="5" style="width: 70px; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border); font-family: inherit; font-weight: 700; text-align: center;">
-                            </div>
-                            <div style="display: flex; flex-direction: column;">
-                                <label style="font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Lv5 Owner</label>
-                                <input type="text" id="sim-lv5-owner" placeholder="Username..." style="width: 120px; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border); font-family: inherit; font-weight: 700;">
-                            </div>
-                            <button class="btn btn-outline" style="align-self: flex-end; padding: 0.65rem 1rem;" onclick="document.getElementById('sim-messages').innerHTML=''; document.getElementById('sim-debug-content').innerHTML='<div class=\\\'debug-item\\\'>Waiting for interaction...</div>'">Clear</button>
-                        </div>
+            <div id="page-simulator" class="hidden" style="max-width: 1200px; margin: 0 auto;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.5rem; padding: 0 0.5rem;">
+                    <div>
+                        <h1 style="font-size: 20px; font-weight: 800; color: #0f172a; margin-bottom: 4px;">Live Simulator</h1>
+                        <p style="font-size: 13px; color: var(--text-muted); font-weight: 500;">Uji coba karakter secara realtime dengan data simulasi.</p>
                     </div>
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 320px; gap: 1.5rem; align-items: start;">
-                        <div class="sim-container">
-                            <div id="sim-messages">
-                                <div class="msg msg-bot">Halo! Silakan pilih karakter dan ketik pesan untuk mulai simulasi.</div>
-                            </div>
-                            <div style="padding: 1.25rem; background: #f8fafc; border-top: 1px solid var(--border); display: flex; gap: 0.8rem;">
-                                <input type="text" id="sim-input" placeholder="Ketik pesan di sini..." style="flex:1; padding: 0.8rem 1.2rem; border-radius: 12px; border: 1.5px solid var(--border); font-family: inherit; font-weight: 600; outline: none; transition: border-color 0.2s;" onkeypress="if(event.key==='Enter') sendMessage()">
-                                <button id="sim-send-btn" onclick="sendMessage()" style="padding: 0.8rem 1.5rem; background: var(--primary); color: #fff; border: none; border-radius: 12px; font-weight: 800; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">KIRIM</button>
-                            </div>
+                    <div style="display: flex; gap: 0.75rem;">
+                        <div style="background: #fff; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 10px;">
+                            <label style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Karakter</label>
+                            <select id="sim-select" style="border: none; font-weight: 700; outline: none; cursor: pointer; color: var(--primary);"></select>
                         </div>
+                        <div style="background: #fff; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 10px;">
+                            <label style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Heart</label>
+                            <input type="number" id="sim-heart" value="0" min="0" max="5" style="border: none; width: 35px; font-weight: 800; outline: none; text-align: center;">
+                        </div>
+                        <button class="btn btn-outline" style="padding: 0.65rem 1rem; border-radius: 12px;" onclick="document.getElementById('sim-messages').innerHTML='<div class=\'msg msg-bot\'>Silakan pilih karakter dan ketik pesan untuk mulai simulasi.</div>'; document.getElementById('sim-debug-content').innerHTML='<div class=\'debug-item\'>Waiting for interaction...</div>'">Clear</button>
+                    </div>
+                </div>
 
-                        <div class="debug-panel">
-                            <div class="debug-header"><span>Debug Info / Chain of Thought</span></div>
-                            <div id="sim-debug-content">
-                                <div class="debug-item">Waiting for interaction...</div>
-                            </div>
-                            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--border);">
-                                <div class="debug-header"><span>Alur Pemikiran (System Prompt)</span></div>
-                                <div id="sim-prompt-content" style="font-family: monospace; font-size: 0.65rem; color: var(--text-muted); background: #f8fafc; padding: 0.5rem; border-radius: 0.5rem; max-height: 200px; overflow-y: auto; white-space: pre-wrap;">-</div>
-                            </div>
+                <div style="display: grid; grid-template-columns: 1fr 350px; gap: 1.5rem;">
+                    <div class="sim-container">
+                        <div id="sim-messages">
+                            <div class="msg msg-bot">Halo! Silakan pilih karakter dan ketik pesan untuk mulai simulasi.</div>
+                        </div>
+                        <div style="padding: 1.25rem; background: #fff; border-top: 1px solid #f1f5f9; display: flex; gap: 0.75rem; align-items: center;">
+                            <input type="text" id="sim-input" placeholder="Tulis sesuatu untuk NPC..." style="flex:1; padding: 0.85rem 1.25rem; border-radius: 15px; border: 1.5px solid var(--border); font-weight: 600; outline: none; transition: all 0.2s;" onkeypress="if(event.key==='Enter') sendMessage()">
+                            <button id="sim-send-btn" onclick="sendMessage()" style="height: 45px; width: 45px; background: var(--primary); color: #fff; border: none; border-radius: 15px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; font-weight: 800;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                            </button>
                         </div>
                     </div>
+
+                    <div class="debug-panel">
+                        <div class="debug-header"><span>Chain of Thought & Metrics</span></div>
+                        <div id="sim-debug-content" class="debug-content">
+                            <div class="debug-item">Waiting for interaction...</div>
+                        </div>
+                        
+                        <div style="margin-top: 1.25rem; flex-shrink: 0;">
+                            <div class="debug-header"><span>Active System Prompt</span></div>
+                            <div id="sim-prompt-content" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #64748b; background: #f8fafc; padding: 1rem; border-radius: 12px; border: 1px solid #f1f5f9; max-height: 250px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5;">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
                 </div>
             </div>
         </main>
@@ -586,6 +663,7 @@ function getAdminDashboardHTML(stats, user) {
 
         <script>
             let allLogs = []; let allUsers = []; let characters = [];
+            let userPage = 1;
             function toggleMobileMenu() { document.getElementById('sidebar').classList.toggle('mobile-open'); }
             
             function formatBotMsg(msg) {
@@ -616,7 +694,7 @@ function getAdminDashboardHTML(stats, user) {
 
                 if(pageId === 'karakter') load();
                 if(pageId === 'otak') loadModels();
-                if(pageId === 'users') loadUsers();
+                if(pageId === 'users') loadUsers(1);
                 if(pageId === 'logs') loadLogs();
                 if(pageId === 'simulator') loadSimSelect();
                 if(pageId === 'terminal') initTerminal();
@@ -683,34 +761,65 @@ function getAdminDashboardHTML(stats, user) {
 
             async function load() {
                 const r = await fetch('/api/characters'); const d = await r.json(); (characters = d.characters);
-                const b = document.getElementById('char-body'); b.innerHTML = '';
-                characters.forEach(c => {
+                const b = document.getElementById('char-body'); if(b) b.innerHTML = '';
+                if(b) characters.forEach(c => {
                     b.innerHTML += '<tr>' +
                         '<td><b>' + c.npc_name + '</b><br><small>' + c.id + '</small></td>' +
                         '<td>' + (c.is_enabled ? '<span style="color:var(--success); font-weight:600">ON</span>' : 'OFF') + '</td>' +
-                        '<td><label class="switch"><input type="checkbox" ' + (c.is_enabled ? 'checked' : '') + ' onchange="toggleChar(\\'' + c.id + '\\', this.checked)"><span class="slider"></span></label></td>' +
+                        '<td><label class="switch"><input type="checkbox" ' + (c.is_enabled ? 'checked' : '') + ' onchange="toggleChar(&apos;' + c.id + '&apos;, this.checked)"><span class="slider"></span></label></td>' +
                         '<td style="text-align:right">' +
-                            '<button class="btn btn-outline" style="padding:0.3rem 0.8rem; margin-right:0.5rem" onclick="editChar(\\'' + c.id + '\\')">Settings</button>' +
-                            '<button class="btn-danger" onclick="deleteChar(\\'' + c.id + '\\')">Delete</button>' +
+                            '<button class="btn btn-outline" style="padding:0.3rem 0.8rem; margin-right:0.5rem" onclick="editChar(&apos;' + c.id + '&apos;)">Settings</button>' +
+                            '<button class="btn-danger" onclick="deleteChar(&apos;' + c.id + '&apos;)">Delete</button>' +
                         '</td>' +
                     '</tr>';
                 });
+
+                // Load Usage Stats
+                const usageRes = await fetch('/api/admin/usage');
+                const usageData = await usageRes.json();
+                const ub = document.getElementById('usage-body');
+                if(ub) {
+                    ub.innerHTML = '';
+                    if(usageData.usage && usageData.usage.length > 0) {
+                        usageData.usage.forEach(u => {
+                            ub.innerHTML += \`<tr><td>\${u.day}</td><td style="text-align:right">\${u.total_requests}</td><td style="text-align:right">\${u.total_tokens.toLocaleString()}</td></tr>\`;
+                        });
+                    } else {
+                        ub.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:1rem">No historical data yet.</td></tr>';
+                    }
+                }
             }
 
             async function loadModels() {
                 const r = await fetch('/api/admin/models'); const d = await r.json();
                 const list = document.getElementById('otak-list'); list.innerHTML = '';
+                
+                // Render API Utama
+                list.innerHTML += '<h3 style="margin:1rem 0 0.5rem; font-size:0.7rem; color:var(--text-muted)">INFRASTRUKTUR API UTAMA</h3>';
                 d.otak.forEach(o => {
                     const s = o.stats || {requests:0, success:0, errors:0};
                     list.innerHTML += '<div class="otak-row '+(o.isEnabled?"active":"")+'">' +
-                        '<div class="otak-name">OTAK #'+o.id+'</div>' +
+                        '<div class="otak-name">UTAMA #'+o.id+'</div>' +
                         '<div class="otak-stats">' +
-                            '<div class="otak-stat-item"><span class="otak-stat-label">Requests</span><span class="otak-stat-value">'+s.requests+'</span></div>' +
+                            '<div class="otak-stat-item"><span class="otak-stat-label">Reqs</span><span class="otak-stat-value">'+s.requests+'</span></div>' +
                             '<div class="otak-stat-item"><span class="otak-stat-label">Status</span><span class="otak-stat-value" style="color:'+(o.isEnabled?'var(--success)':'var(--danger)')+'">'+(o.isEnabled ? (o.isCoolingDown ? 'COOLDOWN' : 'READY') : 'DISABLED')+'</span></div>' +
-                            '<div class="otak-stat-item"><span class="otak-stat-label">Success</span><span class="otak-stat-value">'+s.success+'</span></div>' +
-                            '<div class="otak-stat-item"><span class="otak-stat-label">Errors</span><span class="otak-stat-value">'+s.errors+'</span></div>' +
                         '</div>' +
-                        '<label class="switch"><input type="checkbox" '+(o.isEnabled?"checked":"")+' onchange="toggleOtak('+o.id+', this.checked)"><span class="slider"></span></label>' +
+                        '<label class="switch"><input type="checkbox" '+(o.isEnabled?"checked":"")+' onchange="toggleOtak('+o.id+', this.checked, &apos;GROQ&apos;)"><span class="slider"></span></label>' +
+                    '</div>';
+                });
+
+                // Render Cadangan
+                list.innerHTML += '<h3 style="margin:2rem 0 0.5rem; font-size:0.7rem; color:var(--text-muted)">INFRASTRUKTUR CADANGAN (FALLBACK)</h3>';
+                d.cerebras.forEach(o => {
+                    const s = o.stats || {requests:0, success:0, errors:0, tokens:0};
+                    list.innerHTML += '<div class="otak-row '+(o.isEnabled?"active":"")+'" style="border-left: 4px solid var(--info)">' +
+                        '<div class="otak-name">CADANGAN #'+o.id+'</div>' +
+                        '<div class="otak-stats">' +
+                            '<div class="otak-stat-item"><span class="otak-stat-label">Reqs</span><span class="otak-stat-value">'+s.requests+'</span></div>' +
+                            '<div class="otak-stat-item"><span class="otak-stat-label">Tokens</span><span class="otak-stat-value">'+s.tokens.toLocaleString()+'</span></div>' +
+                            '<div class="otak-stat-item"><span class="otak-stat-label">Status</span><span class="otak-stat-value" style="color:'+(o.isEnabled?'var(--success)':'var(--danger)')+'">'+(o.isEnabled ? (o.isCoolingDown ? 'COOLDOWN' : 'READY') : 'DISABLED')+'</span></div>' +
+                        '</div>' +
+                        '<label class="switch"><input type="checkbox" '+(o.isEnabled?"checked":"")+' onchange="toggleOtak('+o.id+', this.checked, &apos;CEREBRAS&apos;)"><span class="slider"></span></label>' +
                     '</div>';
                 });
             }
@@ -745,13 +854,28 @@ function getAdminDashboardHTML(stats, user) {
             }
             function filterLogs() { const q = document.getElementById('log-search').value.toLowerCase(); renderLogs(allLogs.filter(l => l.username.toLowerCase().includes(q) || l.ai_name.toLowerCase().includes(q))); }
 
-            async function loadUsers() {
-                const r = await fetch('/api/admin/users'); const d = await r.json(); allUsers = d.users;
+            async function loadUsers(page = 1) {
+                userPage = page;
+                const r = await fetch('/api/admin/users?page=' + page); 
+                const d = await r.json(); 
+                allUsers = d.users;
                 renderUsers(allUsers);
+                renderUserPagination(d.pagination);
+            }
+            function renderUserPagination(p) {
+                const el = document.getElementById('user-pagination');
+                if(!el) return;
+                if(!p || p.totalPages <= 1) { el.innerHTML = ''; return; }
+
+                let html = '';
+                if(p.page > 1) html += \`<button class="btn btn-outline" style="padding:0.3rem 0.8rem" onclick="loadUsers(\${p.page - 1})">Prev</button>\`;
+                html += \`<span style="font-weight:700; color:var(--text-muted); font-size:0.8rem">Page \${p.page} of \${p.totalPages}</span>\`;
+                if(p.page < p.totalPages) html += \`<button class="btn btn-outline" style="padding:0.3rem 0.8rem" onclick="loadUsers(\${p.page + 1})">Next</button>\`;
+                el.innerHTML = html;
             }
             function renderUsers(users) {
                 const b = document.getElementById('user-body'); b.innerHTML = '';
-                users.forEach(u => { b.innerHTML += '<tr><td><strong>'+u.username+'</strong></td><td>'+new Date(u.last_seen).toLocaleString()+'</td><td style="text-align:right"><button class="btn btn-outline" onclick="viewUserDetail(\\''+u.username+'\\')">View Logs</button></td></tr>'; });
+                users.forEach(u => { b.innerHTML += '<tr><td><strong>'+u.username+'</strong></td><td>'+new Date(u.last_seen).toLocaleString()+'</td><td style="text-align:right"><button class="btn btn-outline" onclick="viewUserDetail(&apos;'+u.username+'&apos;)">View Logs</button></td></tr>'; });
             }
             function filterUsers() {
                 const q = document.getElementById('user-search').value.toLowerCase();
@@ -806,18 +930,29 @@ function getAdminDashboardHTML(stats, user) {
                 }
             }
 
-              async function sendMessage() {
+            async function sendMessage() {
                 const text = document.getElementById('sim-input').value;
                 const heartLv = document.getElementById('sim-heart').value || 0;
                 if(!text) return;
 
                 const btn = document.getElementById('sim-send-btn');
-                btn.disabled = true;
-                btn.innerText = '...';
-
                 const box = document.getElementById('sim-messages');
+                
+                btn.disabled = true;
+                btn.innerHTML = '...';
+
+                // User message
                 box.innerHTML += \`<div class="msg msg-user">\${text}</div>\`;
                 document.getElementById('sim-input').value = '';
+                box.scrollTop = box.scrollHeight;
+
+                // Typing indicator
+                const typingId = 'typing-' + Date.now();
+                box.innerHTML += \`
+                    <div id="\${typingId}" class="msg msg-bot msg-typing">
+                        Sedang berpikir <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+                    </div>
+                \`;
                 box.scrollTop = box.scrollHeight;
 
                 try {
@@ -827,39 +962,39 @@ function getAdminDashboardHTML(stats, user) {
                         body: JSON.stringify({ 
                             user: { username: 'Yogaa', level: parseInt(heartLv) }, 
                             message: text,
-                            context: {
-                                relationship: {
-                                    lv5_username: document.getElementById('sim-lv5-owner').value
-                                }
-                            },
                             system: { ai_name: document.getElementById('sim-select').value }
                         })
                     });
                     const d = await r.json();
-                    const botMsg = d.sentences ? d.sentences.join(String.fromCharCode(10)) : 'Error: No response';
-                    box.innerHTML += \`<div class="msg msg-bot">\${botMsg.split(String.fromCharCode(10)).join('<br>')}</div>\`;
+                    
+                    // Remove typing indicator
+                    const typingEl = document.getElementById(typingId);
+                    if(typingEl) typingEl.remove();
+
+                    const botMsg = d.sentences ? d.sentences.join('<br>') : 'Error: No response';
+                    box.innerHTML += \`<div class="msg msg-bot">\${botMsg}</div>\`;
                     box.scrollTop = box.scrollHeight;
 
                     // Update Debug Info
                     if (d.debug) {
                         const dbg = document.getElementById('sim-debug-content');
                         dbg.innerHTML = \`
-                            <div class="debug-item"><span class="debug-label">Model:</span> <span class="debug-value">\${d.debug.model}</span></div>
-                            <div class="debug-item"><span class="debug-label">Otak ID:</span> <span class="debug-value">#\${d.debug.otak_id}</span></div>
-                            <div class="debug-item"><span class="debug-label">Tokens:</span> <span class="debug-value">\${d.debug.tokens}</span></div>
-                            <div class="debug-item"><span class="debug-label">Latency:</span> <span class="debug-value">\${d.debug.latency}ms</span></div>
-                            <div class="debug-item"><span class="debug-label">Pose:</span> <span class="debug-value">\${d.ai_pose}</span></div>
+                            <div class="debug-item"><span class="debug-label">Otak Terpilih</span><span class="debug-value">#\${d.debug.otak_id} (\${d.debug.model})</span></div>
+                            <div class="debug-item"><span class="debug-label">Total Token</span><span class="debug-value">\${d.debug.tokens} toks</span></div>
+                            <div class="debug-item"><span class="debug-label">Kecepatan (Latency)</span><span class="debug-value">\${d.debug.latency}ms</span></div>
+                            <div class="debug-item"><span class="debug-label">Ekspresi / Pose</span><span class="debug-value" style="color:var(--primary)">\${d.ai_pose || 'idle'}</span></div>
                         \`;
                         document.getElementById('sim-prompt-content').innerText = d.debug.system_prompt;
                     }
                 } catch(e) {
-                    showToast('Failed to send message', 'error');
+                    const typingEl = document.getElementById(typingId);
+                    if(typingEl) typingEl.remove();
+                    showToast('Gagal terhubung ke engine', 'error');
                 } finally {
                     btn.disabled = false;
-                    btn.innerText = 'KIRIM';
+                    btn.innerHTML = \`<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>\`;
                 }
             }
-           
 
             async function toggleChar(id, enabled) { await fetch('/api/characters/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, data:{...characters.find(x=>x.id===id), is_enabled:enabled}}) }); load(); }
             async function deleteChar(id) { 
@@ -869,9 +1004,9 @@ function getAdminDashboardHTML(stats, user) {
                     load(); 
                 } 
             }
-            async function toggleOtak(id, enabled) { 
-                await fetch('/api/admin/models/toggle', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, enabled}) }); 
-                showToast('AI Node #' + id + ' ' + (enabled ? 'Enabled' : 'Disabled'), enabled ? 'success' : 'error');
+            async function toggleOtak(id, enabled, type = 'GROQ') { 
+                await fetch('/api/admin/models/toggle', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, enabled, type}) }); 
+                showToast(type + ' Node #' + id + ' ' + (enabled ? 'Enabled' : 'Disabled'), enabled ? 'success' : 'error');
                 loadModels(); 
             }
             
@@ -933,7 +1068,7 @@ function getAdminDashboardHTML(stats, user) {
                     document.getElementById('s-req').innerText = d.totalRequests;
                     document.getElementById('s-tok').innerText = d.totalTokens.toLocaleString();
                     document.getElementById('s-active').innerText = d.active_keys + '/' + d.available_keys;
-                    document.getElementById('s-cooldown').innerText = d.cooldown_keys;
+                    if(d.cerebras_stats) document.getElementById('s-cerebras').innerText = d.cerebras_stats.active + '/' + d.cerebras_stats.available;
                     document.getElementById('s-uptime').innerText = d.uptime;
 
                     const tb = document.getElementById('top-char-body');

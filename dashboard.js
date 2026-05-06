@@ -467,27 +467,8 @@ function getAdminDashboardHTML(stats, user) {
                     <div class="stat-card orange"><h3>Node Cadangan</h3><p id="s-cerebras">${stats.cerebras_stats ? stats.cerebras_stats.active : 0}/${stats.cerebras_stats ? stats.cerebras_stats.available : 0}</p></div>
                 </div>
 
-                <div class="card-section">
-                    <h3>7-Day Usage History (Tokens & Reqs)</h3>
-                    <div class="table-container">
-                        <table>
-                            <thead><tr><th>DATE</th><th style="text-align:right">REQUESTS</th><th style="text-align:right">TOKENS</th></tr></thead>
-                            <tbody id="usage-body"><tr><td colspan="3" style="text-align:center; padding:1rem; color:var(--text-muted)">Loading usage data...</td></tr></tbody>
-                        </table>
-                    </div>
-                </div>
-
                 <div class="dashboard-bottom">
-                    <div class="card-section">
-                        <h3>Top NPCs Usage</h3>
-                        <div class="table-container">
-                            <table>
-                                <thead><tr><th>NPC NAME</th><th style="text-align:right">TOKENS</th></tr></thead>
-                                <tbody id="top-char-body">${stats.topChars.map(c => '<tr><td>'+c.name.toUpperCase()+'</td><td style="text-align:right">'+c.toks.toLocaleString()+'</td></tr>').join('')}</tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="card-section">
+                    <div class="card-section" style="width: 100%;">
                         <h3>Recent Activity</h3>
                         <div id="live-feed" class="feed-container">
                              ${stats.recentLogs.map(l => `
@@ -813,21 +794,6 @@ function getAdminDashboardHTML(stats, user) {
                         '</td>' +
                     '</tr>';
                 });
-
-                // Load Usage Stats
-                const usageRes = await fetch('/api/admin/usage');
-                const usageData = await usageRes.json();
-                const ub = document.getElementById('usage-body');
-                if(ub) {
-                    ub.innerHTML = '';
-                    if(usageData.usage && usageData.usage.length > 0) {
-                        usageData.usage.forEach(u => {
-                            ub.innerHTML += \`<tr><td>\${u.day}</td><td style="text-align:right">\${u.total_requests}</td><td style="text-align:right">\${u.total_tokens.toLocaleString()}</td></tr>\`;
-                        });
-                    } else {
-                        ub.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:1rem">No historical data yet.</td></tr>';
-                    }
-                }
             }
 
             async function loadModels() {
@@ -869,7 +835,12 @@ function getAdminDashboardHTML(stats, user) {
                 });
             }
 
-            async function loadLogs() { const r = await fetch('/api/admin/logs'); const d = await r.json(); allLogs = d.logs; renderLogs(allLogs); }
+            async function loadLogs() { 
+                const r = await fetch('/api/admin/logs'); 
+                const d = await r.json(); 
+                allLogs = d.logs; 
+                filterLogs(); 
+            }
             function renderLogs(logs) {
                 const b = document.getElementById('log-body'); b.innerHTML = '';
                 logs.forEach(l => { 
@@ -1129,9 +1100,6 @@ function getAdminDashboardHTML(stats, user) {
                     if(d.cerebras_stats) document.getElementById('s-cerebras').innerText = d.cerebras_stats.active + '/' + d.cerebras_stats.available;
                     document.getElementById('s-uptime').innerText = d.uptime;
 
-                    const tb = document.getElementById('top-char-body');
-                    if(d.topChars) tb.innerHTML = d.topChars.map(c => '<tr><td>'+c.name.toUpperCase()+'</td><td style="text-align:right">'+c.toks.toLocaleString()+'</td></tr>').join('');
-
                     // Update Recent Activity
                     const feed = document.getElementById('live-feed');
                     if(d.recentLogs && d.recentLogs.length > 0) {
@@ -1152,6 +1120,12 @@ function getAdminDashboardHTML(stats, user) {
                                 </div>
                             </div>
                         \`).join('');
+                    }
+                    
+                    // Auto-sync logs if the logs page is currently active
+                    const logsPage = document.getElementById('page-logs');
+                    if (logsPage && !logsPage.classList.contains('hidden')) {
+                        loadLogs();
                     }
                 } catch(e) {}
             }, 5000);

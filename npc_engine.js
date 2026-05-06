@@ -740,35 +740,22 @@ app.get('/api/admin/logs/stream', apiAuth, adminOnly, (req, res) => {
     });
 });
 
+let cachedDBStats = { topChars: [], recentLogs: [], lastUpdate: 0, usage: null, usageLastUpdate: 0, logs: null, logsLastUpdate: 0 };
+
 // API: Get Stats
 app.get('/api/stats', async (req, res) => {
     const active = groqClients.filter(c => Date.now() > c.cooldownUntil && c.isEnabled).length;
     const cooldown = groqClients.filter(c => Date.now() <= c.cooldownUntil).length;
     
-    // Get top usage FROM DATABASE (Persistent)
-    let topChars = [];
-    try {
-        const topRes = await db.execute(`
-            SELECT 
-                COALESCE(c.npc_name, l.ai_name) as name, 
-                SUM(l.tokens) as toks 
-            FROM chat_logs l
-            LEFT JOIN characters c ON l.ai_name = c.id
-            GROUP BY l.ai_name 
-            ORDER BY toks DESC 
-            LIMIT 10
-        `);
-        topChars = topRes.rows;
-    } catch(e) {
-        console.error("[DB STATS ERROR]:", e.message);
+    if (Date.now() - cachedDBStats.lastUpdate > 30000) {
+        try {
+            const logRes = await db.execute("SELECT ai_name, username, user_message, bot_response, timestamp, ai_pose, user_level FROM chat_logs ORDER BY id DESC LIMIT 5");
+            cachedDBStats.recentLogs = logRes.rows;
+        } catch(e) {}
+        
+        cachedDBStats.lastUpdate = Date.now();
     }
 
-    // Get Recent Logs (Last 5)
-    let recentLogs = [];
-    try {
-        const logRes = await db.execute("SELECT ai_name, username, user_message, bot_response, timestamp, ai_pose, user_level FROM chat_logs ORDER BY id DESC LIMIT 5");
-        recentLogs = logRes.rows;
-    } catch(e) {}
 
     res.json({
         ...globalStats,
@@ -781,8 +768,7 @@ app.get('/api/stats', async (req, res) => {
             active: cerebrasClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil).length,
             total_tokens: cerebrasClients.reduce((acc, c) => acc + c.stats.tokens, 0)
         },
-        topChars,
-        recentLogs
+        recentLogs: cachedDBStats.recentLogs
     });
 });
 
@@ -888,14 +874,18 @@ app.post('/api/admin/models/switch', apiAuth, adminOnly, (req, res) => {
     }
 });
 
-// API: Get Chat Logs
+// API: Get Logs
 app.get('/api/admin/logs', apiAuth, adminOnly, async (req, res) => {
-    try {
-        const result = await db.execute("SELECT * FROM chat_logs ORDER BY timestamp DESC LIMIT 100");
-        res.json({ logs: result.rows });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
+    if (Date.now() - cachedDBStats.logsLastUpdate > 15000 || !cachedDBStats.logs) {
+        try {
+            const result = await db.execute("SELECT * FROM chat_logs ORDER BY id DESC LIMIT 100");
+            cachedDBStats.logs = result.rows;
+            cachedDBStats.logsLastUpdate = Date.now();
+        } catch (e) {
+            console.error("[DB LOGS ERROR]:", e.message);
+        }
     }
+    res.json({ logs: cachedDBStats.logs || [] });
 });
 
 // API: Get Users List (Paginated)
@@ -932,7 +922,7 @@ app.get('/api/admin/users', apiAuth, adminOnly, async (req, res) => {
 app.get('/api/admin/user-logs/:username', apiAuth, async (req, res) => {
     try {
         const result = await db.execute({
-            sql: "SELECT * FROM chat_logs WHERE username = ? ORDER BY timestamp DESC LIMIT 50",
+            sql: "SELECT * FROM chat_logs WHERE username = ? ORDER BY id DESC LIMIT 50",
             args: [req.params.username]
         });
         res.json({ logs: result.rows });
@@ -941,23 +931,9 @@ app.get('/api/admin/user-logs/:username', apiAuth, async (req, res) => {
     }
 });
 
-// API: Get Daily Usage Stats
+// API: Get Daily Usage Stats (Disabled to save Row Reads)
 app.get('/api/admin/usage', apiAuth, adminOnly, async (req, res) => {
-    try {
-        const result = await db.execute(`
-            SELECT 
-                strftime('%Y-%m-%d', timestamp) as day, 
-                SUM(tokens) as total_tokens, 
-                COUNT(*) as total_requests 
-            FROM chat_logs 
-            GROUP BY day 
-            ORDER BY day DESC 
-            LIMIT 7
-        `);
-        res.json({ usage: result.rows });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
+    res.json({ usage: [] });
 });
 
 // API: Save/Update Character

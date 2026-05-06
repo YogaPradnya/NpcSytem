@@ -440,9 +440,58 @@ Contoh: "Halo ${currentUsername}! [POSE: ${allowedPoses[0]}]"`;
             }
         }
 
-        // 2. Jika semua key available gagal untuk Primary Model, coba Fallback Model
+        // 2. Jika Groq Utama sedang cooldown/limit, LANGSUNG coba Cerebras (Cepat & Stabil)
+        if (!success && cerebrasClients.length > 0) {
+            const availableCerebras = cerebrasClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil);
+            
+            if (availableCerebras.length > 0) {
+                console.warn(`[NPC] API Utama sedang istirahat, beralih ke API Cadangan (Cerebras)...`);
+                
+                for (let i = 0; i < availableCerebras.length; i++) {
+                    const clientObj = availableCerebras[i];
+                    
+                    // ATURAN BARU: Jika token > 900k, matikan selama 1 hari
+                    if (clientObj.stats.tokens >= 900000) {
+                        console.warn(`[NPC] API Cadangan #${clientObj.id} mencapai limit harian 900k token. Cooldown 1 hari.`);
+                        clientObj.cooldownUntil = Date.now() + (24 * 3600 * 1000); // 24 jam
+                        continue; // Lewati ke cadangan berikutnya
+                    }
+
+                    const client = clientObj.client;
+                    clientObj.stats.requests++;
+
+                    try {
+                        completion = await client.chat.completions.create({
+                            model: 'llama3.1-8b',
+                            messages: [
+                                { role: 'system', content: finalSystemPrompt },
+                                ...chatHistory,
+                                { role: 'user', content: message }
+                            ],
+                            max_tokens: 150,
+                            temperature: 0.8
+                        });
+                        
+                        const cTokens = completion.usage?.total_tokens || 0;
+                        clientObj.stats.success++;
+                        clientObj.stats.tokens += cTokens;
+                        success = true;
+                        console.log(`[NPC] Berhasil diselamatkan oleh API Cadangan #${clientObj.id}!`);
+                        break;
+                    } catch (cErr) {
+                        clientObj.stats.errors++;
+                        console.error(`[NPC] API Cadangan #${clientObj.id} error:`, cErr.message);
+                        if (cErr.status === 429) {
+                            clientObj.cooldownUntil = Date.now() + (1 * 3600 * 1000); // Cooldown 1 jam
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Upaya Terakhir: Coba kembali Groq (Fallback Model) jika semua di atas gagal
         if (!success) {
-            console.warn(`[NPC] Semua key gagal untuk ${primaryModel}, mencoba fallback ke ${fallbackModel}`);
+            console.warn(`[NPC] Mencoba upaya terakhir dengan kunci Groq yang tersisa...`);
             
             for (let i = 0; i < fallbackClients.length; i++) {
                 const clientObj = fallbackClients[i];
@@ -468,48 +517,6 @@ Contoh: "Halo ${currentUsername}! [POSE: ${allowedPoses[0]}]"`;
                 } catch (error) {
                     clientObj.stats.errors++;
                     console.warn(`[NPC] Otak ${clientObj.id} fallback error:`, error.message);
-                }
-            }
-        }
-
-
-        // 3. Ultimate Fallback: Cerebras (Jika Groq benar-benar mati/limit)
-        if (!success && cerebrasClients.length > 0) {
-            const availableCerebras = cerebrasClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil);
-            
-            if (availableCerebras.length > 0) {
-                console.warn(`[NPC] API Utama lumpuh, mencoba API Cadangan...`);
-                
-                for (let i = 0; i < availableCerebras.length; i++) {
-                    const clientObj = availableCerebras[i];
-                    const client = clientObj.client;
-                    clientObj.stats.requests++;
-
-                    try {
-                        completion = await client.chat.completions.create({
-                            model: 'llama3.1-8b',
-                            messages: [
-                                { role: 'system', content: finalSystemPrompt },
-                                ...chatHistory,
-                                { role: 'user', content: message }
-                            ],
-                            max_tokens: 150,
-                            temperature: 0.8
-                        });
-                        
-                        const cTokens = completion.usage?.total_tokens || 0;
-                        clientObj.stats.success++;
-                        clientObj.stats.tokens += cTokens;
-                        success = true;
-                        console.log(`[NPC] Berhasil diselamatkan oleh API Cadangan #\${clientObj.id}!`);
-                        break;
-                    } catch (cErr) {
-                        clientObj.stats.errors++;
-                        console.error(`[NPC] API Cadangan #\${clientObj.id} error:`, cErr.message);
-                        if (cErr.status === 429) {
-                            clientObj.cooldownUntil = Date.now() + (30 * 60 * 1000); // 30 menit cooldown
-                        }
-                    }
                 }
             }
         }

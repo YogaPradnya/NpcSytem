@@ -1134,7 +1134,7 @@ function getAdminDashboardHTML(stats, user) {
             async function loadBanList() {
                 try {
                     const res = await fetch('/api/admin/ban-list');
-                    const data = await res.json();
+                    const data = await res.json();    
                     if (data.success) {
                         const tbody = document.getElementById('banlist-body');
                         tbody.innerHTML = data.list.map(b => \`

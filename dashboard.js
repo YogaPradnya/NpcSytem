@@ -797,11 +797,14 @@ function getAdminDashboardHTML(stats, user) {
                 // Render API Utama
                 list.innerHTML += '<h3 style="margin:1rem 0 0.5rem; font-size:0.7rem; color:var(--text-muted)">INFRASTRUKTUR API UTAMA</h3>';
                 d.otak.forEach(o => {
-                    const s = o.stats || {requests:0, success:0, errors:0};
+                    const s = o.stats || {requests:0, success:0, errors:0, tokens:0};
                     list.innerHTML += '<div class="otak-row '+(o.isEnabled?"active":"")+'">' +
                         '<div class="otak-name">UTAMA #'+o.id+'</div>' +
                         '<div class="otak-stats">' +
                             '<div class="otak-stat-item"><span class="otak-stat-label">Reqs</span><span class="otak-stat-value">'+s.requests+'</span></div>' +
+                            '<div class="otak-stat-item"><span class="otak-stat-label">Success</span><span class="otak-stat-value" style="color:var(--success)">'+s.success+'</span></div>' +
+                            '<div class="otak-stat-item"><span class="otak-stat-label">Errors</span><span class="otak-stat-value" style="color:var(--danger)">'+s.errors+'</span></div>' +
+                            '<div class="otak-stat-item"><span class="otak-stat-label">Tokens</span><span class="otak-stat-value">'+(s.tokens || 0).toLocaleString()+'</span></div>' +
                             '<div class="otak-stat-item"><span class="otak-stat-label">Status</span><span class="otak-stat-value" style="color:'+(o.isEnabled?'var(--success)':'var(--danger)')+'">'+(o.isEnabled ? (o.isCoolingDown ? 'COOLDOWN' : 'READY') : 'DISABLED')+'</span></div>' +
                         '</div>' +
                         '<label class="switch"><input type="checkbox" '+(o.isEnabled?"checked":"")+' onchange="toggleOtak('+o.id+', this.checked, &apos;GROQ&apos;)"><span class="slider"></span></label>' +
@@ -816,7 +819,9 @@ function getAdminDashboardHTML(stats, user) {
                         '<div class="otak-name">CADANGAN #'+o.id+'</div>' +
                         '<div class="otak-stats">' +
                             '<div class="otak-stat-item"><span class="otak-stat-label">Reqs</span><span class="otak-stat-value">'+s.requests+'</span></div>' +
-                            '<div class="otak-stat-item"><span class="otak-stat-label">Tokens</span><span class="otak-stat-value">'+s.tokens.toLocaleString()+'</span></div>' +
+                            '<div class="otak-stat-item"><span class="otak-stat-label">Success</span><span class="otak-stat-value" style="color:var(--success)">'+s.success+'</span></div>' +
+                            '<div class="otak-stat-item"><span class="otak-stat-label">Errors</span><span class="otak-stat-value" style="color:var(--danger)">'+s.errors+'</span></div>' +
+                            '<div class="otak-stat-item"><span class="otak-stat-label">Tokens</span><span class="otak-stat-value">'+(s.tokens || 0).toLocaleString()+'</span></div>' +
                             '<div class="otak-stat-item"><span class="otak-stat-label">Status</span><span class="otak-stat-value" style="color:'+(o.isEnabled?'var(--success)':'var(--danger)')+'">'+(o.isEnabled ? (o.isCoolingDown ? 'COOLDOWN' : 'READY') : 'DISABLED')+'</span></div>' +
                         '</div>' +
                         '<label class="switch"><input type="checkbox" '+(o.isEnabled?"checked":"")+' onchange="toggleOtak('+o.id+', this.checked, &apos;CEREBRAS&apos;)"><span class="slider"></span></label>' +

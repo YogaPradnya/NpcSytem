@@ -286,7 +286,8 @@ const groqClients = keys.map((key, index) => ({
     stats: {
         requests: 0,
         success: 0,
-        errors: 0
+        errors: 0,
+        tokens: 0
     }
 }));
 
@@ -419,6 +420,7 @@ Contoh: "Halo ${user?.username}! [POSE: ${allowedPoses[0]}]"`;
                     temperature: 0.8
                 });
                 clientObj.stats.success++; // Success!
+                clientObj.stats.tokens += completion.usage?.total_tokens || 0;
                 success = true;
                 break; // Berhasil, keluar dari loop (jadi pakai urutan 1, lalu 2, dst)
             } catch (error) {
@@ -455,6 +457,7 @@ Contoh: "Halo ${user?.username}! [POSE: ${allowedPoses[0]}]"`;
                         temperature: 0.8
                     });
                     clientObj.stats.success++;
+                    clientObj.stats.tokens += completion.usage?.total_tokens || 0;
                     success = true;
                     break;
                 } catch (error) {

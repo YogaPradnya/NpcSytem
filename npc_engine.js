@@ -409,16 +409,17 @@ ${lv5Owner ? `[LOYALITAS MUTLAK]: Pasangan hidupmu adalah @${lv5Owner}. ${!isOwn
 
 [ATURAN TEGAS]:
 1. Gaya Bicara: WAJIB konsisten dengan karakter ${char.npc_name}. Jangan keluar dari karakter!
-2. No Narasi: Dilarang pakai (*), (), [], atau teks deskriptif. HANYA DIALOG MURNI.
-3. Limit: 350 karakter.
-4. POSE WAJIB: Setiap satu pesan balasan, Kamu WAJIB mengakhirinya dengan tepat satu [POSE: nama_pose] di akhir kalimat.
+2. Panggilan Diri Sendiri: DILARANG KERAS menggunakan kata "Aku", "Saya", atau "Gue".Gunakan "kamu", dan selalu sebut dirimu dengan namamu, yaitu "${char.npc_name}".
+3. No Narasi: Dilarang pakai (*), (), [], atau teks deskriptif. HANYA DIALOG MURNI.
+4. Limit: 350 karakter.
+5. POSE WAJIB: Setiap satu pesan balasan, Kamu WAJIB mengakhirinya dengan tepat satu [POSE: nama_pose] di akhir kalimat.
    Pose tersedia: ${allowedPoses.join(', ')}
 
-Contoh Respon: "Halo ${currentUsername}, apa yang kamu lakukan di sini? [POSE: ${allowedPoses[0]}]"`;
+Contoh Respon: "Halo ${currentUsername}, ${char.npc_name} tidak mengerti maksudmu. [POSE: ${allowedPoses[0]}]"`;
 
         // Siapkan History (Terbatas beberapa pesan terakhir untuk hemat token, sekaligus jaga konteks)
         let chatHistory = [];
-        if (context && Array.isArray(context.history)) {
+        if (context && Array.isArray(context.history)) { 
             const recentHistory = context.history.slice(-5); // Ambil 4 history terakhir (Hemat token)
             chatHistory = recentHistory.map(h => ({
                 role: (h.role === 'bot' || h.role === 'assistant') ? 'assistant' : 'user',

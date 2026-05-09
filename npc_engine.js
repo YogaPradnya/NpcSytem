@@ -320,6 +320,19 @@ const cerebrasKeys = [
     process.env.CEREBRAS_API_KEY_5,
     process.env.CEREBRAS_API_KEY_6,
     process.env.CEREBRAS_API_KEY_7,
+    process.env.CEREBRAS_API_KEY_8,
+    process.env.CEREBRAS_API_KEY_9,
+    process.env.CEREBRAS_API_KEY_10,
+    process.env.CEREBRAS_API_KEY_11,
+    process.env.CEREBRAS_API_KEY_12,
+    process.env.CEREBRAS_API_KEY_13,
+    process.env.CEREBRAS_API_KEY_14,
+    process.env.CEREBRAS_API_KEY_15,
+    process.env.CEREBRAS_API_KEY_16,
+    process.env.CEREBRAS_API_KEY_17,
+    process.env.CEREBRAS_API_KEY_18,
+    process.env.CEREBRAS_API_KEY_19,
+    process.env.CEREBRAS_API_KEY_20,
 ].filter(Boolean);
 
 const cerebrasClients = cerebrasKeys.map((key, index) => ({
@@ -334,6 +347,23 @@ const cerebrasClients = cerebrasKeys.map((key, index) => ({
         tokens: 0
     }
 }));
+
+// Reset Statistik Harian secara Otomatis (Setiap Jam 00:00)
+let lastResetDate = new Date().getDate();
+setInterval(() => {
+    const now = new Date();
+    if (now.getDate() !== lastResetDate) {
+        console.log("[SYSTEM] Reset statistik harian untuk semua otak...");
+        [...groqClients, ...cerebrasClients].forEach(c => {
+            c.stats.tokens = 0;
+            c.stats.requests = 0;
+            c.stats.success = 0;
+            c.stats.errors = 0;
+            c.cooldownUntil = 0;
+        });
+        lastResetDate = now.getDate();
+    }
+}, 1000 * 60 * 15); // Cek setiap 15 menit
 
 app.post('/api/npc/v1/chat', async (req, res) => {
     const startTime = Date.now();
@@ -409,7 +439,7 @@ ${lv5Owner ? `[LOYALITAS MUTLAK]: Pasangan hidupmu adalah @${lv5Owner}. ${!isOwn
 
 [ATURAN TEGAS]:
 1. Gaya Bicara: WAJIB konsisten dengan karakter ${char.npc_name}. Jangan keluar dari karakter!
-2. Panggilan Diri Sendiri: DILARANG KERAS menggunakan kata "Aku", "Saya", atau "Gue".Gunakan "kamu", dan selalu sebut dirimu dengan namamu, yaitu "${char.npc_name}".
+2. Panggilan & Subjek: DILARANG KERAS menggunakan kata "Aku", "Saya", "Gue", atau "Anda". Ganti semua kata "Saya/Aku" dengan namamu "${char.npc_name}" secara natural, atau hilangkan subjeknya jika memungkinkan. Panggil User dengan sebutan "kamu". JANGAN menyebut namamu sendiri di setiap kalimat, cukup sesekali agar tidak kaku.
 3. No Narasi: Dilarang pakai (*), (), [], atau teks deskriptif. HANYA DIALOG MURNI.
 4. Limit: 350 karakter.
 5. POSE WAJIB: Setiap satu pesan balasan, Kamu WAJIB mengakhirinya dengan tepat satu [POSE: nama_pose] di akhir kalimat.
@@ -478,8 +508,8 @@ Contoh Respon: "Halo ${currentUsername}, ${char.npc_name} tidak mengerti maksudm
                 clientObj.stats.errors++; // Error!
                 // Jika error adalah rate limit (token habis)
                 if (error.status === 429 || error.message.toLowerCase().includes('rate limit')) {
-                    clientObj.cooldownUntil = Date.now() + (1 * 3600 * 1000); // Delay 1 jam
-                    console.warn(`[NPC] Otak ${clientObj.id} Exhausted! Delay 1 jam.`);
+                    clientObj.cooldownUntil = Date.now() + (30 * 60 * 1000); // Delay 30 menit
+                    console.warn(`[NPC] Otak ${clientObj.id} Exhausted! Delay 30 menit.`);
                 } else {
                     console.warn(`[NPC] Otak ${clientObj.id} error:`, error.message);
                 }
@@ -498,8 +528,10 @@ Contoh Respon: "Halo ${currentUsername}, ${char.npc_name} tidak mengerti maksudm
                     
                     // ATURAN BARU: Jika token > 900k, matikan selama 1 hari
                     if (clientObj.stats.tokens >= 900000) {
-                        console.warn(`[NPC] API Cadangan #${clientObj.id} mencapai limit harian 900k token. Cooldown 1 hari.`);
-                        clientObj.cooldownUntil = Date.now() + (24 * 3600 * 1000); // 24 jam
+                        if (Date.now() > clientObj.cooldownUntil) {
+                            console.warn(`[NPC] API Cadangan #${clientObj.id} mencapai limit harian 900k token. Cooldown 1 hari.`);
+                            clientObj.cooldownUntil = Date.now() + (24 * 3600 * 1000); // 24 jam
+                        }
                         continue; // Lewati ke cadangan berikutnya
                     }
 
@@ -527,8 +559,8 @@ Contoh Respon: "Halo ${currentUsername}, ${char.npc_name} tidak mengerti maksudm
                     } catch (cErr) {
                         clientObj.stats.errors++;
                         console.error(`[NPC] API Cadangan #${clientObj.id} error:`, cErr.message);
-                        if (cErr.status === 429) {
-                            clientObj.cooldownUntil = Date.now() + (1 * 3600 * 1000); // Cooldown 1 jam
+                        if (cErr.status === 429 || cErr.message.toLowerCase().includes('rate limit')) {
+                            clientObj.cooldownUntil = Date.now() + (30 * 60 * 1000); // Cooldown 30 menit
                         }
                     }
                 }

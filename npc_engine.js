@@ -102,16 +102,24 @@ let globalStats = {
 };
 
 let deepinfraBillingData = null;
+let deepinfraAccountData = null;
 async function fetchDeepInfraBilling() {
     const apiKey = process.env.DEEPINFRA_API_KEY;
     if (!apiKey) return;
     try {
         const now = new Date();
         const period = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const url = `https://api.deepinfra.com/payment/usage/tokens?from=${period}`;
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${apiKey}` } });
-        if (response.ok) deepinfraBillingData = await response.json();
-    } catch (e) { console.error("[DEEPINFRA BILLING ERROR]:", e.message); }
+        const urlBilling = `https://api.deepinfra.com/payment/usage/tokens?from=${period}`;
+        const urlAccount = `https://api.deepinfra.com/payment/checklist`;
+        
+        const [resB, resA] = await Promise.all([
+            fetch(urlBilling, { headers: { 'Authorization': `Bearer ${apiKey}` } }),
+            fetch(urlAccount, { headers: { 'Authorization': `Bearer ${apiKey}` } })
+        ]);
+
+        if (resB.ok) deepinfraBillingData = await resB.json();
+        if (resA.ok) deepinfraAccountData = await resA.json();
+    } catch (e) { console.error("[DEEPINFRA SYNC ERROR]:", e.message); }
 }
 setInterval(fetchDeepInfraBilling, 300000); // 5 mins
 fetchDeepInfraBilling();
@@ -861,6 +869,7 @@ app.get('/api/stats', async (req, res) => {
             total_tokens: cerebrasClients.reduce((acc, c) => acc + c.stats.tokens, 0)
         },
         deepinfra_billing: deepinfraBillingData,
+        deepinfra_account: deepinfraAccountData,
         recentLogs: cachedDBStats.recentLogs
     });
 });
@@ -911,6 +920,7 @@ app.get('/admin', sessionAuth, async (req, res) => {
             total_tokens: cerebrasClients.reduce((acc, c) => acc + c.stats.tokens, 0)
         },
         deepinfra_billing: deepinfraBillingData,
+        deepinfra_account: deepinfraAccountData,
         topChars,
         recentLogs
     };

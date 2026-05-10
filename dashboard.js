@@ -1,3 +1,18 @@
+function renderBalanceBadge(account) {
+    if (!account || account.limit === undefined) return '';
+    const limit = account.limit || 0;
+    const recent = account.recent || 0;
+    const available = limit - recent;
+    
+    const color = available > 0 ? '#22c55e' : '#ef4444';
+    const bg = available > 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+    const label = available > 0 ? 'AVAILABLE' : 'OVER LIMIT';
+    return `<div style="display:flex; align-items:center; gap:8px; background:${bg}; padding:4px 12px; border-radius:8px; border:1px solid ${color}">
+        <div style="width:6px; height:6px; border-radius:50%; background:${color}"></div>
+        <span style="font-size:11px; font-weight:800; color:${color}">${label}: $${available.toFixed(2)}</span>
+    </div>`;
+}
+
 function renderBillingTable(billingData) {
     if (!billingData || !billingData.months || !billingData.months.length) return '<tr><td colspan="4" style="text-align:center; color:#64748b; padding:2rem">No billing data available.</td></tr>';
     const latestMonth = billingData.months[0];
@@ -702,7 +717,10 @@ function getAdminDashboardHTML(stats, user) {
                     <div class="card-section">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem">
                             <h3 style="margin-bottom:0">DeepInfra Billing & Usage</h3>
-                            <span style="font-size:11px; font-weight:800; color:#64748b; background:#f1f5f9; padding:4px 10px; border-radius:6px; text-transform:uppercase">REALTIME DATA</span>
+                            <div style="display:flex; gap:0.75rem; align-items:center" id="billing-header-tools">
+                                ${renderBalanceBadge(stats.deepinfra_account)}
+                                <span style="font-size:11px; font-weight:800; color:#64748b; background:#f1f5f9; padding:4px 10px; border-radius:6px; text-transform:uppercase">REALTIME DATA</span>
+                            </div>
                         </div>
                         <div class="table-container">
                             <table>
@@ -1367,6 +1385,21 @@ function getAdminDashboardHTML(stats, user) {
                 setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 500); }, 3000);
             }
             
+            function renderBalanceBadge(account) {
+                if (!account || account.limit === undefined) return '';
+                const limit = account.limit || 0;
+                const recent = account.recent || 0;
+                const available = limit - recent;
+                
+                const color = available > 0 ? '#22c55e' : '#ef4444';
+                const bg = available > 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+                const label = available > 0 ? 'AVAILABLE' : 'OVER LIMIT';
+                return '<div style="display:flex; align-items:center; gap:8px; background:'+bg+'; padding:4px 12px; border-radius:8px; border:1px solid '+color+'">' +
+                    '<div style="width:6px; height:6px; border-radius:50%; background:'+color+'"></div>' +
+                    '<span style="font-size:11px; font-weight:800; color:'+color+'">'+label+': $'+available.toFixed(2)+'</span>' +
+                '</div>';
+            }
+
             function renderBillingTable(billingData) {
                 if (!billingData || !billingData.months || !billingData.months.length) return '<tr><td colspan="4" style="text-align:center; color:#64748b; padding:2rem">No billing data available.</td></tr>';
                 const latestMonth = billingData.months[0];
@@ -1453,6 +1486,12 @@ function getAdminDashboardHTML(stats, user) {
                     const billingBody = document.getElementById('billing-body');
                     if (billingBody && d.deepinfra_billing) {
                         billingBody.innerHTML = renderBillingTable(d.deepinfra_billing);
+                    }
+                    const billingHeader = document.getElementById('billing-header-tools');
+                    if (billingHeader && d.deepinfra_account) {
+                        const badgeHtml = renderBalanceBadge(d.deepinfra_account);
+                        const realtimeSpan = '<span style="font-size:11px; font-weight:800; color:#64748b; background:#f1f5f9; padding:4px 10px; border-radius:6px; text-transform:uppercase">REALTIME DATA</span>';
+                        billingHeader.innerHTML = badgeHtml + realtimeSpan;
                     }
                 } catch(e) {}
             }, 3000);

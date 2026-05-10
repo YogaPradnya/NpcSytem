@@ -940,6 +940,16 @@ app.get('/api/admin/models', apiAuth, adminOnly, (req, res) => {
     });
 });
 
+app.post('/api/admin/config/update', apiAuth, adminOnly, (req, res) => {
+    const { primaryModel } = req.body;
+    if (primaryModel) {
+        aiConfig.primaryModel = primaryModel;
+        console.log(`[CONFIG] Primary Model changed to: ${primaryModel}`);
+        return res.json({ success: true, message: `Model berhasil diubah ke ${primaryModel}` });
+    }
+    res.status(400).json({ success: false, error: 'Model tidak valid' });
+});
+
 // API: Toggle Otak
 app.post('/api/admin/models/toggle', apiAuth, adminOnly, (req, res) => {
     const { id, enabled, type } = req.body;

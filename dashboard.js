@@ -509,7 +509,16 @@ function getAdminDashboardHTML(stats, user) {
 
             ${isAdmin ? `
             <div id="page-otak" class="hidden">
-                <header><h1>Otak</h1></header>
+                <header>
+                    <h1>Otak</h1>
+                    <div style="display:flex; gap:1rem; align-items:center; background:#fff; padding:0.5rem 1rem; border-radius:12px; border:1px solid var(--border)">
+                        <label style="font-size:0.7rem; font-weight:800; color:var(--text-muted); text-transform:uppercase">DeepInfra Model</label>
+                        <select id="model-switcher" onchange="updateModel(this.value)" style="border:none; font-weight:700; outline:none; cursor:pointer; color:var(--primary); font-size:0.85rem">
+                            <option value="meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo">Llama 3.1 8B Turbo</option>
+                            <option value="meta-llama/Meta-Llama-3.1-8B-Instruct">Llama 3.1 8B Regular</option>
+                        </select>
+                    </div>
+                </header>
                 <div class="otak-container" id="otak-list"></div>
             </div>
 
@@ -801,6 +810,11 @@ function getAdminDashboardHTML(stats, user) {
                 const r = await fetch('/api/admin/models'); const d = await r.json();
                 const list = document.getElementById('otak-list'); list.innerHTML = '';
                 
+                // Sync Model Switcher
+                if (document.getElementById('model-switcher')) {
+                    document.getElementById('model-switcher').value = d.config.primaryModel;
+                }
+
                 // Render DeepInfra (Utama)
                 list.innerHTML += '<h3 style="margin:1rem 0 0.5rem; font-size:0.7rem; color:var(--text-muted)">INFRASTRUKTUR DEEPINFRA (UTAMA)</h3>';
                 d.deepinfra.forEach(o => {
@@ -1055,6 +1069,22 @@ function getAdminDashboardHTML(stats, user) {
                 await fetch('/api/admin/models/toggle', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, enabled, type}) }); 
                 showToast(type + ' Node #' + id + ' ' + (enabled ? 'Enabled' : 'Disabled'), enabled ? 'success' : 'error');
                 loadModels(); 
+            }
+            
+            async function updateModel(modelName) {
+                try {
+                    const r = await fetch('/api/admin/config/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ primaryModel: modelName })
+                    });
+                    const d = await r.json();
+                    if (d.success) {
+                        showToast(d.message, 'success');
+                    }
+                } catch (e) {
+                    showToast("Error: " + e.message, 'error');
+                }
             }
             
             function openModal(id = null) {

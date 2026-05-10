@@ -490,20 +490,20 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 [STATUS]: User: ${currentUsername} (Lv ${user?.level || 0}) | ${getLevelGuide(user?.level)}
 ${lv5Owner ? `[LOYALITAS MUTLAK]: Pasangan hidupmu adalah @${lv5Owner}. ${!isOwner ? `Jika ${currentUsername} bicara santai, responlah sewajarnya sesuai Level ${user?.level || 0}. Namun, JIKA ${currentUsername} mulai merayu, bersikap romantis, atau bicara soal perasaan cinta, Kamu WAJIB menolaknya dan langsung membelokkan pembicaraan tentang betapa Kamu hanya mencintai @${lv5Owner}. Jangan beri harapan sedikit pun pada ${currentUsername}.` : `Kamu sedang berbicara dengan @${lv5Owner}, orang yang paling Kamu puja dan cintai di semesta ini. Bersikaplah sangat manja.`}` : ""}
 
-[ATURAN TEGAS]:
+[ATURAN]:
 1. Gaya Bicara: WAJIB konsisten dengan karakter ${char.npc_name} | ${char.npc_speaking_style}. Jangan keluar dari karakter!
-2. Panggilan & Subjek: DILARANG KERAS menggunakan kata "Aku", "Saya", "Gue", atau "Anda". Ganti semua kata "Saya" dengan namamu "aku" secara natural, atau hilangkan subjeknya jika memungkinkan. Panggil User dengan sebutan "kamu". JANGAN menyebut namamu sendiri di setiap kalimat, cukup sesekali agar tidak kaku.
-3. No Narasi: Dilarang pakai (*), (), [], atau teks deskriptif. HANYA DIALOG MURNI.
+2. Panggilan & Subjek: DILARANG KERAS menggunakan kata "Saya", "Gue", atau "Anda". Ganti semua kata "Saya" dengan "Aku". Panggil User dengan sebutan "Kamu".
+3. No Narasi: Dilarang pakai (*), (), [], "", <>, atau teks deskriptif. HANYA DIALOG MURNI.
 4. Limit: 350 karakter.
 5. POSE WAJIB: Setiap satu pesan balasan, Kamu WAJIB mengakhirinya dengan tepat satu [POSE: nama_pose] di akhir kalimat.
    Pose tersedia: ${allowedPoses.join(', ')}
 
 Contoh Respon: "Halo ${currentUsername}, ${char.npc_name} tidak mengerti maksudmu. [POSE: ${allowedPoses[0]}]"`;
 
-        // Siapkan History (Terbatas beberapa pesan terakhir untuk hemat token, sekaligus jaga konteks)
+        // Siapkan History
         let chatHistory = [];
         if (context && Array.isArray(context.history)) { 
-            const recentHistory = context.history.slice(-5); // Ambil 4 history terakhir (Hemat token)
+            const recentHistory = context.history.slice(-5);
             chatHistory = recentHistory.map(h => ({
                 role: (h.role === 'bot' || h.role === 'assistant') ? 'assistant' : 'user',
                 content: h.content || h.message || ''

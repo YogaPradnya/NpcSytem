@@ -1,3 +1,17 @@
+function renderBillingTable(billingData) {
+    if (!billingData || !billingData.months || !billingData.months.length) return '<tr><td colspan="4" style="text-align:center; color:#64748b; padding:2rem">No billing data available.</td></tr>';
+    const latestMonth = billingData.months[0];
+    if (!latestMonth || !latestMonth.items) return '<tr><td colspan="4" style="text-align:center; color:#64748b; padding:2rem">No items found for current period.</td></tr>';
+    return latestMonth.items.map(item => {
+        const modelName = item.model.model_name.split('/').pop();
+        const type = item.pricing_type === 'input_tokens' ? 'IN' : 'OUT';
+        const usage = (item.units).toLocaleString();
+        const rate = '$' + (item.rate * 1000000).toFixed(4) + '/1M';
+        const cost = '$' + (item.cost / 100).toFixed(2);
+        return '<tr><td style="font-weight:700; color:#1e293b">' + modelName + ' <span style="font-size:9px; color:#94a3b8; margin-left:5px">' + type + '</span></td><td>' + usage + ' tokens</td><td style="color:#64748b">' + rate + '</td><td style="font-weight:800; color:var(--primary); text-align:right">' + cost + '</td></tr>';
+    }).join('') + '<tr style="background:#f8fafc"><td colspan="3" style="font-weight:800; text-align:right; color:#1e293b">ESTIMATED TOTAL SPEND</td><td style="font-weight:900; color:var(--primary); font-size:1.1rem; text-align:right">$' + (latestMonth.total_cost / 100).toFixed(2) + '</td></tr>';
+}
+
 function getAdminDashboardHTML(stats, user) {
     const isAdmin = user && user.role === 'admin';
     const currentRole = user ? user.role : 'guest';
@@ -684,6 +698,28 @@ function getAdminDashboardHTML(stats, user) {
                             <canvas id="usageChart"></canvas>
                         </div>
                     </div>
+
+                    <div class="card-section">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem">
+                            <h3 style="margin-bottom:0">DeepInfra Billing & Usage</h3>
+                            <span style="font-size:11px; font-weight:800; color:#64748b; background:#f1f5f9; padding:4px 10px; border-radius:6px; text-transform:uppercase">REALTIME DATA</span>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>MODEL</th>
+                                        <th>USAGE</th>
+                                        <th>RATE</th>
+                                        <th style="text-align:right">SPEND (EST)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="billing-body">
+                                    ${renderBillingTable(stats.deepinfra_billing)}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
             ` : ''}
@@ -1119,9 +1155,9 @@ function getAdminDashboardHTML(stats, user) {
                 if(!p || p.totalPages <= 1) { el.innerHTML = ''; return; }
 
                 let html = '';
-                if(p.page > 1) html += \`<button class="btn btn-outline" style="padding:0.3rem 0.8rem" onclick="loadUsers(\${p.page - 1})">Prev</button>\`;
-                html += \`<span style="font-weight:700; color:var(--text-muted); font-size:0.8rem">Page \${p.page} of \${p.totalPages}</span>\`;
-                if(p.page < p.totalPages) html += \`<button class="btn btn-outline" style="padding:0.3rem 0.8rem" onclick="loadUsers(\${p.page + 1})">Next</button>\`;
+                if(p.page > 1) html += '<button class="btn btn-outline" style="padding:0.3rem 0.8rem" onclick="loadUsers(' + (p.page - 1) + ')">Prev</button>';
+                html += '<span style="font-weight:700; color:var(--text-muted); font-size:0.8rem">Page ' + p.page + ' of ' + p.totalPages + '</span>';
+                if(p.page < p.totalPages) html += '<button class="btn btn-outline" style="padding:0.3rem 0.8rem" onclick="loadUsers(' + (p.page + 1) + ')">Next</button>';
                 el.innerHTML = html;
             }
             function renderUsers(users) {
@@ -1397,6 +1433,12 @@ function getAdminDashboardHTML(stats, user) {
                         usageChart.update();
                     } else if (document.getElementById('usageChart')) {
                         initUsageChart(d);
+                    }
+
+                    // Update Billing Table
+                    const billingBody = document.getElementById('billing-body');
+                    if (billingBody && d.deepinfra_billing) {
+                        billingBody.innerHTML = renderBillingTable(d.deepinfra_billing);
                     }
                 } catch(e) {}
             }, 3000);

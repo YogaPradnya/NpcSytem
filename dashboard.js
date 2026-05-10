@@ -6,7 +6,7 @@ function renderBillingTable(billingData) {
         const modelName = item.model.model_name.split('/').pop();
         const type = item.pricing_type === 'input_tokens' ? 'IN' : 'OUT';
         const usage = (item.units).toLocaleString();
-        const rate = '$' + (item.rate * 1000000).toFixed(4) + '/1M';
+        const rate = '$' + (item.rate * 10000).toFixed(4) + '/1M';
         const cost = '$' + (item.cost / 100).toFixed(2);
         return '<tr><td style="font-weight:700; color:#1e293b">' + modelName + ' <span style="font-size:9px; color:#94a3b8; margin-left:5px">' + type + '</span></td><td>' + usage + ' tokens</td><td style="color:#64748b">' + rate + '</td><td style="font-weight:800; color:var(--primary); text-align:right">' + cost + '</td></tr>';
     }).join('') + '<tr style="background:#f8fafc"><td colspan="3" style="font-weight:800; text-align:right; color:#1e293b">ESTIMATED TOTAL SPEND</td><td style="font-weight:900; color:var(--primary); font-size:1.1rem; text-align:right">$' + (latestMonth.total_cost / 100).toFixed(2) + '</td></tr>';
@@ -1367,6 +1367,20 @@ function getAdminDashboardHTML(stats, user) {
                 setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 500); }, 3000);
             }
             
+            function renderBillingTable(billingData) {
+                if (!billingData || !billingData.months || !billingData.months.length) return '<tr><td colspan="4" style="text-align:center; color:#64748b; padding:2rem">No billing data available.</td></tr>';
+                const latestMonth = billingData.months[0];
+                if (!latestMonth || !latestMonth.items) return '<tr><td colspan="4" style="text-align:center; color:#64748b; padding:2rem">No items found for current period.</td></tr>';
+                return latestMonth.items.map(item => {
+                    const modelName = item.model.model_name.split('/').pop();
+                    const type = item.pricing_type === 'input_tokens' ? 'IN' : 'OUT';
+                    const usage = (item.units).toLocaleString();
+                    const rate = '$' + (item.rate * 10000).toFixed(4) + '/1M';
+                    const cost = '$' + (item.cost / 100).toFixed(2);
+                    return '<tr><td style="font-weight:700; color:#1e293b">' + modelName + ' <span style="font-size:9px; color:#94a3b8; margin-left:5px">' + type + '</span></td><td>' + usage + ' tokens</td><td style="color:#64748b">' + rate + '</td><td style="font-weight:800; color:var(--primary); text-align:right">' + cost + '</td></tr>';
+                }).join('') + '<tr style="background:#f8fafc"><td colspan="3" style="font-weight:800; text-align:right; color:#1e293b">ESTIMATED TOTAL SPEND</td><td style="font-weight:900; color:var(--primary); font-size:1.1rem; text-align:right">$' + (latestMonth.total_cost / 100).toFixed(2) + '</td></tr>';
+            }
+
             let usageChart = null;
             function initUsageChart(data) {
                 const ctx = document.getElementById('usageChart');

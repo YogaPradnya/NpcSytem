@@ -9,7 +9,9 @@ function getAdminDashboardHTML(stats, user) {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>NPC SYSTEM - Control Panel</title>
         <link rel="icon" type="image/png" href="/favicon.png?v=2">
-        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="https://unpkg.com/lucide@latest"></script>
         <style>
             :root {
                 --primary: #f97316;
@@ -22,15 +24,19 @@ function getAdminDashboardHTML(stats, user) {
                 --success: #22c55e;
                 --danger: #ef4444;
                 --info: #3b82f6;
+                --radius: 1rem;
+                --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
             }
+            
             @keyframes fadeIn { 
-                from { opacity: 0; transform: translateY(8px); } 
+                from { opacity: 0; transform: translateY(4px); } 
                 to { opacity: 1; transform: translateY(0); } 
             }
-            .animate-fade { animation: fadeIn 0.4s ease-out forwards; }
+            .animate-fade { animation: fadeIn 0.3s ease-out forwards; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
+            
             body {
-                font-family: 'Outfit', sans-serif;
+                font-family: 'Montserrat', sans-serif;
                 background: var(--bg);
                 color: var(--text-main);
                 height: 100vh;
@@ -40,99 +46,191 @@ function getAdminDashboardHTML(stats, user) {
             }
 
             aside {
-                width: 230px;
+                width: 280px;
                 background: #0f172a;
                 color: #fff;
                 display: flex;
                 flex-direction: column;
-                padding: 2rem 1.2rem;
+                padding: 2rem 1.25rem;
                 flex-shrink: 0;
                 z-index: 50;
-                transition: transform 0.3s ease;
-                border-right: 1px solid rgba(255,255,255,0.05);
+                position: relative;
+                overflow: hidden;
+            }
+            aside::before {
+                content: '';
+                position: absolute;
+                top: -50%;
+                left: -50%;
+                width: 200%;
+                height: 200%;
+                background: radial-gradient(circle, rgba(249, 115, 22, 0.05) 0%, transparent 70%);
+                pointer-events: none;
             }
             .brand {
                 text-align: center;
-                margin-bottom: 3rem;
-                letter-spacing: 0.5px;
+                margin-bottom: 3.5rem;
+                position: relative;
             }
-            .brand h1 { font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 4px; text-transform: uppercase; }
-            .brand p { font-size: 12px; color: #64748b; font-weight: 700; letter-spacing: 1px; }
+            .brand img {
+                filter: drop-shadow(0 0 15px rgba(249, 115, 22, 0.3));
+                transition: transform 0.3s ease;
+            }
+            .brand:hover img { transform: scale(1.05) rotate(5deg); }
+            .brand h1 { font-size: 20px; font-weight: 900; color: #fff; margin-top: 1rem; text-transform: uppercase; letter-spacing: 2px; }
+            .brand p { font-size: 9px; color: #64748b; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; }
 
-            nav { display: flex; flex-direction: column; gap: 0.8rem; }
+            nav { display: flex; flex-direction: column; gap: 0.6rem; position: relative; }
             .nav-item {
-                padding: 0.75rem 1rem;
-                border-radius: 0.75rem;
+                padding: 0.9rem 1.25rem;
+                border-radius: 0.85rem;
                 cursor: pointer;
                 color: #94a3b8;
-                font-weight: 700;
-                transition: all 0.2s;
+                font-weight: 600;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
                 font-size: 14px;
+                display: flex;
+                align-items: center;
+                gap: 14px;
+                border: 1px solid transparent;
+            }
+            .nav-item i { width: 18px; height: 18px; opacity: 0.7; transition: all 0.3s; }
+            .nav-item:hover { 
+                background: rgba(255,255,255,0.03); 
+                color: #fff; 
+                padding-left: 1.5rem;
+                border-color: rgba(255,255,255,0.05);
+            }
+            .nav-item:hover i { opacity: 1; transform: scale(1.1); color: var(--primary); }
+            
+            .nav-item.active {
+                background: linear-gradient(135deg, var(--primary) 0%, #ea580c 100%);
+                color: #fff;
+                box-shadow: 0 10px 20px -5px rgba(249, 115, 22, 0.4);
+                font-weight: 700;
+            }
+            .nav-item.active i { opacity: 1; color: #fff; }
+
+            .sidebar-footer {
+                margin-top: auto;
+                padding-top: 2rem;
+                border-top: 1px solid rgba(255,255,255,0.05);
+                position: relative;
+            }
+            .user-info-card {
+                background: rgba(255,255,255,0.03);
+                padding: 1rem;
+                border-radius: 1rem;
+                margin-bottom: 1.5rem;
+                border: 1px solid rgba(255,255,255,0.05);
                 text-align: center;
             }
-            .nav-item:hover { background: rgba(255,255,255,0.05); color: #fff; transform: translateX(5px); }
-            .nav-item.active {
-                background: var(--primary);
+            .status-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 10px;
+                font-weight: 800;
+                color: var(--success);
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+            .status-dot {
+                width: 8px;
+                height: 8px;
+                background: var(--success);
+                border-radius: 50%;
+                box-shadow: 0 0 10px var(--success);
+                animation: pulse 2s infinite;
+            }
+            @keyframes pulse {
+                0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+                70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+                100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+            }
+
+            .btn-logout {
+                width: 100%;
+                background: rgba(239, 68, 68, 0.1);
+                color: #ef4444;
+                border: 1px solid rgba(239, 68, 68, 0.2);
+                padding: 0.9rem;
+                border-radius: 0.85rem;
+                font-weight: 700;
+                font-size: 13px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 10px;
+                transition: all 0.3s;
+                cursor: pointer;
+            }
+            .btn-logout:hover {
+                background: #ef4444;
                 color: #fff;
-                box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+                box-shadow: 0 8px 16px -4px rgba(239, 68, 68, 0.4);
             }
 
             main {
                 flex: 1;
                 overflow-y: auto;
-                padding: 2rem;
-                background: #f8fafc;
-                width: 100%;
+                padding: 3rem;
+                background: var(--bg);
             }
-            header h1 { font-size: 16px; font-weight: 800; }
+            header h1 { font-size: 24px; font-weight: 900; letter-spacing: -1px; }
             header {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                margin-bottom: 2rem;
+                margin-bottom: 3rem;
             }
-            .menu-toggle { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; }
 
             .stats-grid { 
                 display: grid; 
-                grid-template-columns: repeat(5, 1fr); 
-                gap: 1.25rem; 
-                margin-bottom: 2.5rem; 
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+                gap: 1.5rem; 
+                margin-bottom: 3.5rem; 
             }
             
             .stat-card {
                 background: #fff;
-                padding: 1.25rem 1.5rem;
+                padding: 1.5rem;
                 border: 1px solid var(--border);
-                border-radius: 0.75rem;
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-                border-left: 4px solid var(--primary);
+                border-radius: 1.25rem;
+                box-shadow: 0 4px 15px -3px rgba(0,0,0,0.03);
                 display: flex;
                 flex-direction: column;
                 justify-content: center;
-                min-height: 100px;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                border-left: 5px solid var(--primary);
+                min-height: 110px;
+                position: relative;
+                overflow: hidden;
             }
+            .stat-card:hover { transform: translateY(-5px); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.05); }
+            
             .stat-card.blue { border-left-color: var(--info); }
             .stat-card.green { border-left-color: var(--success); }
-            .stat-card.red { border-left-color: var(--danger); }
-            .stat-card:hover { transform: translateY(-5px); box-shadow: 0 12px 20px -5px rgba(0,0,0,0.1); }
             .stat-card.orange { border-left-color: var(--primary); }
+            .stat-card.purple { border-left-color: #a855f7; }
+            .stat-card.red { border-left-color: var(--danger); }
 
             .stat-card h3 { 
-                font-size: 14px; 
-                color: var(--text-muted); 
+                font-size: 10px; 
+                color: #94a3b8; 
                 text-transform: uppercase; 
-                margin-bottom: 0.5rem; 
-                letter-spacing: 1px;
+                margin-bottom: 0.75rem; 
+                letter-spacing: 1.5px;
                 font-weight: 800;
             }
             .stat-card p { 
-                font-size: 24px; 
+                font-size: 26px; 
                 font-weight: 800; 
                 color: #1e293b; 
                 line-height: 1;
+                letter-spacing: -1px;
             }
-            .uptime-val { color: var(--primary) !important; }
+            .uptime-val { color: var(--primary) !important; font-size: 18px !important; }
 
             /* 2 Column Layout at Bottom */
             .dashboard-bottom {
@@ -279,10 +377,79 @@ function getAdminDashboardHTML(stats, user) {
             }
 
             .sim-container { display: flex; flex-direction: column; background: #fff; border-radius: 1rem; border: 1px solid var(--border); overflow: hidden; min-height: 400px; }
-            #sim-messages { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem; max-height: 400px; }
-            .msg { max-width: 85%; padding: 0.6rem 0.9rem; border-radius: 15px; font-size: 0.85rem; }
-            .msg-user { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 2px; }
-            .msg-bot { align-self: flex-start; background: #f1f5f9; color: var(--text-main); border-bottom-left-radius: 2px; }
+            /* Live Simulator Chat Styles */
+            .sim-container {
+                background: #fff;
+                border: 1px solid var(--border);
+                border-radius: 1.25rem;
+                display: flex;
+                flex-direction: column;
+                height: 550px;
+                overflow: hidden;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            }
+            #sim-messages {
+                flex: 1;
+                overflow-y: auto;
+                padding: 1.5rem;
+                display: flex;
+                flex-direction: column;
+                gap: 1.25rem;
+                background: #fdfdfd;
+            }
+            .msg {
+                max-width: 80%;
+                padding: 1rem 1.25rem;
+                border-radius: 1.25rem;
+                font-size: 14px;
+                line-height: 1.5;
+                position: relative;
+                animation: fadeIn 0.3s ease-out forwards;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+            }
+            .msg-user {
+                align-self: flex-end;
+                background: var(--primary);
+                color: #fff;
+                border-bottom-right-radius: 4px;
+            }
+            .msg-bot {
+                align-self: flex-start;
+                background: #fff;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-bottom-left-radius: 4px;
+            }
+            .msg-typing {
+                font-style: italic;
+                font-size: 12px;
+                color: #94a3b8;
+                background: transparent !important;
+                border: none !important;
+                box-shadow: none !important;
+            }
+            .dot { display: inline-block; width: 4px; height: 4px; background: #94a3b8; border-radius: 50%; margin: 0 2px; animation: bounce 1.4s infinite ease-in-out; }
+            .dot:nth-child(1) { animation-delay: -0.32s; }
+            .dot:nth-child(2) { animation-delay: -0.16s; }
+            @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1.0); } }
+
+            /* Responsive Design */
+            @media (max-width: 1024px) {
+                .stats-grid { grid-template-columns: repeat(3, 1fr); }
+            }
+            @media (max-width: 768px) {
+                body { overflow-y: auto; }
+                aside { display: none; } /* Mobile menu logic usually handles this */
+                main { padding: 1.5rem; }
+                .stats-grid { grid-template-columns: repeat(2, 1fr); }
+                .dashboard-bottom { grid-template-columns: 1fr !important; }
+                header h1 { font-size: 20px; }
+                .stat-card p { font-size: 22px; }
+            }
+            @media (max-width: 480px) {
+                .stats-grid { grid-template-columns: 1fr; }
+                .stat-card { min-height: auto; padding: 1.25rem; }
+            }
 
             .modal { display:none; position:fixed; inset:0; background:rgba(15, 23, 42, 0.6); justify-content:center; align-items:center; z-index:100; backdrop-filter: blur(4px); }
             .modal-content { background:#fff; padding:2rem; border-radius:1.25rem; width:100%; max-width:600px; max-height: 90vh; overflow-y: auto; position: relative; }
@@ -305,28 +472,66 @@ function getAdminDashboardHTML(stats, user) {
             .toast.error { border-left-color: var(--danger); }
             .toast-msg { font-size: 0.85rem; font-weight: 600; color: var(--text-main); }
 
-            /* Terminal Style */
+            /* Terminal Page Styles */
+            #page-terminal { display: flex; flex-direction: column; height: 100%; }
             .terminal-container {
                 background: #0f172a;
-                color: #38bdf8;
-                font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+                color: #fff;
                 padding: 1.5rem;
-                border-radius: 1rem;
-                height: 600px;
-                overflow-y: auto;
-                font-size: 0.85rem;
-                line-height: 1.5;
-                box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
-                border: 1px solid #1e293b;
+                border: 1px solid var(--border);
+                border-radius: 1.25rem;
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+                overflow: hidden;
             }
-            .terminal-line { margin-bottom: 4px; display: flex; gap: 10px; }
-            .term-time { color: #64748b; min-width: 80px; }
-            .term-type { font-weight: 800; min-width: 60px; text-transform: uppercase; }
-            .type-log { color: #22c55e; }
-            .type-warn { color: #eab308; }
-            .type-error { color: #ef4444; }
-            .type-system { color: #a855f7; }
-            .term-msg { color: #e2e8f0; flex: 1; white-space: pre-wrap; }
+            .terminal-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 1rem;
+                padding-bottom: 0.75rem;
+                border-bottom: 1px solid rgba(255,255,255,0.05);
+            }
+            .terminal-status { font-size: 11px; font-weight: 800; text-transform: uppercase; display: flex; align-items: center; gap: 8px; color: var(--success); }
+            .terminal-output {
+                flex: 1;
+                overflow-y: auto;
+                font-family: 'JetBrains Mono', monospace;
+                font-size: 12px;
+                line-height: 1.6;
+                padding-right: 10px;
+            }
+            .terminal-output::-webkit-scrollbar { width: 6px; }
+            .terminal-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+            
+            .term-line {
+                display: grid;
+                grid-template-columns: 110px 80px 1fr;
+                gap: 1rem;
+                padding: 6px 0;
+                border-bottom: 1px solid rgba(255,255,255,0.03);
+            }
+            .term-time { color: #64748b; font-size: 11px; }
+            .term-type { font-weight: 800; text-transform: uppercase; font-size: 10px; text-align: center; }
+            .term-type.type-log { color: #22c55e; }
+            .term-type.type-system { color: #a855f7; }
+            .term-type.type-error { color: #ef4444; }
+            .term-msg { color: #e2e8f0; word-break: break-word; }
+            
+            .term-btn-clear {
+                background: rgba(255,255,255,0.05);
+                border: 1px solid rgba(255,255,255,0.1);
+                color: #fff;
+                padding: 6px 16px;
+                font-size: 11px;
+                font-weight: 700;
+                border-radius: 8px;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            .term-btn-clear:hover { background: var(--primary); border-color: var(--primary); }
 
             /* Simulator Specific */
             .sim-container {
@@ -422,35 +627,39 @@ function getAdminDashboardHTML(stats, user) {
 
         <aside id="sidebar">
             <div class="brand">
-                <img src="/logo.png" style="width:60px; height:60px; border-radius:12px; margin-bottom:1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3)">
+                <img src="/logo.png" style="width:70px; height:70px; border-radius:18px; box-shadow: 0 8px 25px rgba(0,0,0,0.5)">
                 <h1>ANIMEIN.AI</h1>
-                <p>CONTROL PANEL BY YOGA</p>
+                <p>SYSTEM ENGINE V1</p>
             </div>
             <nav>
-                ${isAdmin ? `<div class="nav-item active" onclick="showPage('dashboard', this)">Dashboard</div>` : ''}
-                <div class="nav-item ${!isAdmin ? 'active' : ''}" onclick="showPage('karakter', this)">Data Karakter</div>
+                ${isAdmin ? `<div class="nav-item active" onclick="showPage('dashboard', this)"><i data-lucide="layout-dashboard"></i> Dashboard</div>` : ''}
+                <div class="nav-item ${!isAdmin ? 'active' : ''}" onclick="showPage('karakter', this)"><i data-lucide="users"></i> Data Karakter</div>
                 ${isAdmin ? `
-                    <div class="nav-item" onclick="showPage('otak', this)">Manajemen Otak</div>
-                    <div class="nav-item" onclick="showPage('users', this)">Daftar User</div>
-                    <div class="nav-item" onclick="showPage('banlist', this)">Daftar Ban</div>
+                    <div class="nav-item" onclick="showPage('otak', this)"><i data-lucide="cpu"></i> Manajemen Otak</div>
+                    <div class="nav-item" onclick="showPage('users', this)"><i data-lucide="user-cog"></i> Daftar User</div>
+                    <div class="nav-item" onclick="showPage('banlist', this)"><i data-lucide="ban"></i> Daftar Ban</div>
                 ` : ''}
-                <div class="nav-item" onclick="showPage('simulator', this)">Live Simulator</div>
+                <div class="nav-item" onclick="showPage('simulator', this)"><i data-lucide="play-circle"></i> Live Simulator</div>
                 ${isAdmin ? `
-                    <div class="nav-item" onclick="showPage('logs', this)">Log Percakapan</div>
-                    <div class="nav-item" onclick="showPage('terminal', this)">Logs</div>
+                    <div class="nav-item" onclick="showPage('logs', this)"><i data-lucide="message-square"></i> Log Percakapan</div>
+                    <div class="nav-item" onclick="showPage('terminal', this)"><i data-lucide="terminal"></i> Logs</div>
                 ` : ''}
             </nav>
-            <div style="margin-top: auto; padding-top: 2rem; border-top: 1px solid rgba(255,255,255,0.05);">
-                <div style="text-align: center; margin-bottom: 1rem;">
-                    <span style="background: rgba(249, 115, 22, 0.1); color: var(--primary); padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.6rem; font-weight: 800; border: 1px solid rgba(249, 115, 22, 0.2);">VERSI 1.0.6</span>
+            
+            <div class="sidebar-footer">
+                <div class="user-info-card">
+                    <div style="font-size: 9px; color: #64748b; font-weight: 800; margin-bottom: 8px; text-transform: uppercase;">Logged in as ${currentRole}</div>
+                    <div class="status-badge">
+                        <span class="status-dot"></span>
+                        ONLINE
+                    </div>
                 </div>
-                <div style="color: var(--text-muted); font-size: 0.65rem; font-weight: 700; margin-bottom: 0.5rem; text-align: center; text-transform: uppercase;">Logged in as ${currentRole}</div>
-                <div style="color: var(--success); font-size: 0.75rem; font-weight: 800; margin-bottom: 1rem; display: flex; align-items: center; justify-content: center; letter-spacing: 1px;">
-                    ONLINE
-                </div>
-                <button onclick="location.href='/logout'" style="width: 100%; padding: 1rem; background: var(--primary); color: #fff; border: none; border-radius: 0.75rem; font-weight: 800; font-size: 0.95rem; cursor: pointer; transition: all 0.3s;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">
-                    LOGOUT
+                <button class="btn-logout" onclick="window.location.href='/logout'">
+                    <i data-lucide="log-out"></i> LOGOUT
                 </button>
+                <div style="text-align: center; margin-top: 1.5rem;">
+                    <span style="color: rgba(255,255,255,0.2); font-size: 10px; font-weight: 700;">VERSI 1.0.6</span>
+                </div>
             </div>
         </aside>
 
@@ -460,39 +669,19 @@ function getAdminDashboardHTML(stats, user) {
                 <header><h1>Dashboard</h1></header>
                 
                 <div class="stats-grid">
-                    <div class="stat-card orange"><h3>Total Interaction</h3><p id="s-req">${stats.totalRequests}</p></div>
+                    <div class="stat-card orange"><h3>Total Interaction</h3><p id="s-req">${stats.totalRequests.toLocaleString()}</p></div>
                     <div class="stat-card blue"><h3>Uptime Session</h3><p id="s-uptime" class="uptime-val">${stats.uptime}</p></div>
-                    <div class="stat-card blue"><h3>Tokens Consumed</h3><p id="s-tok">${stats.totalTokens.toLocaleString()}</p></div>
-                    <div class="stat-card green"><h3>DeepInfra (Utama)</h3><p id="s-active">${stats.deepinfra_stats ? stats.deepinfra_stats.active : 0}/${stats.deepinfra_stats ? stats.deepinfra_stats.available : 0}</p></div>
-                    <div class="stat-card orange"><h3>Node Groq</h3><p id="s-groq">${stats.groq_stats ? stats.groq_stats.active : 0}/${stats.groq_stats ? stats.groq_stats.available : 0}</p></div>
-                    <div class="stat-card blue"><h3>Node Cerebras</h3><p id="s-cerebras">${stats.cerebras_stats ? stats.cerebras_stats.active : 0}/${stats.cerebras_stats ? stats.cerebras_stats.available : 0}</p></div>
+                    <div class="stat-card blue"><h3>Tokens Consumed</h3><p id="s-tok">${(stats.totalTokens || 0).toLocaleString()}</p></div>
+                    <div class="stat-card green"><h3>DeepInfra (Utama)</h3><p id="s-active">${(stats.deepinfra_stats && stats.deepinfra_stats.active) || 0}/${(stats.deepinfra_stats && stats.deepinfra_stats.available) || 0}</p></div>
+                    <div class="stat-card purple"><h3>Node Groq</h3><p id="s-groq">${(stats.groq_stats && stats.groq_stats.active) || 0}/${(stats.groq_stats && stats.groq_stats.available) || 0}</p></div>
+                    <div class="stat-card orange"><h3>Node Cerebras</h3><p id="s-cerebras">${(stats.cerebras_stats && stats.cerebras_stats.active) || 0}/${(stats.cerebras_stats && stats.cerebras_stats.available) || 0}</p></div>
                 </div>
 
-                <div class="dashboard-bottom">
-                    <div class="card-section" style="width: 100%;">
-                        <h3>Recent Activity</h3>
-                        <div id="live-feed" class="feed-container">
-                             ${stats.recentLogs.map(l => `
-                                <div class="feed-item">
-                                    <div class="feed-avatar">${l.ai_name[0].toUpperCase()}</div>
-                                    <div class="feed-content">
-                                        <div class="feed-title">
-                                            <span>${l.ai_name.toUpperCase()}</span> 
-                                            <small style="background:var(--primary); color:#fff; padding:1px 4px; border-radius:4px; font-size:0.6rem; vertical-align:middle; margin-left:4px">${l.ai_pose || 'idle'}</small>
-                                            ← @${l.username} <small style="color:var(--text-muted); font-size:0.65rem">Lv.${l.user_level || 0}</small>
-                                        </div>
-                                        <div class="feed-msg" style="color:var(--text-main)"><small style="font-weight:700;color:var(--text-muted)">U:</small> ${l.user_message}</div>
-                                        <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
-                                            ${l.bot_response.split('\n').map((s, idx) => 
-                                                '<div class="feed-msg" style="color:var(--primary); margin:0;">' +
-                                                (idx === 0 ? '<small style="font-weight:700">A:</small> ' : '') + s +
-                                                '</div>'
-                                            ).join('')}
-                                        </div>
-                                        <div class="feed-time">${new Date(l.timestamp).toLocaleTimeString()}</div>
-                                    </div>
-                                </div>
-                            `).join('')}
+                <div class="dashboard-bottom" style="grid-template-columns: 1fr;">
+                    <div class="card-section">
+                        <h3>Statistik Penggunaan Provider</h3>
+                        <div style="height: 550px; position: relative;">
+                            <canvas id="usageChart"></canvas>
                         </div>
                     </div>
                 </div>
@@ -586,17 +775,25 @@ function getAdminDashboardHTML(stats, user) {
                     <tbody id="log-body"></tbody>
                 </table></div></div>
             </div>
-
+            
             <div id="page-terminal" class="hidden">
                 <header>
-                    <h1>Realtime Engine Terminal</h1>
-                    <div style="display:flex; gap:1rem; align-items:center">
-                        <span id="terminal-status" style="font-size:0.7rem; font-weight:800; color:var(--danger)">● DISCONNECTED</span>
-                        <button class="btn btn-outline" onclick="clearTerminal()">Clear</button>
-                    </div>
+                    <h1>Engine Monitor</h1>
+                    <div class="terminal-status" id="terminal-status">● DISCONNECTED</div>
                 </header>
-                <div class="terminal-container" id="terminal-output">
-                    <div class="terminal-line"><span class="term-msg">Waiting for logs...</span></div>
+                
+                <div class="terminal-container">
+                    <div class="terminal-header">
+                        <span style="font-weight: 800; font-size: 11px; color: #666;">RAW SYSTEM LOGS</span>
+                        <button class="term-btn-clear" onclick="clearTerminal()">Purge Logs</button>
+                    </div>
+                    <div id="terminal-output" class="terminal-output">
+                        <div class="term-line">
+                            <span class="term-time">[00:00:00]</span>
+                            <span class="term-type type-system">SYSTEM</span>
+                            <span class="term-msg">Waiting for incoming logs...</span>
+                        </div>
+                    </div>
                 </div>
             </div>
             ` : ''}
@@ -765,29 +962,27 @@ function getAdminDashboardHTML(stats, user) {
             function appendTerminalLog(data) {
                 const term = document.getElementById('terminal-output');
                 if (!term) return;
-
+                
                 const line = document.createElement('div');
-                line.className = 'terminal-line';
+                line.className = 'term-line';
                 
-                const time = new Date(data.timestamp || Date.now()).toLocaleTimeString();
-                const type = data.type || 'log';
+                const timeStr = new Date(data.timestamp || Date.now()).toLocaleTimeString();
+                const type = (data.type || 'log').toLowerCase();
                 
-                line.innerHTML = \`
-                    <span class="term-time">[\${time}]</span>
-                    <span class="term-type type-\${type}">\${type}</span>
-                    <span class="term-msg">\${data.message}</span>
-                \`;
+                line.innerHTML = 
+                    '<span class="term-time">' + timeStr + '</span>' +
+                    '<span class="term-type type-' + type + '">' + type + '</span>' +
+                    '<span class="term-msg">' + data.message + '</span>';
                 
                 term.appendChild(line);
                 term.scrollTop = term.scrollHeight;
                 
-                // Limit lines to 200
-                if (term.children.length > 200) term.removeChild(term.firstChild);
+                if (term.children.length > 300) term.removeChild(term.firstChild);
             }
 
             function clearTerminal() {
                 const term = document.getElementById('terminal-output');
-                if (term) term.innerHTML = '<div class="terminal-line"><span class="term-msg">Terminal cleared.</span></div>';
+                if (term) term.innerHTML = '<div class="term-line"><span class="term-time"></span><span class="term-type type-system">SYSTEM</span><span class="term-msg">Terminal buffer cleared.</span></div>';
             }
 
             async function load() {
@@ -998,17 +1193,15 @@ function getAdminDashboardHTML(stats, user) {
                 btn.innerHTML = '...';
 
                 // User message
-                box.innerHTML += \`<div class="msg msg-user">\${text}</div>\`;
+                box.innerHTML += '<div class="msg msg-user">' + text + '</div>';
                 document.getElementById('sim-input').value = '';
                 box.scrollTop = box.scrollHeight;
 
                 // Typing indicator
                 const typingId = 'typing-' + Date.now();
-                box.innerHTML += \`
-                    <div id="\${typingId}" class="msg msg-bot msg-typing">
-                        Sedang berpikir <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-                    </div>
-                \`;
+                box.innerHTML += '<div id="' + typingId + '" class="msg msg-bot msg-typing">' +
+                    'NPC sedang mengetik <span class="dot"></span><span class="dot"></span><span class="dot"></span>' +
+                    '</div>';
                 box.scrollTop = box.scrollHeight;
 
                 try {
@@ -1131,11 +1324,56 @@ function getAdminDashboardHTML(stats, user) {
             function showToast(msg, type = 'success') {
                 const container = document.getElementById('toast-container');
                 const t = document.createElement('div');
-                t.className = \`toast \${type}\`;
-                t.innerHTML = \`<span class="toast-msg">\${msg}</span>\`;
+                t.className = "toast " + type;
+                t.innerHTML = '<span class="toast-msg">' + msg + '</span>';
                 container.appendChild(t);
                 setTimeout(() => t.classList.add('show'), 100);
                 setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 500); }, 3000);
+            }
+            
+            let usageChart = null;
+            function initUsageChart(data) {
+                const ctx = document.getElementById('usageChart');
+                if (!ctx) return;
+                
+                const chartData = {
+                    labels: ['DeepInfra (Utama)', 'Groq', 'Cerebras'],
+                    datasets: [{
+                        label: 'Tokens Consumed',
+                        data: [
+                            data.deepinfra_stats ? data.deepinfra_stats.total_tokens : 0,
+                            data.groq_stats ? data.groq_stats.total_tokens : 0,
+                            data.cerebras_stats ? data.cerebras_stats.total_tokens : 0
+                        ],
+                        backgroundColor: [
+                            'rgba(34, 197, 94, 0.6)',
+                            'rgba(249, 115, 22, 0.6)',
+                            'rgba(59, 130, 246, 0.6)'
+                        ],
+                        borderColor: [
+                            'rgb(34, 197, 94)',
+                            'rgb(249, 115, 22)',
+                            'rgb(59, 130, 246)'
+                        ],
+                        borderWidth: 2
+                    }]
+                };
+
+                usageChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: chartData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { beginAtZero: true, grid: { display: false } },
+                            x: { grid: { display: false } }
+                        },
+                        plugins: {
+                            legend: { display: false }
+                        }
+                    }
+                });
             }
 
             setInterval(async () => {
@@ -1143,40 +1381,25 @@ function getAdminDashboardHTML(stats, user) {
                     const r = await fetch('/api/stats');
                     const d = await r.json();
                     document.getElementById('s-req').innerText = d.totalRequests;
-                    document.getElementById('s-tok').innerText = d.totalTokens.toLocaleString();
-                    document.getElementById('s-active').innerText = d.active_keys + '/' + d.available_keys;
-                    if(d.cerebras_stats) document.getElementById('s-cerebras').innerText = d.cerebras_stats.active + '/' + d.cerebras_stats.available;
-                    document.getElementById('s-uptime').innerText = d.uptime;
+                    document.getElementById('s-tok').innerText = (d.totalTokens || 0).toLocaleString();
+                    document.getElementById('s-active').innerText = (d.deepinfra_stats ? d.deepinfra_stats.active : 0) + '/' + (d.deepinfra_stats ? d.deepinfra_stats.available : 0);
+                    if(d.groq_stats) document.getElementById('s-groq').innerText = (d.groq_stats.active || 0) + '/' + (d.groq_stats.available || 0);
+                    if(d.cerebras_stats) document.getElementById('s-cerebras').innerText = (d.cerebras_stats.active || 0) + '/' + (d.cerebras_stats.available || 0);
+                    document.getElementById('s-uptime').innerText = d.uptime || '0s';
 
-                    // Update Recent Activity
-                    const feed = document.getElementById('live-feed');
-                    if(d.recentLogs && d.recentLogs.length > 0) {
-                        feed.innerHTML = d.recentLogs.map(l => \`
-                            <div class="feed-item">
-                                <div class="feed-avatar">\${l.ai_name[0].toUpperCase()}</div>
-                                <div class="feed-content">
-                                    <div class="feed-title">
-                                        <span>\${l.ai_name.toUpperCase()}</span> 
-                                        <small style="background:var(--primary); color:#fff; padding:1px 4px; border-radius:4px; font-size:0.6rem; vertical-align:middle; margin-left:4px">\${l.ai_pose || 'idle'}</small>
-                                        ← @\${l.username} <small style="color:var(--text-muted); font-size:0.65rem">Lv.\${l.user_level || 0}</small>
-                                    </div>
-                                    <div class="feed-msg" style="color:var(--text-main)"><small style="font-weight:700;color:var(--text-muted)">U:</small> \${l.user_message}</div>
-                                    <div style="display:flex; flex-direction:column; gap:2px; margin-top:4px; color:var(--primary)">
-                                        \${formatBotMsg(l.bot_response)}
-                                    </div>
-                                    <div class="feed-time">\${new Date(l.timestamp).toLocaleTimeString()}</div>
-                                </div>
-                            </div>
-                        \`).join('');
-                    }
-                    
-                    // Auto-sync logs if the logs page is currently active
-                    const logsPage = document.getElementById('page-logs');
-                    if (logsPage && !logsPage.classList.contains('hidden')) {
-                        loadLogs();
+                    // Update Chart
+                    if (usageChart) {
+                        usageChart.data.datasets[0].data = [
+                            d.deepinfra_stats ? d.deepinfra_stats.total_tokens : 0,
+                            d.groq_stats ? d.groq_stats.total_tokens : 0,
+                            d.cerebras_stats ? d.cerebras_stats.total_tokens : 0
+                        ];
+                        usageChart.update();
+                    } else if (document.getElementById('usageChart')) {
+                        initUsageChart(d);
                     }
                 } catch(e) {}
-            }, 60000);
+            }, 3000);
 
             // --- BAN LIST MANAGEMENT ---
             async function loadBanList() {
@@ -1269,6 +1492,7 @@ function getAdminDashboardHTML(stats, user) {
             // Hook loadBanList to be called on start or when page is shown
             document.addEventListener('DOMContentLoaded', () => {
                 if (${isAdmin}) loadBanList();
+                lucide.createIcons();
             });
 
             showPage(${isAdmin} ? 'dashboard' : 'karakter');

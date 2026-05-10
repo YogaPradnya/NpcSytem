@@ -101,6 +101,21 @@ let globalStats = {
     charUsage: {} // Track tokens per character
 };
 
+let deepinfraBillingData = null;
+async function fetchDeepInfraBilling() {
+    const apiKey = process.env.DEEPINFRA_API_KEY;
+    if (!apiKey) return;
+    try {
+        const now = new Date();
+        const period = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const url = `https://api.deepinfra.com/payment/usage/tokens?from=${period}`;
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${apiKey}` } });
+        if (response.ok) deepinfraBillingData = await response.json();
+    } catch (e) { console.error("[DEEPINFRA BILLING ERROR]:", e.message); }
+}
+setInterval(fetchDeepInfraBilling, 300000); // 5 mins
+fetchDeepInfraBilling();
+
 // Real-time Log Stream (SSE)
 let logListeners = [];
 function broadcastLog(data) {
@@ -845,6 +860,7 @@ app.get('/api/stats', async (req, res) => {
             active: cerebrasActive,
             total_tokens: cerebrasClients.reduce((acc, c) => acc + c.stats.tokens, 0)
         },
+        deepinfra_billing: deepinfraBillingData,
         recentLogs: cachedDBStats.recentLogs
     });
 });
@@ -894,6 +910,7 @@ app.get('/admin', sessionAuth, async (req, res) => {
             active: cerebrasClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil).length,
             total_tokens: cerebrasClients.reduce((acc, c) => acc + c.stats.tokens, 0)
         },
+        deepinfra_billing: deepinfraBillingData,
         topChars,
         recentLogs
     };

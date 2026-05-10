@@ -463,8 +463,9 @@ function getAdminDashboardHTML(stats, user) {
                     <div class="stat-card orange"><h3>Total Interaction</h3><p id="s-req">${stats.totalRequests}</p></div>
                     <div class="stat-card blue"><h3>Uptime Session</h3><p id="s-uptime" class="uptime-val">${stats.uptime}</p></div>
                     <div class="stat-card blue"><h3>Tokens Consumed</h3><p id="s-tok">${stats.totalTokens.toLocaleString()}</p></div>
-                    <div class="stat-card green"><h3>Node Utama</h3><p id="s-active">${stats.active_keys}/${stats.available_keys}</p></div>
-                    <div class="stat-card orange"><h3>Node Cadangan</h3><p id="s-cerebras">${stats.cerebras_stats ? stats.cerebras_stats.active : 0}/${stats.cerebras_stats ? stats.cerebras_stats.available : 0}</p></div>
+                    <div class="stat-card green"><h3>DeepInfra (Utama)</h3><p id="s-active">${stats.deepinfra_stats ? stats.deepinfra_stats.active : 0}/${stats.deepinfra_stats ? stats.deepinfra_stats.available : 0}</p></div>
+                    <div class="stat-card orange"><h3>Node Groq</h3><p id="s-groq">${stats.groq_stats ? stats.groq_stats.active : 0}/${stats.groq_stats ? stats.groq_stats.available : 0}</p></div>
+                    <div class="stat-card blue"><h3>Node Cerebras</h3><p id="s-cerebras">${stats.cerebras_stats ? stats.cerebras_stats.active : 0}/${stats.cerebras_stats ? stats.cerebras_stats.available : 0}</p></div>
                 </div>
 
                 <div class="dashboard-bottom">
@@ -800,12 +801,29 @@ function getAdminDashboardHTML(stats, user) {
                 const r = await fetch('/api/admin/models'); const d = await r.json();
                 const list = document.getElementById('otak-list'); list.innerHTML = '';
                 
-                // Render API Utama
-                list.innerHTML += '<h3 style="margin:1rem 0 0.5rem; font-size:0.7rem; color:var(--text-muted)">INFRASTRUKTUR API UTAMA</h3>';
+                // Render DeepInfra (Utama)
+                list.innerHTML += '<h3 style="margin:1rem 0 0.5rem; font-size:0.7rem; color:var(--text-muted)">INFRASTRUKTUR DEEPINFRA (UTAMA)</h3>';
+                d.deepinfra.forEach(o => {
+                    const s = o.stats || {requests:0, success:0, errors:0, tokens:0};
+                    list.innerHTML += '<div class="otak-row '+(o.isEnabled?"active":"")+'" style="border-left: 4px solid var(--success)">' +
+                        '<div class="otak-name">DEEPINFRA #'+o.id+'</div>' +
+                        '<div class="otak-stats">' +
+                            '<div class="otak-stat-item"><span class="otak-stat-label">Reqs</span><span class="otak-stat-value">'+s.requests+'</span></div>' +
+                            '<div class="otak-stat-item"><span class="otak-stat-label">Success</span><span class="otak-stat-value" style="color:var(--success)">'+s.success+'</span></div>' +
+                            '<div class="otak-stat-item"><span class="otak-stat-label">Errors</span><span class="otak-stat-value" style="color:var(--danger)">'+s.errors+'</span></div>' +
+                            '<div class="otak-stat-item"><span class="otak-stat-label">Tokens</span><span class="otak-stat-value">'+(s.tokens || 0).toLocaleString()+'</span></div>' +
+                            '<div class="otak-stat-item"><span class="otak-stat-label">Status</span><span class="otak-stat-value" style="color:'+(o.isEnabled?'var(--success)':'var(--danger)')+'">'+(o.isEnabled ? (o.isCoolingDown ? 'COOLDOWN' : 'READY') : 'DISABLED')+'</span></div>' +
+                        '</div>' +
+                        '<label class="switch"><input type="checkbox" '+(o.isEnabled?"checked":"")+' onchange="toggleOtak('+o.id+', this.checked, &apos;DEEPINFRA&apos;)"><span class="slider"></span></label>' +
+                    '</div>';
+                });
+
+                // Render Groq
+                list.innerHTML += '<h3 style="margin:2rem 0 0.5rem; font-size:0.7rem; color:var(--text-muted)">INFRASTRUKTUR GROQ (CADANGAN 1)</h3>';
                 d.otak.forEach(o => {
                     const s = o.stats || {requests:0, success:0, errors:0, tokens:0};
                     list.innerHTML += '<div class="otak-row '+(o.isEnabled?"active":"")+'">' +
-                        '<div class="otak-name">UTAMA #'+o.id+'</div>' +
+                        '<div class="otak-name">GROQ #'+o.id+'</div>' +
                         '<div class="otak-stats">' +
                             '<div class="otak-stat-item"><span class="otak-stat-label">Reqs</span><span class="otak-stat-value">'+s.requests+'</span></div>' +
                             '<div class="otak-stat-item"><span class="otak-stat-label">Success</span><span class="otak-stat-value" style="color:var(--success)">'+s.success+'</span></div>' +
@@ -817,12 +835,12 @@ function getAdminDashboardHTML(stats, user) {
                     '</div>';
                 });
 
-                // Render Cadangan
-                list.innerHTML += '<h3 style="margin:2rem 0 0.5rem; font-size:0.7rem; color:var(--text-muted)">INFRASTRUKTUR CADANGAN (FALLBACK)</h3>';
+                // Render Cerebras
+                list.innerHTML += '<h3 style="margin:2rem 0 0.5rem; font-size:0.7rem; color:var(--text-muted)">INFRASTRUKTUR CEREBRAS (CADANGAN 2)</h3>';
                 d.cerebras.forEach(o => {
                     const s = o.stats || {requests:0, success:0, errors:0, tokens:0};
                     list.innerHTML += '<div class="otak-row '+(o.isEnabled?"active":"")+'" style="border-left: 4px solid var(--info)">' +
-                        '<div class="otak-name">CADANGAN #'+o.id+'</div>' +
+                        '<div class="otak-name">CEREBRAS #'+o.id+'</div>' +
                         '<div class="otak-stats">' +
                             '<div class="otak-stat-item"><span class="otak-stat-label">Reqs</span><span class="otak-stat-value">'+s.requests+'</span></div>' +
                             '<div class="otak-stat-item"><span class="otak-stat-label">Success</span><span class="otak-stat-value" style="color:var(--success)">'+s.success+'</span></div>' +

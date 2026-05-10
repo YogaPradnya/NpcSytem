@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const Groq = require('groq-sdk');
 const Cerebras = require('@cerebras/cerebras_cloud_sdk');
+const OpenAI = require('openai');
 const cookieParser = require('cookie-parser');
 require('dotenv').config();
 const { createClient } = require('@libsql/client');
@@ -129,7 +130,7 @@ console.error = (...args) => {
 
 // Konfigurasi Model AI
 let aiConfig = {
-    primaryModel: 'llama-3.1-8b-instant',
+    primaryModel: 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
     fallbackModel: 'llama-3.1-8b-instant'
 };
 
@@ -348,13 +349,42 @@ const cerebrasClients = cerebrasKeys.map((key, index) => ({
     }
 }));
 
+// Inisialisasi DeepInfra Clients (Primary)
+const deepInfraKeys = [
+    process.env.DEEPINFRA_API_KEY,
+    process.env.DEEPINFRA_API_KEY_2,
+    process.env.DEEPINFRA_API_KEY_3,
+    process.env.DEEPINFRA_API_KEY_4,
+    process.env.DEEPINFRA_API_KEY_5,
+].filter(Boolean);
+
+const deepInfraClients = deepInfraKeys.map((key, index) => ({
+    id: index + 1,
+    client: new OpenAI({
+        apiKey: key,
+        baseURL: 'https://api.deepinfra.com/v1/openai',
+    }),
+    cooldownUntil: 0,
+    isEnabled: true,
+    stats: {
+        requests: 0,
+        success: 0,
+        errors: 0,
+        tokens: 0
+    }
+}));
+
+if (deepInfraClients.length === 0) {
+    console.warn("[NPC] Peringatan: Tidak ada API Key DeepInfra Utama yang ditemukan di .env!");
+}
+
 // Reset Statistik Harian secara Otomatis (Setiap Jam 00:00)
 let lastResetDate = new Date().getDate();
 setInterval(() => {
     const now = new Date();
     if (now.getDate() !== lastResetDate) {
         console.log("[SYSTEM] Reset statistik harian untuk semua otak...");
-        [...groqClients, ...cerebrasClients].forEach(c => {
+        [...deepInfraClients, ...groqClients, ...cerebrasClients].forEach(c => {
             c.stats.tokens = 0;
             c.stats.requests = 0;
             c.stats.success = 0;
@@ -457,128 +487,134 @@ Contoh Respon: "Halo ${currentUsername}, ${char.npc_name} tidak mengerti maksudm
             }));
         }
 
-        // Pilih client yang tidak sedang cooldown, aktif, dan belum mencapai rate limit (5 req/min)
+        // Pilih client yang tidak sedang cooldown
         const now = Date.now();
-        const availableClients = groqClients.filter(c => c.isEnabled && now > c.cooldownUntil);
+        const availableDeepInfra = deepInfraClients.filter(c => c.isEnabled && now > c.cooldownUntil);
+        const availableGroq = groqClients.filter(c => c.isEnabled && now > c.cooldownUntil);
+        const availableCerebras = cerebrasClients.filter(c => c.isEnabled && now > c.cooldownUntil);
         
-        // Siapkan client untuk fallback yang mengabaikan cooldown (Upaya terakhir)
         const fallbackClients = groqClients.filter(c => c.isEnabled);
 
-        if (availableClients.length === 0) {
-            console.warn(`[NPC] Perhatian: Tidak ada kunci Groq Utama yang READY. Menyiapkan jalur cadangan...`);
-        } else {
-            console.log(`[NPC] Ditemukan ${availableClients.length} kunci Groq Utama yang siap.`);
-        }
-
-        if (availableClients.length === 0 && fallbackClients.length === 0 && cerebrasClients.length === 0) {
-            let errorMessage = 'Semua token/otak (Utama & Cadangan) sedang sibuk. Silakan coba lagi nanti.';
+        if (availableDeepInfra.length === 0 && availableGroq.length === 0 && availableCerebras.length === 0 && fallbackClients.length === 0) {
+            let errorMessage = 'Semua token/otak sedang sibuk. Silakan coba lagi nanti.';
             return res.status(503).json({ success: false, error: errorMessage });
         }
 
-        // Konfigurasi Model (Gunakan pilihan dari config)
         const primaryModel = aiConfig.primaryModel;
         const fallbackModel = aiConfig.fallbackModel;
 
         let completion;
         let success = false;
 
-        // 1. Coba Primary Model secara berurutan pada availableClients
-        for (let i = 0; i < availableClients.length; i++) {
-            const clientObj = availableClients[i];
-            const client = clientObj.client;
-            
-            clientObj.stats.requests++; // Increment request count
-
-            try {
-                completion = await client.chat.completions.create({
-                    model: primaryModel,
-                    messages: [
-                        { role: 'system', content: finalSystemPrompt },
-                        ...chatHistory,
-                        { role: 'user', content: message }
-                    ],
-                    max_tokens: 130,
-                    temperature: 0.8
-                });
-                clientObj.stats.success++; // Success!
-                clientObj.stats.tokens += completion.usage?.total_tokens || 0;
-                success = true;
-                break; // Berhasil, keluar dari loop (jadi pakai urutan 1, lalu 2, dst)
-            } catch (error) {
-                clientObj.stats.errors++; // Error!
-                // Jika error adalah rate limit (token habis)
-                if (error.status === 429 || error.message.toLowerCase().includes('rate limit')) {
-                    clientObj.cooldownUntil = Date.now() + (30 * 60 * 1000); // Delay 30 menit
-                    console.warn(`[NPC] Otak ${clientObj.id} Exhausted! Delay 30 menit.`);
-                } else {
-                    console.warn(`[NPC] Otak ${clientObj.id} error:`, error.message);
-                }
-            }
-        }
-
-        // 2. Jika Groq Utama sedang cooldown/limit, LANGSUNG coba Cerebras (Cepat & Stabil)
-        if (!success && cerebrasClients.length > 0) {
-            const availableCerebras = cerebrasClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil);
-            
-            if (availableCerebras.length > 0) {
-                console.warn(`[NPC] API Utama sedang istirahat, beralih ke API Cadangan (Cerebras)...`);
-                
-                for (let i = 0; i < availableCerebras.length; i++) {
-                    const clientObj = availableCerebras[i];
-                    
-                    // ATURAN BARU: Jika token > 900k, matikan selama 1 hari
-                    if (clientObj.stats.tokens >= 900000) {
-                        if (Date.now() > clientObj.cooldownUntil) {
-                            console.warn(`[NPC] API Cadangan #${clientObj.id} mencapai limit harian 900k token. Cooldown 1 hari.`);
-                            clientObj.cooldownUntil = Date.now() + (24 * 3600 * 1000); // 24 jam
-                        }
-                        continue; // Lewati ke cadangan berikutnya
-                    }
-
-                    const client = clientObj.client;
-                    clientObj.stats.requests++;
-
-                    try {
-                        completion = await client.chat.completions.create({
-                            model: 'llama3.1-8b',
-                            messages: [
-                                { role: 'system', content: finalSystemPrompt },
-                                ...chatHistory,
-                                { role: 'user', content: message }
-                            ],
-                            max_tokens: 150,
-                            temperature: 0.8
-                        });
-                        
-                        const cTokens = completion.usage?.total_tokens || 0;
-                        clientObj.stats.success++;
-                        clientObj.stats.tokens += cTokens;
-                        success = true;
-                        console.log(`[NPC] Berhasil diselamatkan oleh API Cadangan #${clientObj.id}!`);
-                        break;
-                    } catch (cErr) {
-                        clientObj.stats.errors++;
-                        console.error(`[NPC] API Cadangan #${clientObj.id} error:`, cErr.message);
-                        if (cErr.status === 429 || cErr.message.toLowerCase().includes('rate limit')) {
-                            clientObj.cooldownUntil = Date.now() + (30 * 60 * 1000); // Cooldown 30 menit
-                        }
-                    }
-                }
-            }
-        }
-
-        // 3. Upaya Terakhir: Coba kembali Groq (Fallback Model) jika semua di atas gagal
-        if (!success) {
-            console.warn(`[NPC] Mencoba upaya terakhir dengan kunci Groq yang tersisa...`);
-            
-            for (let i = 0; i < fallbackClients.length; i++) {
-                const clientObj = fallbackClients[i];
-                const client = clientObj.client;
-                
+        // 1. Coba DeepInfra (UTAMA)
+        if (!success && availableDeepInfra.length > 0) {
+            console.log(`[NPC] Mencoba DeepInfra Utama (${availableDeepInfra.length} node)...`);
+            for (let i = 0; i < availableDeepInfra.length; i++) {
+                const clientObj = availableDeepInfra[i];
                 clientObj.stats.requests++;
 
                 try {
-                    completion = await client.chat.completions.create({
+                    completion = await clientObj.client.chat.completions.create({
+                        model: primaryModel,
+                        messages: [
+                            { role: 'system', content: finalSystemPrompt },
+                            ...chatHistory,
+                            { role: 'user', content: message }
+                        ],
+                        max_tokens: 150,
+                        temperature: 0.8
+                    });
+                    clientObj.stats.success++;
+                    clientObj.stats.tokens += completion.usage?.total_tokens || 0;
+                    success = true;
+                    break;
+                } catch (error) {
+                    clientObj.stats.errors++;
+                    if (error.status === 429 || error.message.toLowerCase().includes('rate limit')) {
+                        clientObj.cooldownUntil = Date.now() + (30 * 60 * 1000); 
+                        console.warn(`[NPC] DeepInfra #${clientObj.id} Limit! Cooldown 30m.`);
+                    } else {
+                        console.warn(`[NPC] DeepInfra #${clientObj.id} Error:`, error.message);
+                    }
+                }
+            }
+        }
+
+        // 2. Coba Groq (CADANGAN 1)
+        if (!success && availableGroq.length > 0) {
+            console.warn(`[NPC] DeepInfra gagal/limit, beralih ke Groq...`);
+            for (let i = 0; i < availableGroq.length; i++) {
+                const clientObj = availableGroq[i];
+                clientObj.stats.requests++;
+
+                try {
+                    completion = await clientObj.client.chat.completions.create({
+                        model: 'llama-3.1-8b-instant',
+                        messages: [
+                            { role: 'system', content: finalSystemPrompt },
+                            ...chatHistory,
+                            { role: 'user', content: message }
+                        ],
+                        max_tokens: 150,
+                        temperature: 0.8
+                    });
+                    clientObj.stats.success++;
+                    clientObj.stats.tokens += completion.usage?.total_tokens || 0;
+                    success = true;
+                    break;
+                } catch (error) {
+                    clientObj.stats.errors++;
+                    if (error.status === 429 || error.message.toLowerCase().includes('rate limit')) {
+                        clientObj.cooldownUntil = Date.now() + (30 * 60 * 1000); 
+                    }
+                }
+            }
+        }
+
+        // 3. Coba Cerebras (CADANGAN 2)
+        if (!success && availableCerebras.length > 0) {
+            console.warn(`[NPC] Groq gagal, beralih ke Cerebras...`);
+            for (let i = 0; i < availableCerebras.length; i++) {
+                const clientObj = availableCerebras[i];
+                
+                if (clientObj.stats.tokens >= 900000) {
+                    clientObj.cooldownUntil = Date.now() + (24 * 3600 * 1000);
+                    continue;
+                }
+
+                clientObj.stats.requests++;
+                try {
+                    completion = await clientObj.client.chat.completions.create({
+                        model: 'llama3.1-8b',
+                        messages: [
+                            { role: 'system', content: finalSystemPrompt },
+                            ...chatHistory,
+                            { role: 'user', content: message }
+                        ],
+                        max_tokens: 150,
+                        temperature: 0.8
+                    });
+                    clientObj.stats.success++;
+                    clientObj.stats.tokens += completion.usage?.total_tokens || 0;
+                    success = true;
+                    break;
+                } catch (error) {
+                    clientObj.stats.errors++;
+                    if (error.status === 429 || error.message.toLowerCase().includes('rate limit')) {
+                        clientObj.cooldownUntil = Date.now() + (30 * 60 * 1000);
+                    }
+                }
+            }
+        }
+
+        // 4. Upaya Terakhir (Groq Fallback)
+        if (!success) {
+            console.warn(`[NPC] Semua API Utama & Cadangan gagal, mencoba fallback terakhir...`);
+            for (let i = 0; i < fallbackClients.length; i++) {
+                const clientObj = fallbackClients[i];
+                clientObj.stats.requests++;
+                try {
+                    completion = await clientObj.client.chat.completions.create({
                         model: fallbackModel,
                         messages: [
                             { role: 'system', content: finalSystemPrompt },
@@ -594,13 +630,12 @@ Contoh Respon: "Halo ${currentUsername}, ${char.npc_name} tidak mengerti maksudm
                     break;
                 } catch (error) {
                     clientObj.stats.errors++;
-                    console.warn(`[NPC] Otak ${clientObj.id} fallback error:`, error.message);
                 }
             }
         }
 
         if (!success) {
-            throw new Error("Semua key (Groq & Cerebras) sedang kehabisan token atau error.");
+            throw new Error("Semua provider (DeepInfra, Groq, Cerebras) gagal merespon.");
         }
 
         let fullResponse = completion.choices[0].message.content;
@@ -733,10 +768,12 @@ Contoh Respon: "Halo ${currentUsername}, ${char.npc_name} tidak mengerti maksudm
                 tokens: tokens,
                 otak_id: success ? (
                     (() => {
-                        const groqMatch = groqClients.find(c => c.client.apiKey === completion._options?.apiKey);
-                        if (groqMatch) return `UTAMA #${groqMatch.id}`;
-                        const cerebrasMatch = cerebrasClients.find(c => c.client.apiKey === completion._options?.apiKey);
-                        if (cerebrasMatch) return `CADANGAN #${cerebrasMatch.id}`;
+                        const diMatch = deepInfraClients.find(c => c.client.apiKey === completion._options?.apiKey);
+                        if (diMatch) return `DEEPINFRA #${diMatch.id}`;
+                        const groqMatch = groqClients.find(c => c.client.apiKey === (completion.client ? completion.client.apiKey : completion._options?.apiKey));
+                        if (groqMatch) return `GROQ #${groqMatch.id}`;
+                        const cerebrasMatch = cerebrasClients.find(c => c.client.apiKey === (completion.client ? completion.client.apiKey : completion._options?.apiKey));
+                        if (cerebrasMatch) return `CEREBRAS #${cerebrasMatch.id}`;
                         return 'FALLBACK';
                     })()
                 ) : 'N/A',
@@ -777,8 +814,9 @@ let cachedDBStats = { topChars: [], recentLogs: [], lastUpdate: 0, usage: null, 
 
 // API: Get Stats
 app.get('/api/stats', async (req, res) => {
-    const active = groqClients.filter(c => Date.now() > c.cooldownUntil && c.isEnabled).length;
-    const cooldown = groqClients.filter(c => Date.now() <= c.cooldownUntil).length;
+    const diActive = deepInfraClients.filter(c => Date.now() > c.cooldownUntil && c.isEnabled).length;
+    const groqActive = groqClients.filter(c => Date.now() > c.cooldownUntil && c.isEnabled).length;
+    const cerebrasActive = cerebrasClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil).length;
     
     if (Date.now() - cachedDBStats.lastUpdate > 30000) {
         try {
@@ -789,16 +827,22 @@ app.get('/api/stats', async (req, res) => {
         cachedDBStats.lastUpdate = Date.now();
     }
 
-
     res.json({
         ...globalStats,
         uptime: formatUptime(Math.floor((new Date() - globalStats.startTime) / 1000)),
-        available_keys: groqClients.length,
-        active_keys: active,
-        cooldown_keys: cooldown,
+        deepinfra_stats: {
+            available: deepInfraClients.length,
+            active: diActive,
+            total_tokens: deepInfraClients.reduce((acc, c) => acc + c.stats.tokens, 0)
+        },
+        groq_stats: {
+            available: groqClients.length,
+            active: groqActive,
+            total_tokens: groqClients.reduce((acc, c) => acc + c.stats.tokens, 0)
+        },
         cerebras_stats: {
             available: cerebrasClients.length,
-            active: cerebrasClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil).length,
+            active: cerebrasActive,
             total_tokens: cerebrasClients.reduce((acc, c) => acc + c.stats.tokens, 0)
         },
         recentLogs: cachedDBStats.recentLogs
@@ -835,9 +879,16 @@ app.get('/admin', sessionAuth, async (req, res) => {
     const stats = {
         ...globalStats,
         uptime: formatUptime(Math.floor((new Date() - globalStats.startTime) / 1000)),
-        available_keys: groqClients.length,
-        active_keys: active,
-        cooldown_keys: groqClients.length - active,
+        deepinfra_stats: {
+            available: deepInfraClients.length,
+            active: deepInfraClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil).length,
+            total_tokens: deepInfraClients.reduce((acc, c) => acc + c.stats.tokens, 0)
+        },
+        groq_stats: {
+            available: groqClients.length,
+            active: groqClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil).length,
+            total_tokens: groqClients.reduce((acc, c) => acc + c.stats.tokens, 0)
+        },
         cerebras_stats: {
             available: cerebrasClients.length,
             active: cerebrasClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil).length,
@@ -853,6 +904,17 @@ app.get('/admin', sessionAuth, async (req, res) => {
 app.get('/api/admin/models', apiAuth, adminOnly, (req, res) => {
     res.json({
         config: aiConfig,
+        deepinfra: deepInfraClients.map(c => {
+            const now = Date.now();
+            return {
+                id: c.id,
+                type: 'DEEPINFRA',
+                isEnabled: c.isEnabled,
+                isCoolingDown: now < c.cooldownUntil,
+                cooldownRemaining: Math.max(0, Math.floor((c.cooldownUntil - now) / 1000)),
+                stats: c.stats
+            };
+        }),
         otak: groqClients.map(c => {
             const now = Date.now();
             return {
@@ -884,6 +946,8 @@ app.post('/api/admin/models/toggle', apiAuth, adminOnly, (req, res) => {
     let otak;
     if (type === 'CEREBRAS') {
         otak = cerebrasClients.find(c => c.id === id);
+    } else if (type === 'DEEPINFRA') {
+        otak = deepInfraClients.find(c => c.id === id);
     } else {
         otak = groqClients.find(c => c.id === id);
     }

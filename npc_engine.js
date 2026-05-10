@@ -97,6 +97,8 @@ const PORT = process.env.PORT || 4000; // Menggunakan port dari environment atau
 let globalStats = {
     totalRequests: 0,
     totalTokens: 0,
+    totalPromptTokens: 0,
+    totalCompletionTokens: 0,
     startTime: new Date(),
     charUsage: {} // Track tokens per character
 };
@@ -153,7 +155,7 @@ console.error = (...args) => {
 
 // Konfigurasi Model AI
 let aiConfig = {
-    primaryModel: 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
+    primaryModel: 'meta-llama/Meta-Llama-3.1-8B-Instruct',
     fallbackModel: 'llama-3.1-8b-instant'
 };
 
@@ -327,7 +329,9 @@ const groqClients = keys.map((key, index) => ({
         requests: 0,
         success: 0,
         errors: 0,
-        tokens: 0
+        tokens: 0,
+        prompt_tokens: 0,
+        completion_tokens: 0
     }
 }));
 
@@ -368,7 +372,9 @@ const cerebrasClients = cerebrasKeys.map((key, index) => ({
         requests: 0,
         success: 0,
         errors: 0,
-        tokens: 0
+        tokens: 0,
+        prompt_tokens: 0,
+        completion_tokens: 0
     }
 }));
 
@@ -393,7 +399,9 @@ const deepInfraClients = deepInfraKeys.map((key, index) => ({
         requests: 0,
         success: 0,
         errors: 0,
-        tokens: 0
+        tokens: 0,
+        prompt_tokens: 0,
+        completion_tokens: 0
     }
 }));
 
@@ -409,6 +417,8 @@ setInterval(() => {
         console.log("[SYSTEM] Reset statistik harian untuk semua otak...");
         [...deepInfraClients, ...groqClients, ...cerebrasClients].forEach(c => {
             c.stats.tokens = 0;
+            c.stats.prompt_tokens = 0;
+            c.stats.completion_tokens = 0;
             c.stats.requests = 0;
             c.stats.success = 0;
             c.stats.errors = 0;
@@ -548,14 +558,17 @@ Contoh Respon: "Halo ${currentUsername}, ${char.npc_name} tidak mengerti maksudm
                         temperature: 0.8
                     });
                     clientObj.stats.success++;
-                    clientObj.stats.tokens += completion.usage?.total_tokens || 0;
+                    const usage = completion.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+                    clientObj.stats.tokens += usage.total_tokens;
+                    clientObj.stats.prompt_tokens += usage.prompt_tokens;
+                    clientObj.stats.completion_tokens += usage.completion_tokens;
                     success = true;
                     break;
                 } catch (error) {
                     clientObj.stats.errors++;
                     if (error.status === 429 || error.message.toLowerCase().includes('rate limit')) {
-                        clientObj.cooldownUntil = Date.now() + (30 * 60 * 1000); 
-                        console.warn(`[NPC] DeepInfra #${clientObj.id} Limit! Cooldown 30m.`);
+                        clientObj.cooldownUntil = Date.now() + (5 * 60 * 1000); 
+                        console.warn(`[NPC] DeepInfra #${clientObj.id} Limit! Cooldown 5m.`);
                     } else {
                         console.warn(`[NPC] DeepInfra #${clientObj.id} Error:`, error.message);
                     }
@@ -582,7 +595,10 @@ Contoh Respon: "Halo ${currentUsername}, ${char.npc_name} tidak mengerti maksudm
                         temperature: 0.8
                     });
                     clientObj.stats.success++;
-                    clientObj.stats.tokens += completion.usage?.total_tokens || 0;
+                    const usage = completion.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+                    clientObj.stats.tokens += usage.total_tokens;
+                    clientObj.stats.prompt_tokens += usage.prompt_tokens;
+                    clientObj.stats.completion_tokens += usage.completion_tokens;
                     success = true;
                     break;
                 } catch (error) {
@@ -618,7 +634,10 @@ Contoh Respon: "Halo ${currentUsername}, ${char.npc_name} tidak mengerti maksudm
                         temperature: 0.8
                     });
                     clientObj.stats.success++;
-                    clientObj.stats.tokens += completion.usage?.total_tokens || 0;
+                    const usage = completion.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+                    clientObj.stats.tokens += usage.total_tokens;
+                    clientObj.stats.prompt_tokens += usage.prompt_tokens;
+                    clientObj.stats.completion_tokens += usage.completion_tokens;
                     success = true;
                     break;
                 } catch (error) {
@@ -648,7 +667,10 @@ Contoh Respon: "Halo ${currentUsername}, ${char.npc_name} tidak mengerti maksudm
                         temperature: 0.8
                     });
                     clientObj.stats.success++;
-                    clientObj.stats.tokens += completion.usage?.total_tokens || 0;
+                    const usage = completion.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+                    clientObj.stats.tokens += usage.total_tokens;
+                    clientObj.stats.prompt_tokens += usage.prompt_tokens;
+                    clientObj.stats.completion_tokens += usage.completion_tokens;
                     success = true;
                     break;
                 } catch (error) {
@@ -748,9 +770,12 @@ Contoh Respon: "Halo ${currentUsername}, ${char.npc_name} tidak mengerti maksudm
         sentences = sentences.slice(0, 4);
         // Update Statistik
         const endTime = Date.now();
-        const tokens = completion.usage?.total_tokens || 0;
+        const usage = completion.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+        const tokens = usage.total_tokens;
         globalStats.totalRequests++;
         globalStats.totalTokens += tokens;
+        globalStats.totalPromptTokens += usage.prompt_tokens;
+        globalStats.totalCompletionTokens += usage.completion_tokens;
         if (!globalStats.charUsage[aiKey]) globalStats.charUsage[aiKey] = 0;
         globalStats.charUsage[aiKey] += tokens;
 
@@ -856,17 +881,23 @@ app.get('/api/stats', async (req, res) => {
         deepinfra_stats: {
             available: deepInfraClients.length,
             active: diActive,
-            total_tokens: deepInfraClients.reduce((acc, c) => acc + c.stats.tokens, 0)
+            total_tokens: deepInfraClients.reduce((acc, c) => acc + c.stats.tokens, 0),
+            prompt_tokens: deepInfraClients.reduce((acc, c) => acc + c.stats.prompt_tokens, 0),
+            completion_tokens: deepInfraClients.reduce((acc, c) => acc + c.stats.completion_tokens, 0)
         },
         groq_stats: {
             available: groqClients.length,
             active: groqActive,
-            total_tokens: groqClients.reduce((acc, c) => acc + c.stats.tokens, 0)
+            total_tokens: groqClients.reduce((acc, c) => acc + c.stats.tokens, 0),
+            prompt_tokens: groqClients.reduce((acc, c) => acc + c.stats.prompt_tokens, 0),
+            completion_tokens: groqClients.reduce((acc, c) => acc + c.stats.completion_tokens, 0)
         },
         cerebras_stats: {
             available: cerebrasClients.length,
             active: cerebrasActive,
-            total_tokens: cerebrasClients.reduce((acc, c) => acc + c.stats.tokens, 0)
+            total_tokens: cerebrasClients.reduce((acc, c) => acc + c.stats.tokens, 0),
+            prompt_tokens: cerebrasClients.reduce((acc, c) => acc + c.stats.prompt_tokens, 0),
+            completion_tokens: cerebrasClients.reduce((acc, c) => acc + c.stats.completion_tokens, 0)
         },
         deepinfra_billing: deepinfraBillingData,
         deepinfra_account: deepinfraAccountData,
@@ -907,17 +938,23 @@ app.get('/admin', sessionAuth, async (req, res) => {
         deepinfra_stats: {
             available: deepInfraClients.length,
             active: deepInfraClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil).length,
-            total_tokens: deepInfraClients.reduce((acc, c) => acc + c.stats.tokens, 0)
+            total_tokens: deepInfraClients.reduce((acc, c) => acc + c.stats.tokens, 0),
+            prompt_tokens: deepInfraClients.reduce((acc, c) => acc + c.stats.prompt_tokens, 0),
+            completion_tokens: deepInfraClients.reduce((acc, c) => acc + c.stats.completion_tokens, 0)
         },
         groq_stats: {
             available: groqClients.length,
             active: groqClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil).length,
-            total_tokens: groqClients.reduce((acc, c) => acc + c.stats.tokens, 0)
+            total_tokens: groqClients.reduce((acc, c) => acc + c.stats.tokens, 0),
+            prompt_tokens: groqClients.reduce((acc, c) => acc + c.stats.prompt_tokens, 0),
+            completion_tokens: groqClients.reduce((acc, c) => acc + c.stats.completion_tokens, 0)
         },
         cerebras_stats: {
             available: cerebrasClients.length,
             active: cerebrasClients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil).length,
-            total_tokens: cerebrasClients.reduce((acc, c) => acc + c.stats.tokens, 0)
+            total_tokens: cerebrasClients.reduce((acc, c) => acc + c.stats.tokens, 0),
+            prompt_tokens: cerebrasClients.reduce((acc, c) => acc + c.stats.prompt_tokens, 0),
+            completion_tokens: cerebrasClients.reduce((acc, c) => acc + c.stats.completion_tokens, 0)
         },
         deepinfra_billing: deepinfraBillingData,
         deepinfra_account: deepinfraAccountData,

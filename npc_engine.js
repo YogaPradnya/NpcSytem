@@ -179,12 +179,12 @@ function formatUptime(seconds) {
 // Fungsi untuk mendapatkan panduan hubungan yang mendalam (Level-Based Psychology)
 function getLevelGuide(level) {
     const lv = Number(level) || 0; 
-    if (lv <= 0) return "[LV0: ASING] Dingin, formal, jaga jarak, tanpa emosi.";
-    if (lv === 1) return "[LV1: KENALAN] Ramah sewajarnya, sedikit kaku, hindari topik pribadi.";
-    if (lv === 2) return "[LV2: TEMAN] Santai, luwes, mulai bercanda, panggil nama user.";
-    if (lv === 3) return "[LV3: TEMAN BAIK] Jujur, terbuka, emosional, sangat antusias.";
-    if (lv === 4) return "[LV4: SAHABAT] Sangat percaya, protektif, manja/menggoda, takut kehilangan.";
-    return "[LV5: PASANGAN] Intim, setia, manja, posesif manis, cinta mati.";
+    if (lv <= 0) return "[LV0:ASING] Dingin, formal, jaga jarak.";
+    if (lv === 1) return "[LV1:KENALAN] Ramah, sedikit kaku.";
+    if (lv === 2) return "[LV2:TEMAN] Santai, luwes, bercanda.";
+    if (lv === 3) return "[LV3:TEMAN BAIK] Jujur, terbuka, antusias.";
+    if (lv === 4) return "[LV4:SAHABAT] Protektif, manja, takut kehilangan.";
+    return "[LV5:PASANGAN] Intim, setia, manja, cinta mati.";
 }
 
 function getDefaultStageLabel(level) {
@@ -493,22 +493,18 @@ app.post('/api/npc/v1/chat', async (req, res) => {
 
         // System Prompt: Membangun dari Struktur Data Baru yang Komprehensif
         const finalSystemPrompt = `Kamu adalah ${char.npc_name}.
-[BIO]: ${char.npc_description} | ${char.npc_personality} | Gaya Bicara: ${char.npc_speaking_style}
-
-[KONTEKS]: ${problem} | Mood: ${mood}
-
-[STATUS]: User: ${currentUsername} (Lv ${user?.level || 0}) | ${getLevelGuide(user?.level)}
-${lv5Owner ? `[LOYALITAS MUTLAK]: Pasangan hidupmu adalah @${lv5Owner}. ${!isOwner ? `Jika ${currentUsername} bicara santai, responlah sewajarnya sesuai Level ${user?.level || 0}. Namun, JIKA ${currentUsername} mulai merayu, bersikap romantis, atau bicara soal perasaan cinta, Kamu WAJIB menolaknya dan langsung membelokkan pembicaraan tentang betapa Kamu hanya mencintai @${lv5Owner}. Jangan beri harapan sedikit pun pada ${currentUsername}.` : `Kamu sedang berbicara dengan @${lv5Owner}, orang yang paling Kamu puja dan cintai di semesta ini. Bersikaplah sangat manja.`}` : ""}
-
+[BIO]:${char.npc_description}|${char.npc_personality}|Gaya Bicara:${char.npc_speaking_style}
+[KONTEKS]:${problem}|Mood:${mood}
+[STATUS]:User:${currentUsername}(Lv${user?.level||0})|${getLevelGuide(user?.level)}
+${lv5Owner ? `[LOYAL]:Lover=@${lv5Owner}.${!isOwner ? `Tolak rayuan/romansa ${currentUsername}. Belokkan ke rasa cintamu pada @${lv5Owner}. Jangan beri harapan pada ${currentUsername}.` : `Sangat manja pada @${lv5Owner}.`}` : ""}
 [ATURAN]:
-1. Gaya Bicara: WAJIB konsisten dengan karakter ${char.npc_name} | ${char.npc_speaking_style}. Jangan keluar dari karakter!
-2. Panggilan & Subjek: DILARANG KERAS menggunakan kata "Saya", "Gue", atau "Anda". Ganti semua kata "Saya" dengan "Aku". Panggil User dengan sebutan "Kamu".
-3. No Narasi: Dilarang pakai (*), (), [], "", <>, atau teks deskriptif. HANYA DIALOG MURNI.
-4. Limit: 350 karakter.
-5. POSE WAJIB: Setiap satu pesan balasan, Kamu WAJIB mengakhirinya dengan tepat satu [POSE: nama_pose] di akhir kalimat.
-   Pose tersedia: ${allowedPoses.join(', ')}
-
-Contoh Respon: "Halo ${currentUsername}, ${char.npc_name} tidak mengerti maksudmu. [POSE: ${allowedPoses[0]}]"`;
+1. Gaya Bicara:WAJIB konsisten dengan karakter ${char.npc_name}|${char.npc_speaking_style}. Jangan keluar dari karakter!
+2. Panggilan & Subjek:DILARANG KERAS menggunakan kata "Saya", "Gue", atau "Anda". Ganti semua kata "Saya" dengan "Aku". Panggil User dengan sebutan "Kamu".
+3. No Narasi:Dilarang pakai (*), (), [], "", <>, atau teks deskriptif. HANYA DIALOG MURNI.
+4. Limit:300 karakter.
+5. POSE WAJIB:Setiap satu pesan balasan, Kamu WAJIB mengakhirinya dengan tepat satu [POSE: nama_pose] di akhir kalimat.
+Pose tersedia:${allowedPoses.join(', ')}
+Contoh Respon:"Halo ${currentUsername}, ${char.npc_name} tidak mengerti maksudmu. [POSE: ${allowedPoses[0]}]"`.trim();
 
         // Siapkan History
         let chatHistory = [];
@@ -807,7 +803,7 @@ Contoh Respon: "Halo ${currentUsername}, ${char.npc_name} tidak mengerti maksudm
             ai_name: aiKey,
             ai_pose: aiPose,
             level: currentHeartLv,
-            is_loyalty_active: !!(lv5Owner && !isOwner), // Flag: True jika ada pemilik hati lain
+            is_loyalty_active: !!(lv5Owner && !isOwner), 
             processing_time_ms: endTime - startTime,
             sentence_count: sentences.length,
             sentences: sentences,

@@ -4,7 +4,11 @@ const OpenAI = require('openai');
 
 const aiConfig = {
     primaryModel: 'meta-llama/Meta-Llama-3.1-8B-Instruct',
-    fallbackModel: 'llama-3.1-8b-instant'
+    fallbackModel: 'llama-3.1-8b-instant',
+    groqFallbackModel: 'llama-3.1-8b-instant',
+    cerebrasFallbackModel: 'llama3.1-8b',
+    maxTokens: 150,
+    temperature: 0.8
 };
 
 function makeStats() {
@@ -124,6 +128,9 @@ function getStatsSummary(clients) {
     return {
         available: clients.length,
         active: clients.filter(c => c.isEnabled && Date.now() > c.cooldownUntil).length,
+        requests: clients.reduce((acc, c) => acc + c.stats.requests, 0),
+        success: clients.reduce((acc, c) => acc + c.stats.success, 0),
+        errors: clients.reduce((acc, c) => acc + c.stats.errors, 0),
         total_tokens: clients.reduce((acc, c) => acc + c.stats.tokens, 0),
         prompt_tokens: clients.reduce((acc, c) => acc + c.stats.prompt_tokens, 0),
         completion_tokens: clients.reduce((acc, c) => acc + c.stats.completion_tokens, 0)
@@ -165,6 +172,34 @@ function setPrimaryModel(primaryModel) {
     aiConfig.primaryModel = primaryModel;
 }
 
+function updateModelConfig(config = {}) {
+    if (typeof config.primaryModel === 'string' && config.primaryModel.trim()) {
+        aiConfig.primaryModel = config.primaryModel.trim();
+    }
+    if (typeof config.fallbackModel === 'string' && config.fallbackModel.trim()) {
+        aiConfig.fallbackModel = config.fallbackModel.trim();
+    }
+    if (typeof config.groqFallbackModel === 'string' && config.groqFallbackModel.trim()) {
+        aiConfig.groqFallbackModel = config.groqFallbackModel.trim();
+    }
+    if (typeof config.cerebrasFallbackModel === 'string' && config.cerebrasFallbackModel.trim()) {
+        aiConfig.cerebrasFallbackModel = config.cerebrasFallbackModel.trim();
+    }
+    if (config.maxTokens !== undefined) {
+        const maxTokens = Number(config.maxTokens);
+        if (Number.isFinite(maxTokens) && maxTokens >= 32 && maxTokens <= 2048) {
+            aiConfig.maxTokens = Math.floor(maxTokens);
+        }
+    }
+    if (config.temperature !== undefined) {
+        const temperature = Number(config.temperature);
+        if (Number.isFinite(temperature) && temperature >= 0 && temperature <= 2) {
+            aiConfig.temperature = Number(temperature.toFixed(2));
+        }
+    }
+    return { ...aiConfig };
+}
+
 function findClient(type, id) {
     if (type === 'CEREBRAS') return cerebrasClients.find(c => c.id === id);
     if (type === 'DEEPINFRA') return deepInfraClients.find(c => c.id === id);
@@ -187,8 +222,8 @@ async function tryClients({ clients, providerName, model, messages, cooldownMs, 
             const completion = await clientObj.client.chat.completions.create({
                 model,
                 messages,
-                max_tokens: 150,
-                temperature: 0.8
+                max_tokens: aiConfig.maxTokens,
+                temperature: aiConfig.temperature
             });
             clientObj.stats.success++;
             addUsageStats(clientObj, completion);
@@ -248,7 +283,7 @@ async function createChatCompletion({ finalSystemPrompt, chatHistory, message })
         const result = await tryClients({
             clients: availableGroq,
             providerName: 'GROQ',
-            model: 'llama-3.1-8b-instant',
+            model: aiConfig.groqFallbackModel,
             messages,
             cooldownMs: 30 * 60 * 1000
         });
@@ -260,7 +295,7 @@ async function createChatCompletion({ finalSystemPrompt, chatHistory, message })
         const result = await tryClients({
             clients: availableCerebras,
             providerName: 'CEREBRAS',
-            model: 'llama3.1-8b',
+            model: aiConfig.cerebrasFallbackModel,
             messages,
             cooldownMs: 30 * 60 * 1000,
             skipClient: clientObj => {
@@ -298,6 +333,7 @@ module.exports = {
     getProviderStats,
     getModelsStatus,
     setPrimaryModel,
+    updateModelConfig,
     toggleClient,
     createChatCompletion
 };

@@ -24,7 +24,23 @@ function createAdminRoutes({
         };
     }
 
+    function streamStats(req, res) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders();
+
+        const send = () => {
+            res.write(`data: ${JSON.stringify(runtimeStats())}\n\n`);
+        };
+
+        send();
+        const timer = setInterval(send, 3000);
+        req.on('close', () => clearInterval(timer));
+    }
+
     router.get('/api/admin/logs/stream', apiAuth, adminOnly, openLogStream);
+    router.get('/api/admin/stats/stream', apiAuth, adminOnly, streamStats);
 
     router.get('/api/stats', async (req, res) => {
         if (Date.now() - cachedDBStats.lastUpdate > 30000) {
@@ -69,11 +85,10 @@ function createAdminRoutes({
     });
 
     router.post('/api/admin/config/update', apiAuth, adminOnly, (req, res) => {
-        const { primaryModel } = req.body;
-        if (primaryModel) {
-            providers.setPrimaryModel(primaryModel);
-            console.log(`[CONFIG] Primary Model changed to: ${primaryModel}`);
-            return res.json({ success: true, message: `Model berhasil diubah ke ${primaryModel}` });
+        const config = providers.updateModelConfig(req.body || {});
+        if (req.body && Object.keys(req.body).length > 0) {
+            console.log(`[CONFIG] Model config updated: ${JSON.stringify(config)}`);
+            return res.json({ success: true, message: 'Konfigurasi model berhasil diperbarui.', config });
         }
         res.status(400).json({ success: false, error: 'Model tidak valid' });
     });
@@ -100,31 +115,64 @@ function createAdminRoutes({
     });
 
     router.get('/api/admin/logs', apiAuth, adminOnly, async (req, res) => {
-        if (Date.now() - cachedDBStats.logsLastUpdate > 15000 || !cachedDBStats.logs) {
-            try {
-                const result = await db.execute("SELECT * FROM chat_logs ORDER BY id DESC LIMIT 100");
-                cachedDBStats.logs = result.rows;
-                cachedDBStats.logsLastUpdate = Date.now();
-            } catch (e) {
-                console.error("[DB LOGS ERROR]:", e.message);
+        try {
+            const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+            const limit = Math.min(100, Math.max(10, parseInt(req.query.limit, 10) || 30));
+            const offset = (page - 1) * limit;
+            const q = String(req.query.q || '').trim();
+
+            let where = '';
+            let args = [];
+            if (q) {
+                where = "WHERE LOWER(username) LIKE LOWER(?) OR LOWER(ai_name) LIKE LOWER(?) OR LOWER(user_message) LIKE LOWER(?) OR LOWER(bot_response) LIKE LOWER(?)";
+                const like = `%${q}%`;
+                args = [like, like, like, like];
             }
+
+            const result = await db.execute({
+                sql: `SELECT * FROM chat_logs ${where} ORDER BY id DESC LIMIT ? OFFSET ?`,
+                args: [...args, limit, offset]
+            });
+            const countRes = await db.execute({
+                sql: `SELECT COUNT(*) as total FROM chat_logs ${where}`,
+                args
+            });
+            const total = Number(countRes.rows[0]?.total || 0);
+
+            res.json({
+                logs: result.rows,
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    totalPages: Math.max(1, Math.ceil(total / limit))
+                }
+            });
+        } catch (e) {
+            console.error("[DB LOGS ERROR]:", e.message);
+            res.status(500).json({ error: e.message });
         }
-        res.json({ logs: cachedDBStats.logs || [] });
     });
 
     router.get('/api/admin/users', apiAuth, adminOnly, async (req, res) => {
         try {
-            const page = parseInt(req.query.page) || 1;
-            const limit = parseInt(req.query.limit) || 30;
+            const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+            const limit = Math.min(100, Math.max(10, parseInt(req.query.limit, 10) || 30));
             const offset = (page - 1) * limit;
+            const q = String(req.query.q || '').trim();
+            const where = q ? "WHERE LOWER(username) LIKE LOWER(?)" : "";
+            const args = q ? [`%${q}%`] : [];
 
             const result = await db.execute({
-                sql: "SELECT * FROM users ORDER BY last_seen DESC LIMIT ? OFFSET ?",
-                args: [limit, offset]
+                sql: `SELECT * FROM users ${where} ORDER BY last_seen DESC LIMIT ? OFFSET ?`,
+                args: [...args, limit, offset]
             });
 
-            const countRes = await db.execute("SELECT COUNT(*) as total FROM users");
-            const total = countRes.rows[0].total;
+            const countRes = await db.execute({
+                sql: `SELECT COUNT(*) as total FROM users ${where}`,
+                args
+            });
+            const total = Number(countRes.rows[0].total || 0);
 
             res.json({
                 users: result.rows,
@@ -140,7 +188,7 @@ function createAdminRoutes({
         }
     });
 
-    router.get('/api/admin/user-logs/:username', apiAuth, async (req, res) => {
+    router.get('/api/admin/user-logs/:username', apiAuth, adminOnly, async (req, res) => {
         try {
             const result = await db.execute({
                 sql: "SELECT * FROM chat_logs WHERE username = ? ORDER BY id DESC LIMIT 50",
@@ -156,7 +204,7 @@ function createAdminRoutes({
         res.json({ usage: [] });
     });
 
-    router.post('/api/characters/save', async (req, res) => {
+    router.post('/api/characters/save', apiAuth, async (req, res) => {
         const { id, data } = req.body;
         if (!id || !data) return res.status(400).json({ error: "Missing data" });
 
@@ -182,7 +230,7 @@ function createAdminRoutes({
         }
     });
 
-    router.post('/api/characters/delete', async (req, res) => {
+    router.post('/api/characters/delete', apiAuth, async (req, res) => {
         const { id } = req.body;
         if (!id) return res.status(400).json({ error: "Missing ID" });
 
@@ -216,7 +264,7 @@ function createAdminRoutes({
         }
     });
 
-    router.get('/api/admin/ban-list', async (req, res) => {
+    router.get('/api/admin/ban-list', apiAuth, adminOnly, async (req, res) => {
         try {
             const bans = await db.execute("SELECT * FROM banned_users ORDER BY created_at DESC");
             const settings = await db.execute("SELECT value FROM settings WHERE key = 'ban_message'");
@@ -226,7 +274,7 @@ function createAdminRoutes({
         }
     });
 
-    router.post('/api/admin/ban-user', async (req, res) => {
+    router.post('/api/admin/ban-user', apiAuth, adminOnly, async (req, res) => {
         let { username } = req.body;
         username = username.toString().trim().replace(/^@/, '');
         try {
@@ -240,7 +288,7 @@ function createAdminRoutes({
         }
     });
 
-    router.post('/api/admin/unban-user', async (req, res) => {
+    router.post('/api/admin/unban-user', apiAuth, adminOnly, async (req, res) => {
         let { username } = req.body;
         username = username.toString().trim().replace(/^@/, '');
         try {
@@ -254,7 +302,7 @@ function createAdminRoutes({
         }
     });
 
-    router.post('/api/admin/update-ban-message', async (req, res) => {
+    router.post('/api/admin/update-ban-message', apiAuth, adminOnly, async (req, res) => {
         const { message } = req.body;
         try {
             await db.execute({

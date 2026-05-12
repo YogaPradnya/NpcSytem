@@ -1,0 +1,811 @@
+const ADMIN_CONFIG = window.NPC_ADMIN_CONFIG || { isAdmin: false, initialPage: 'karakter' };
+
+let allUsers = [];
+let characters = [];
+let userPage = 1;
+let logPage = 1;
+let userSearchTimer = null;
+let logSearchTimer = null;
+let usageChart = null;
+let logEventSource = null;
+let statsEventSource = null;
+
+const sendIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
+
+function escapeHTML(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[ch]));
+}
+
+function escapeAttr(value) {
+    return escapeHTML(value).replace(/`/g, '&#96;');
+}
+
+function jsArg(value) {
+    return escapeAttr(JSON.stringify(String(value ?? '')));
+}
+
+function nFormatter(num) {
+    const value = Number(num) || 0;
+    if (value >= 1000000) return (value / 1000000).toFixed(2).replace(/\.00$/, '') + 'M';
+    if (value >= 1000) return (value / 1000).toFixed(2).replace(/\.00$/, '') + 'K';
+    return value.toLocaleString();
+}
+
+function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+}
+
+function setTableLoading(id, colspan, label = 'Loading...') {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = `<tr><td colspan="${colspan}" class="table-state">${escapeHTML(label)}</td></tr>`;
+}
+
+function setTableError(id, colspan, label) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = `<tr><td colspan="${colspan}" class="table-state error">${escapeHTML(label)}</td></tr>`;
+}
+
+function apiError(data, fallback) {
+    return data?.error || data?.message || fallback;
+}
+
+function toggleMobileMenu() {
+    document.getElementById('sidebar').classList.toggle('mobile-open');
+}
+
+function formatBotMsg(msg) {
+    if (!msg) return '';
+    const cleanMsg = String(msg).replace(/\((.*?)\)|\s*\[(.*?)\]|\*(.*?)\*/g, '').replace(/\s{2,}/g, ' ').trim();
+    if (!cleanMsg) return '...';
+    return cleanMsg.split(String.fromCharCode(10)).map((s, idx) => (
+        '<div style="line-height:1.4">' + (idx === 0 ? '<small style="font-weight:700">A:</small> ' : '') + escapeHTML(s) + '</div>'
+    )).join('');
+}
+
+function showPage(pageId, el) {
+    document.querySelectorAll('main > div').forEach(p => {
+        p.classList.add('hidden');
+        p.classList.remove('animate-fade');
+    });
+    const target = document.getElementById('page-' + pageId);
+    if (target) {
+        target.classList.remove('hidden');
+        void target.offsetWidth;
+        target.classList.add('animate-fade');
+    }
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    if (el) el.classList.add('active');
+    if (window.innerWidth < 768 && document.getElementById('sidebar').classList.contains('mobile-open')) toggleMobileMenu();
+
+    if (pageId === 'karakter') load();
+    if (pageId === 'otak') loadModels();
+    if (pageId === 'users') loadUsers(1);
+    if (pageId === 'logs') loadLogs(1);
+    if (pageId === 'simulator') loadSimSelect();
+    if (pageId === 'terminal') initTerminal();
+    if (pageId === 'banlist') loadBanList();
+}
+
+function initTerminal() {
+    if (logEventSource) return;
+
+    const statusEl = document.getElementById('terminal-status');
+    statusEl.textContent = '● CONNECTING...';
+    statusEl.style.color = 'var(--info)';
+
+    logEventSource = new EventSource('/api/admin/logs/stream');
+
+    logEventSource.onopen = () => {
+        statusEl.textContent = '● LIVE CONNECTED';
+        statusEl.style.color = 'var(--success)';
+        appendTerminalLog({ message: 'Engine connection established.', type: 'system' });
+    };
+
+    logEventSource.onmessage = (e) => {
+        appendTerminalLog(JSON.parse(e.data));
+    };
+
+    logEventSource.onerror = () => {
+        statusEl.textContent = '● DISCONNECTED';
+        statusEl.style.color = 'var(--danger)';
+        logEventSource.close();
+        logEventSource = null;
+        setTimeout(initTerminal, 5000);
+    };
+}
+
+function appendTerminalLog(data) {
+    const term = document.getElementById('terminal-output');
+    if (!term) return;
+
+    const line = document.createElement('div');
+    line.className = 'term-line';
+
+    const time = document.createElement('span');
+    time.className = 'term-time';
+    time.textContent = new Date(data.timestamp || Date.now()).toLocaleTimeString();
+
+    const type = document.createElement('span');
+    const typeName = String(data.type || 'log').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    type.className = 'term-type type-' + typeName;
+    type.textContent = typeName;
+
+    const msg = document.createElement('span');
+    msg.className = 'term-msg';
+    msg.textContent = data.message || '';
+
+    line.append(time, type, msg);
+    term.appendChild(line);
+    term.scrollTop = term.scrollHeight;
+
+    if (term.children.length > 300) term.removeChild(term.firstChild);
+}
+
+function clearTerminal() {
+    const term = document.getElementById('terminal-output');
+    if (!term) return;
+    term.innerHTML = '';
+    appendTerminalLog({ message: 'Terminal buffer cleared.', type: 'system' });
+}
+
+async function load() {
+    setTableLoading('char-body', 4, 'Memuat karakter...');
+    try {
+        const r = await fetch('/api/characters');
+        const d = await r.json();
+        if (!r.ok) throw new Error(apiError(d, 'Gagal memuat karakter'));
+        characters = d.characters || [];
+        window.characters = characters;
+        renderCharacters(characters);
+    } catch (e) {
+        setTableError('char-body', 4, e.message);
+    }
+}
+
+function renderCharacters(list) {
+    const b = document.getElementById('char-body');
+    if (!b) return;
+    if (!list.length) {
+        b.innerHTML = '<tr><td colspan="4" class="table-state">Belum ada karakter.</td></tr>';
+        return;
+    }
+    b.innerHTML = list.map(c => {
+        const id = jsArg(c.id);
+        return '<tr>' +
+            '<td><b>' + escapeHTML(c.npc_name) + '</b><br><small>' + escapeHTML(c.id) + '</small></td>' +
+            '<td>' + (c.is_enabled ? '<span style="color:var(--success); font-weight:600">ON</span>' : 'OFF') + '</td>' +
+            '<td><label class="switch"><input type="checkbox" ' + (c.is_enabled ? 'checked' : '') + ' onchange="toggleChar(' + id + ', this.checked)"><span class="slider"></span></label></td>' +
+            '<td style="text-align:right">' +
+                '<button class="btn btn-outline" style="padding:0.3rem 0.8rem; margin-right:0.5rem" onclick="editChar(' + id + ')">Settings</button>' +
+                '<button class="btn-danger" onclick="deleteChar(' + id + ')">Delete</button>' +
+            '</td>' +
+        '</tr>';
+    }).join('');
+}
+
+async function loadModels() {
+    const list = document.getElementById('otak-list');
+    if (list) list.innerHTML = '<div class="table-state">Memuat status provider...</div>';
+    try {
+        const r = await fetch('/api/admin/models');
+        const d = await r.json();
+        if (!r.ok) throw new Error(apiError(d, 'Gagal memuat model'));
+        syncModelForm(d.config || {});
+        renderModelRows(d);
+    } catch (e) {
+        if (list) list.innerHTML = '<div class="table-state error">' + escapeHTML(e.message) + '</div>';
+    }
+}
+
+function syncModelForm(config) {
+    const map = {
+        'model-primary': config.primaryModel,
+        'model-groq': config.groqFallbackModel || config.fallbackModel,
+        'model-cerebras': config.cerebrasFallbackModel,
+        'model-max-tokens': config.maxTokens,
+        'model-temperature': config.temperature
+    };
+    Object.entries(map).forEach(([id, value]) => {
+        const el = document.getElementById(id);
+        if (el && value !== undefined) el.value = value;
+    });
+}
+
+function renderModelRows(d) {
+    const list = document.getElementById('otak-list');
+    if (!list) return;
+    list.innerHTML = providerGroup('INFRASTRUKTUR DEEPINFRA (UTAMA)', d.deepinfra || [], 'DEEPINFRA', 'var(--success)') +
+        providerGroup('INFRASTRUKTUR GROQ (CADANGAN 1)', d.otak || [], 'GROQ', 'var(--primary)') +
+        providerGroup('INFRASTRUKTUR CEREBRAS (CADANGAN 2)', d.cerebras || [], 'CEREBRAS', 'var(--info)');
+}
+
+function providerGroup(title, rows, type, color) {
+    return '<h3 class="provider-title">' + escapeHTML(title) + '</h3>' + rows.map(o => {
+        const s = o.stats || {};
+        const status = o.isEnabled ? (o.isCoolingDown ? 'COOLDOWN' : 'READY') : 'DISABLED';
+        return '<div class="otak-row ' + (o.isEnabled ? 'active' : '') + '" style="border-left: 4px solid ' + color + '">' +
+            '<div class="otak-name">' + escapeHTML(type) + ' #' + escapeHTML(o.id) + '</div>' +
+            '<div class="otak-stats">' +
+                statItem('Reqs', s.requests || 0) +
+                statItem('Success', s.success || 0, 'var(--success)') +
+                statItem('Errors', s.errors || 0, 'var(--danger)') +
+                statItem('In', Number(s.prompt_tokens || 0).toLocaleString()) +
+                statItem('Out', Number(s.completion_tokens || 0).toLocaleString()) +
+                statItem('Status', status, o.isEnabled ? 'var(--success)' : 'var(--danger)') +
+            '</div>' +
+            '<label class="switch"><input type="checkbox" ' + (o.isEnabled ? 'checked' : '') + ' onchange="toggleOtak(' + Number(o.id) + ', this.checked, \'' + type + '\')"><span class="slider"></span></label>' +
+        '</div>';
+    }).join('');
+}
+
+function statItem(label, value, color = '') {
+    return '<div class="otak-stat-item"><span class="otak-stat-label">' + escapeHTML(label) + '</span><span class="otak-stat-value" ' + (color ? 'style="color:' + color + '"' : '') + '>' + escapeHTML(value) + '</span></div>';
+}
+
+async function saveModelConfig() {
+    const body = {
+        primaryModel: document.getElementById('model-primary').value,
+        groqFallbackModel: document.getElementById('model-groq').value,
+        cerebrasFallbackModel: document.getElementById('model-cerebras').value,
+        maxTokens: document.getElementById('model-max-tokens').value,
+        temperature: document.getElementById('model-temperature').value
+    };
+    try {
+        const r = await fetch('/api/admin/config/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const d = await r.json();
+        if (!r.ok || !d.success) throw new Error(apiError(d, 'Gagal menyimpan konfigurasi'));
+        syncModelForm(d.config || {});
+        showToast(d.message, 'success');
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+}
+
+async function updateModel(modelName) {
+    const primary = document.getElementById('model-primary');
+    if (primary) primary.value = modelName;
+    return saveModelConfig();
+}
+
+async function loadLogs(page = 1) {
+    logPage = page;
+    const q = document.getElementById('log-search')?.value || '';
+    setTableLoading('log-body', 4, 'Memuat log...');
+    try {
+        const r = await fetch('/api/admin/logs?page=' + page + '&q=' + encodeURIComponent(q));
+        const d = await r.json();
+        if (!r.ok) throw new Error(apiError(d, 'Gagal memuat log'));
+        renderLogs(d.logs || []);
+        renderPagination('log-pagination', d.pagination, loadLogs);
+    } catch (e) {
+        setTableError('log-body', 4, e.message);
+    }
+}
+
+function renderLogs(logs) {
+    const b = document.getElementById('log-body');
+    if (!b) return;
+    if (!logs.length) {
+        b.innerHTML = '<tr><td colspan="4" class="table-state">Tidak ada log yang cocok.</td></tr>';
+        return;
+    }
+    b.innerHTML = logs.map(l => `<tr>
+        <td style="font-size:0.7rem; color:var(--text-muted)">${escapeHTML(new Date(l.timestamp).toLocaleString())}</td>
+        <td>
+            <strong>${escapeHTML(String(l.ai_name || '').toUpperCase())}</strong>
+            <span style="background:var(--primary); color:#fff; padding:2px 6px; border-radius:4px; font-size:0.6rem; margin-left:4px">${escapeHTML(l.ai_pose || 'idle')}</span>
+            <br>
+            <span style="color:var(--primary); font-size:0.75rem; font-weight:600">@${escapeHTML(l.username)}</span>
+            <span style="color:var(--text-muted); font-size:0.65rem; font-weight:700">LV.${escapeHTML(l.user_level || 0)}</span>
+        </td>
+        <td>
+            <div class="log-user"><small>U:</small> ${escapeHTML(l.user_message)}</div>
+            <div class="log-bot">${formatBotMsg(l.bot_response)}</div>
+        </td>
+        <td style="text-align:right; font-size:0.7rem; color:var(--text-muted)">
+            <div style="font-weight:600; color:var(--text-main)">${escapeHTML(l.tokens || 0)} toks</div>
+            <div>${escapeHTML(l.latency || 0)}ms</div>
+        </td>
+    </tr>`).join('');
+}
+
+function debouncedLoadLogs() {
+    clearTimeout(logSearchTimer);
+    logSearchTimer = setTimeout(() => loadLogs(1), 250);
+}
+
+function filterLogs() {
+    debouncedLoadLogs();
+}
+
+async function loadUsers(page = 1) {
+    userPage = page;
+    const q = document.getElementById('user-search')?.value || '';
+    setTableLoading('user-body', 3, 'Memuat user...');
+    try {
+        const r = await fetch('/api/admin/users?page=' + page + '&q=' + encodeURIComponent(q));
+        const d = await r.json();
+        if (!r.ok) throw new Error(apiError(d, 'Gagal memuat user'));
+        allUsers = d.users || [];
+        renderUsers(allUsers);
+        renderPagination('user-pagination', d.pagination, loadUsers);
+    } catch (e) {
+        setTableError('user-body', 3, e.message);
+    }
+}
+
+function renderPagination(id, p, callback) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!p || p.totalPages <= 1) {
+        el.innerHTML = '';
+        return;
+    }
+
+    let html = '';
+    if (p.page > 1) html += '<button class="btn btn-outline" style="padding:0.3rem 0.8rem" data-page="' + (p.page - 1) + '">Prev</button>';
+    html += '<span style="font-weight:700; color:var(--text-muted); font-size:0.8rem">Page ' + escapeHTML(p.page) + ' of ' + escapeHTML(p.totalPages) + ' - ' + escapeHTML(p.total) + ' rows</span>';
+    if (p.page < p.totalPages) html += '<button class="btn btn-outline" style="padding:0.3rem 0.8rem" data-page="' + (p.page + 1) + '">Next</button>';
+    el.innerHTML = html;
+    el.querySelectorAll('button[data-page]').forEach(btn => {
+        btn.addEventListener('click', () => callback(Number(btn.dataset.page)));
+    });
+}
+
+function renderUsers(users) {
+    const b = document.getElementById('user-body');
+    if (!b) return;
+    if (!users.length) {
+        b.innerHTML = '<tr><td colspan="3" class="table-state">Tidak ada user yang cocok.</td></tr>';
+        return;
+    }
+    b.innerHTML = users.map(u => {
+        const username = jsArg(u.username);
+        return '<tr><td><strong>' + escapeHTML(u.username) + '</strong></td><td>' + escapeHTML(new Date(u.last_seen).toLocaleString()) + '</td><td style="text-align:right"><button class="btn btn-outline" onclick="viewUserDetail(' + username + ')">View Logs</button></td></tr>';
+    }).join('');
+}
+
+function debouncedLoadUsers() {
+    clearTimeout(userSearchTimer);
+    userSearchTimer = setTimeout(() => loadUsers(1), 250);
+}
+
+function filterUsers() {
+    debouncedLoadUsers();
+}
+
+async function viewUserDetail(username) {
+    showToast('Fetching logs for ' + username + '...', 'success');
+    try {
+        const r = await fetch('/api/admin/user-logs/' + encodeURIComponent(username));
+        const d = await r.json();
+        if (!r.ok) throw new Error(apiError(d, 'Gagal memuat detail user'));
+        const userLogs = d.logs || [];
+
+        document.getElementById('log-popup-title').textContent = 'Logs for @' + username;
+        const b = document.getElementById('log-popup-body');
+        b.innerHTML = userLogs.length ? userLogs.map(l => `<tr>
+            <td style="font-size:0.7rem">${escapeHTML(new Date(l.timestamp).toLocaleString())}</td>
+            <td><strong>${escapeHTML(l.ai_name)}</strong></td>
+            <td>
+                <div class="log-user">U: ${escapeHTML(l.user_message)}</div>
+                <div class="log-bot">${formatBotMsg(l.bot_response)}</div>
+            </td>
+        </tr>`).join('') : '<tr><td colspan="3" class="table-state">No logs found for this user.</td></tr>';
+        document.getElementById('modal-logs').style.display = 'flex';
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+}
+
+function closeLogModal() {
+    document.getElementById('modal-logs').style.display = 'none';
+}
+
+function loadSimSelect() {
+    const s = document.getElementById('sim-select');
+    if (!s) return;
+    s.innerHTML = '';
+    const render = list => {
+        s.innerHTML = (list || []).filter(c => c.is_enabled).map(c => `<option value="${escapeAttr(c.id)}">${escapeHTML(c.npc_name)}</option>`).join('');
+    };
+    if (window.characters && window.characters.length > 0) {
+        render(window.characters);
+    } else {
+        fetch('/api/characters').then(r => r.json()).then(d => {
+            window.characters = d.characters || [];
+            render(window.characters);
+        }).catch(() => showToast('Gagal memuat karakter simulator', 'error'));
+    }
+}
+
+function appendMessage(container, text, className) {
+    const msg = document.createElement('div');
+    msg.className = 'msg ' + className;
+    msg.textContent = text;
+    container.appendChild(msg);
+}
+
+function clearSimulator() {
+    const box = document.getElementById('sim-messages');
+    if (box) {
+        box.innerHTML = '';
+        appendMessage(box, 'Silakan pilih karakter dan ketik pesan untuk mulai simulasi.', 'msg-bot');
+    }
+    const dbg = document.getElementById('sim-debug-content');
+    if (dbg) dbg.innerHTML = '<div class="debug-item">Waiting for interaction...</div>';
+    setText('sim-prompt-content', '-');
+}
+
+async function sendMessage() {
+    const input = document.getElementById('sim-input');
+    const text = input.value.trim();
+    const heartLv = document.getElementById('sim-heart').value || 0;
+    if (!text) return;
+
+    const btn = document.getElementById('sim-send-btn');
+    const box = document.getElementById('sim-messages');
+    btn.disabled = true;
+    btn.textContent = '...';
+
+    appendMessage(box, text, 'msg-user');
+    input.value = '';
+    box.scrollTop = box.scrollHeight;
+
+    const typingId = 'typing-' + Date.now();
+    const typing = document.createElement('div');
+    typing.id = typingId;
+    typing.className = 'msg msg-bot msg-typing';
+    typing.innerHTML = 'NPC sedang mengetik <span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+    box.appendChild(typing);
+    box.scrollTop = box.scrollHeight;
+
+    try {
+        const r = await fetch('/api/npc/v1/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user: { username: 'Yogaa', level: parseInt(heartLv, 10) },
+                message: text,
+                context: {
+                    relationship: {
+                        lv5_username: document.getElementById('sim-lv5-owner').value
+                    }
+                },
+                system: { ai_name: document.getElementById('sim-select').value }
+            })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(apiError(d, 'Gagal mengambil balasan NPC'));
+
+        document.getElementById(typingId)?.remove();
+        appendMessage(box, d.sentences ? d.sentences.join('\n') : 'Error: No response', 'msg-bot');
+        box.scrollTop = box.scrollHeight;
+        renderSimDebug(d);
+    } catch (e) {
+        document.getElementById(typingId)?.remove();
+        showToast(e.message || 'Gagal terhubung ke engine', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = sendIcon;
+    }
+}
+
+function renderSimDebug(d) {
+    if (!d.debug) return;
+    const dbg = document.getElementById('sim-debug-content');
+    dbg.innerHTML = `
+        <div class="debug-item"><span class="debug-label">Otak Terpilih</span><span class="debug-value">${escapeHTML(d.debug.otak_id)} (${escapeHTML(d.debug.model)})</span></div>
+        <div class="debug-item"><span class="debug-label">Total Token</span><span class="debug-value">${escapeHTML(d.debug.tokens)} toks</span></div>
+        <div class="debug-item"><span class="debug-label">Kecepatan (Latency)</span><span class="debug-value">${escapeHTML(d.debug.latency)}ms</span></div>
+        <div class="debug-item"><span class="debug-label">Ekspresi / Pose</span><span class="debug-value" style="color:var(--primary)">${escapeHTML(d.ai_pose || 'idle')}</span></div>
+    `;
+    document.getElementById('sim-prompt-content').textContent = d.debug.system_prompt || '-';
+}
+
+async function toggleChar(id, enabled) {
+    const existing = characters.find(x => x.id === id);
+    if (!existing) return;
+    await fetch('/api/characters/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, data: { ...existing, is_enabled: enabled } })
+    });
+    load();
+}
+
+async function deleteChar(id) {
+    if (confirm('Hapus karakter ' + id + ' secara permanen?')) {
+        await fetch('/api/characters/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id })
+        });
+        showToast('Character deleted successfully', 'error');
+        load();
+    }
+}
+
+async function toggleOtak(id, enabled, type = 'GROQ') {
+    await fetch('/api/admin/models/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, enabled, type })
+    });
+    showToast(type + ' Node #' + id + ' ' + (enabled ? 'Enabled' : 'Disabled'), enabled ? 'success' : 'error');
+    loadModels();
+}
+
+function openModal(id = null) {
+    document.getElementById('modal').style.display = 'flex';
+    const idInput = document.getElementById('f-id');
+    if (id) {
+        const c = characters.find(x => x.id === id);
+        if (c) {
+            idInput.value = c.id;
+            idInput.disabled = true;
+            document.getElementById('f-name').value = c.npc_name || '';
+            document.getElementById('f-desc').value = c.npc_description || '';
+            document.getElementById('f-pers').value = c.npc_personality || '';
+            document.getElementById('f-style').value = c.npc_speaking_style || '';
+            document.getElementById('f-world').value = c.world_setting || '';
+            document.getElementById('m-title').textContent = 'NPC Configuration';
+        }
+    } else {
+        document.getElementById('char-form').reset();
+        idInput.disabled = false;
+        document.getElementById('m-title').textContent = 'Create New NPC';
+    }
+}
+
+function closeModal() {
+    document.getElementById('modal').style.display = 'none';
+}
+
+function editChar(id) {
+    openModal(id);
+}
+
+function showToast(msg, type = 'success') {
+    const container = document.getElementById('toast-container');
+    const t = document.createElement('div');
+    t.className = 'toast ' + type;
+    const span = document.createElement('span');
+    span.className = 'toast-msg';
+    span.textContent = msg;
+    t.appendChild(span);
+    container.appendChild(t);
+    setTimeout(() => t.classList.add('show'), 100);
+    setTimeout(() => {
+        t.classList.remove('show');
+        setTimeout(() => t.remove(), 500);
+    }, 3000);
+}
+
+function renderBalanceBadge(account) {
+    if (!account || account.limit === undefined) return '';
+    const limit = account.limit || 0;
+    const recent = account.recent || 0;
+    const available = limit - recent;
+    const color = available > 0 ? '#22c55e' : '#ef4444';
+    const bg = available > 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+    const label = available > 0 ? 'AVAILABLE' : 'OVER LIMIT';
+    return '<div style="display:flex; align-items:center; gap:8px; background:' + bg + '; padding:4px 12px; border-radius:8px; border:1px solid ' + color + '">' +
+        '<div style="width:6px; height:6px; border-radius:50%; background:' + color + '"></div>' +
+        '<span style="font-size:11px; font-weight:800; color:' + color + '">' + label + ': $' + available.toFixed(2) + '</span>' +
+    '</div>';
+}
+
+function renderBillingTable(billingData) {
+    if (!billingData || !billingData.months || !billingData.months.length) return '<tr><td colspan="4" class="table-state">No billing data available.</td></tr>';
+    const latestMonth = billingData.months[0];
+    if (!latestMonth || !latestMonth.items) return '<tr><td colspan="4" class="table-state">No items found for current period.</td></tr>';
+    const totalTokens = latestMonth.items.reduce((sum, item) => sum + (item.units || 0), 0);
+    return latestMonth.items.map(item => {
+        const modelName = escapeHTML(String(item.model?.model_name || '').split('/').pop());
+        const type = item.pricing_type === 'input_tokens' ? 'IN' : 'OUT';
+        const usage = Number(item.units || 0).toLocaleString();
+        const rate = '$' + (Number(item.rate || 0) * 10000).toFixed(4) + '/1M';
+        const cost = '$' + (Number(item.cost || 0) / 100).toFixed(2);
+        return '<tr><td style="font-weight:700; color:#1e293b">' + modelName + ' <span style="font-size:9px; color:#94a3b8; margin-left:5px">' + type + '</span></td><td>' + usage + ' tokens</td><td style="color:#64748b">' + rate + '</td><td style="font-weight:800; color:var(--primary); text-align:right">' + cost + '</td></tr>';
+    }).join('') +
+        '<tr style="background:#f8fafc"><td style="font-weight:800; color:#64748b; padding-bottom:4px">TOTAL USAGE</td><td style="font-weight:800; color:#1e293b; padding-bottom:4px">' + totalTokens.toLocaleString() + ' tokens</td><td colspan="2"></td></tr>' +
+        '<tr style="background:#f8fafc"><td colspan="3" style="font-weight:800; text-align:right; color:#1e293b; padding-top:0">ESTIMATED TOTAL SPEND</td><td style="font-weight:900; color:var(--primary); font-size:1.1rem; text-align:right; padding-top:0">$' + (Number(latestMonth.total_cost || 0) / 100).toFixed(2) + '</td></tr>';
+}
+
+function initUsageChart(data) {
+    const ctx = document.getElementById('usageChart');
+    if (!ctx || typeof Chart === 'undefined') return;
+    usageChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['DeepInfra (Utama)', 'Groq', 'Cerebras'],
+            datasets: [{
+                label: 'Tokens Consumed',
+                data: providerTokenData(data),
+                backgroundColor: ['rgba(34, 197, 94, 0.6)', 'rgba(249, 115, 22, 0.6)', 'rgba(59, 130, 246, 0.6)'],
+                borderColor: ['rgb(34, 197, 94)', 'rgb(249, 115, 22)', 'rgb(59, 130, 246)'],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, grid: { display: false } },
+                x: { grid: { display: false } }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+}
+
+function providerTokenData(d) {
+    return [
+        d.deepinfra_stats ? d.deepinfra_stats.total_tokens : 0,
+        d.groq_stats ? d.groq_stats.total_tokens : 0,
+        d.cerebras_stats ? d.cerebras_stats.total_tokens : 0
+    ];
+}
+
+function updateStats(d) {
+    setText('s-req', Number(d.totalRequests || 0).toLocaleString());
+    setText('s-prompt-tok', nFormatter(d.totalPromptTokens || 0));
+    setText('s-completion-tok', nFormatter(d.totalCompletionTokens || 0));
+    setText('s-active', (d.deepinfra_stats?.active || 0) + '/' + (d.deepinfra_stats?.available || 0));
+    setText('s-groq', (d.groq_stats?.active || 0) + '/' + (d.groq_stats?.available || 0));
+    setText('s-cerebras', (d.cerebras_stats?.active || 0) + '/' + (d.cerebras_stats?.available || 0));
+    setText('s-uptime', d.uptime || '0s');
+
+    if (usageChart) {
+        usageChart.data.datasets[0].data = providerTokenData(d);
+        usageChart.update();
+    } else if (document.getElementById('usageChart')) {
+        initUsageChart(d);
+    }
+
+    const billingBody = document.getElementById('billing-body');
+    if (billingBody && d.deepinfra_billing) billingBody.innerHTML = renderBillingTable(d.deepinfra_billing);
+    const billingHeader = document.getElementById('billing-header-tools');
+    if (billingHeader && d.deepinfra_account) {
+        billingHeader.innerHTML = renderBalanceBadge(d.deepinfra_account) + '<span style="font-size:11px; font-weight:800; color:#64748b; background:#f1f5f9; padding:4px 10px; border-radius:6px; text-transform:uppercase">LIVE DATA</span>';
+    }
+}
+
+function startStatsStream() {
+    if (!ADMIN_CONFIG.isAdmin || statsEventSource) return;
+    statsEventSource = new EventSource('/api/admin/stats/stream');
+    statsEventSource.onmessage = e => updateStats(JSON.parse(e.data));
+    statsEventSource.onerror = () => {
+        statsEventSource.close();
+        statsEventSource = null;
+        fetchStatsFallback();
+        setTimeout(startStatsStream, 5000);
+    };
+}
+
+async function fetchStatsFallback() {
+    try {
+        const r = await fetch('/api/stats');
+        updateStats(await r.json());
+    } catch (e) {}
+}
+
+async function loadBanList() {
+    const tbody = document.getElementById('banlist-body');
+    if (!tbody) return;
+    setTableLoading('banlist-body', 3, 'Memuat daftar ban...');
+    try {
+        const res = await fetch('/api/admin/ban-list');
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memuat daftar ban'));
+        tbody.innerHTML = (data.list || []).length ? data.list.map(b => `
+            <tr>
+                <td style="font-weight:700;">${escapeHTML(b.username)}</td>
+                <td style="color:var(--text-muted);">${escapeHTML(new Date(b.created_at).toLocaleString('id-ID'))}</td>
+                <td style="text-align:right;"><button class="btn btn-danger" onclick="unbanUser(${jsArg(b.username)})">Unban</button></td>
+            </tr>
+        `).join('') : '<tr><td colspan="3" class="table-state">Belum ada user yang diban.</td></tr>';
+        document.getElementById('ban-message-input').value = data.ban_message || 'Aku malas berbicara dengan kamu.';
+    } catch (e) {
+        setTableError('banlist-body', 3, e.message);
+    }
+}
+
+async function banUser() {
+    const username = document.getElementById('ban-username-input').value.trim();
+    if (!username) return showToast('Username tidak boleh kosong', 'error');
+    try {
+        const res = await fetch('/api/admin/ban-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memblokir user'));
+        showToast(data.message, 'success');
+        document.getElementById('ban-username-input').value = '';
+        loadBanList();
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+}
+
+async function unbanUser(username) {
+    if (!confirm(`Apakah kamu yakin ingin melepas ban untuk ${username}?`)) return;
+    try {
+        const res = await fetch('/api/admin/unban-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal melepas ban user'));
+        showToast(data.message, 'success');
+        loadBanList();
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+}
+
+async function updateBanMessage() {
+    const message = document.getElementById('ban-message-input').value.trim();
+    if (!message) return showToast('Pesan ban tidak boleh kosong', 'error');
+    try {
+        const res = await fetch('/api/admin/update-ban-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memperbarui pesan ban'));
+        showToast(data.message, 'success');
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('char-form');
+    if (form) {
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('f-id').value;
+            const c = characters.find(x => x.id === id);
+            const data = {
+                npc_name: document.getElementById('f-name').value,
+                npc_description: document.getElementById('f-desc').value,
+                npc_personality: document.getElementById('f-pers').value,
+                npc_speaking_style: document.getElementById('f-style').value,
+                world_setting: document.getElementById('f-world').value,
+                is_enabled: c ? c.is_enabled : true,
+                language: 'id'
+            };
+            await fetch('/api/characters/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, data })
+            });
+            showToast('Character saved successfully', 'success');
+            closeModal();
+            load();
+        };
+    }
+
+    if (ADMIN_CONFIG.isAdmin) {
+        startStatsStream();
+    }
+    if (window.lucide) lucide.createIcons();
+    showPage(ADMIN_CONFIG.initialPage || 'karakter');
+});

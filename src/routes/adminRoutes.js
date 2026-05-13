@@ -305,6 +305,18 @@ function createAdminRoutes({
         }
     });
 
+    router.get('/api/admin/banned-usernames', apiAuth, adminOnly, async (req, res) => {
+        try {
+            const bans = await db.execute("SELECT username FROM banned_users");
+            res.json({
+                success: true,
+                usernames: bans.rows.map(r => r.username)
+            });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
     router.post('/api/admin/ban-user', apiAuth, adminOnly, async (req, res) => {
         let { username } = req.body;
         username = username.toString().trim().replace(/^@/, '');

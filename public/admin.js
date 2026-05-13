@@ -299,13 +299,13 @@ async function loadLogs(page = 1) {
     try {
         const [logRes, banRes] = await Promise.all([
             fetch('/api/admin/logs?page=' + page + '&q=' + encodeURIComponent(q)),
-            fetch('/api/admin/ban-list')
+            fetch('/api/admin/banned-usernames')
         ]);
         const d = await logRes.json();
         const banData = await banRes.json();
         if (!logRes.ok) throw new Error(apiError(d, 'Gagal memuat log'));
         if (banRes.ok && banData.success) {
-            bannedUsers = new Set((banData.list || []).map(b => normalizeUsername(b.username)).filter(Boolean));
+            bannedUsers = new Set((banData.usernames || []).map(u => normalizeUsername(u)).filter(Boolean));
         }
         renderLogs(d.logs || []);
         renderPagination('log-pagination', d.pagination, loadLogs);
@@ -742,7 +742,6 @@ async function loadBanList(page = 1) {
         if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memuat daftar ban'));
         const banList = data.list || [];
         latestBanList = banList;
-        bannedUsers = new Set(banList.map(b => normalizeUsername(b.username)).filter(Boolean));
         renderPagination('banlist-pagination', data.pagination, loadBanList);
         setText('ban-count', (data.pagination?.total || banList.length).toLocaleString(LOCALE_ID));
         tbody.innerHTML = banList.length ? banList.map(b => `

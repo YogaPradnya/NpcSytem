@@ -9,6 +9,8 @@ let logSearchTimer = null;
 let usageChart = null;
 let logEventSource = null;
 let statsEventSource = null;
+let bannedUsers = new Set();
+let latestBanList = [];
 
 const sendIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
 
@@ -28,6 +30,10 @@ function escapeAttr(value) {
 
 function jsArg(value) {
     return escapeAttr(JSON.stringify(String(value ?? '')));
+}
+
+function normalizeUsername(value) {
+    return String(value ?? '').trim().replace(/^@/, '').toLowerCase();
 }
 
 function nFormatter(num) {
@@ -283,9 +289,16 @@ async function loadLogs(page = 1) {
     const q = document.getElementById('log-search')?.value || '';
     setTableLoading('log-body', 4, 'Memuat log...');
     try {
-        const r = await fetch('/api/admin/logs?page=' + page + '&q=' + encodeURIComponent(q));
-        const d = await r.json();
-        if (!r.ok) throw new Error(apiError(d, 'Gagal memuat log'));
+        const [logRes, banRes] = await Promise.all([
+            fetch('/api/admin/logs?page=' + page + '&q=' + encodeURIComponent(q)),
+            fetch('/api/admin/ban-list')
+        ]);
+        const d = await logRes.json();
+        const banData = await banRes.json();
+        if (!logRes.ok) throw new Error(apiError(d, 'Gagal memuat log'));
+        if (banRes.ok && banData.success) {
+            bannedUsers = new Set((banData.list || []).map(b => normalizeUsername(b.username)).filter(Boolean));
+        }
         renderLogs(d.logs || []);
         renderPagination('log-pagination', d.pagination, loadLogs);
     } catch (e) {
@@ -300,13 +313,20 @@ function renderLogs(logs) {
         b.innerHTML = '<tr><td colspan="4" class="table-state">Tidak ada log yang cocok.</td></tr>';
         return;
     }
-    b.innerHTML = logs.map(l => `<tr>
+    b.innerHTML = logs.map(l => {
+        const username = String(l.username || '').trim();
+        const usernameArg = jsArg(username);
+        const isBanned = bannedUsers.has(normalizeUsername(username));
+        const actionButton = isBanned
+            ? `<button class="btn btn-outline" style="margin-top:0.55rem; padding:0.35rem 0.75rem; font-size:0.7rem; border-radius:8px;" onclick="unbanUser(${usernameArg})">Unban</button>`
+            : `<button class="btn btn-danger" style="margin-top:0.55rem; padding:0.35rem 0.75rem; font-size:0.7rem; border-radius:8px;" onclick="banUser(${usernameArg})">Ban</button>`;
+        return `<tr>
         <td style="font-size:0.7rem; color:var(--text-muted)">${escapeHTML(new Date(l.timestamp).toLocaleString())}</td>
         <td>
             <strong>${escapeHTML(String(l.ai_name || '').toUpperCase())}</strong>
             <span style="background:var(--primary); color:#fff; padding:2px 6px; border-radius:4px; font-size:0.6rem; margin-left:4px">${escapeHTML(l.ai_pose || 'idle')}</span>
             <br>
-            <span style="color:var(--primary); font-size:0.75rem; font-weight:600">@${escapeHTML(l.username)}</span>
+            <span style="color:var(--primary); font-size:0.75rem; font-weight:600">@${escapeHTML(username)}</span>
             <span style="color:var(--text-muted); font-size:0.65rem; font-weight:700">LV.${escapeHTML(l.user_level || 0)}</span>
         </td>
         <td>
@@ -316,8 +336,10 @@ function renderLogs(logs) {
         <td style="text-align:right; font-size:0.7rem; color:var(--text-muted)">
             <div style="font-weight:600; color:var(--text-main)">${escapeHTML(l.tokens || 0)} toks</div>
             <div>${escapeHTML(l.latency || 0)}ms</div>
+            ${actionButton}
         </td>
-    </tr>`).join('');
+    </tr>`;
+    }).join('');
 }
 
 function debouncedLoadLogs() {
@@ -710,7 +732,11 @@ async function loadBanList() {
         const res = await fetch('/api/admin/ban-list');
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memuat daftar ban'));
-        tbody.innerHTML = (data.list || []).length ? data.list.map(b => `
+        const banList = data.list || [];
+        latestBanList = banList;
+        bannedUsers = new Set(banList.map(b => normalizeUsername(b.username)).filter(Boolean));
+        setText('ban-count', banList.length.toLocaleString('id-ID'));
+        tbody.innerHTML = banList.length ? banList.map(b => `
             <tr>
                 <td style="font-weight:700;">${escapeHTML(b.username)}</td>
                 <td style="color:var(--text-muted);">${escapeHTML(new Date(b.created_at).toLocaleString('id-ID'))}</td>
@@ -723,9 +749,11 @@ async function loadBanList() {
     }
 }
 
-async function banUser() {
-    const username = document.getElementById('ban-username-input').value.trim();
+async function banUser(targetUsername = '') {
+    const input = document.getElementById('ban-username-input');
+    const username = String(targetUsername || input?.value || '').trim();
     if (!username) return showToast('Username tidak boleh kosong', 'error');
+    if (targetUsername && !confirm(`Ban @${username} dan masukkan ke daftar ban?`)) return;
     try {
         const res = await fetch('/api/admin/ban-user', {
             method: 'POST',
@@ -735,8 +763,9 @@ async function banUser() {
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memblokir user'));
         showToast(data.message, 'success');
-        document.getElementById('ban-username-input').value = '';
+        if (input && !targetUsername) input.value = '';
         loadBanList();
+        loadLogs(logPage);
     } catch (e) {
         showToast(e.message, 'error');
     }
@@ -754,9 +783,41 @@ async function unbanUser(username) {
         if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal melepas ban user'));
         showToast(data.message, 'success');
         loadBanList();
+        loadLogs(logPage);
     } catch (e) {
         showToast(e.message, 'error');
     }
+}
+
+async function exportBanListTxt() {
+    if (!latestBanList.length) {
+        await loadBanList();
+    }
+    if (!latestBanList.length) return showToast('Daftar ban masih kosong, tidak ada yang diexport.', 'error');
+
+    const exportedAt = new Date().toLocaleString('id-ID');
+    const lines = [
+        'DAFTAR BAN USER - NPC SYSTEM',
+        `Export: ${exportedAt}`,
+        `Total: ${latestBanList.length} orang`,
+        '',
+        ...latestBanList.map((b, idx) => {
+            const date = b.created_at ? new Date(b.created_at).toLocaleString('id-ID') : '-';
+            return `${idx + 1}. ${b.username} | ${date}`;
+        })
+    ];
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `daftar-ban-${stamp}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('Daftar ban berhasil diexport ke TXT.', 'success');
 }
 
 async function updateBanMessage() {

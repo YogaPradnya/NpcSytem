@@ -247,6 +247,18 @@ function getAdminDashboardHTML(stats, user) {
                                 <button class="btn btn-danger" onclick="banUser()" style="border-radius: 8px;">Ban</button>
                             </div>
                         </div>
+
+                        <div class="card-section" style="padding: 1.5rem; background: linear-gradient(135deg, rgba(239,68,68,0.1), rgba(249,115,22,0.08)); border: 1px solid rgba(239,68,68,0.18);">
+                            <div style="font-size: 0.72rem; font-weight: 900; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: .45rem;">Total User Diban</div>
+                            <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:1rem;">
+                                <div>
+                                    <span id="ban-count" style="font-size: 2.4rem; line-height: 1; font-weight: 900; color: var(--danger);">0</span>
+                                    <span style="font-size:.85rem; font-weight:800; color:var(--text-muted); margin-left:.35rem;">orang</span>
+                                </div>
+                                <button class="btn btn-outline" onclick="exportBanListTxt()" style="border-radius: 10px; padding: .65rem .9rem; white-space: nowrap;">Export TXT</button>
+                            </div>
+                            <p style="margin:.8rem 0 0; font-size:.75rem; color:var(--text-muted); font-weight:600; line-height:1.45;">Export berisi username dan tanggal ban.</p>
+                        </div>
                         
                         <div class="card-section" style="padding: 1.5rem;">
                             <h2 style="font-size: 1rem; margin-bottom: 1rem;">Pengaturan Pesan Ban</h2>

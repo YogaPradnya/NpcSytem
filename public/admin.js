@@ -1,4 +1,6 @@
 const ADMIN_CONFIG = window.NPC_ADMIN_CONFIG || { isAdmin: false, initialPage: 'karakter' };
+const TZ_CONFIG = { timeZone: 'Asia/Jakarta', hour12: false };
+const LOCALE_ID = 'id-ID';
 
 let allUsers = [];
 let characters = [];
@@ -6,6 +8,8 @@ let userPage = 1;
 let logPage = 1;
 let userSearchTimer = null;
 let logSearchTimer = null;
+let banSearchTimer = null;
+let banPage = 1;
 let usageChart = null;
 let logEventSource = null;
 let statsEventSource = null;
@@ -40,7 +44,7 @@ function nFormatter(num) {
     const value = Number(num) || 0;
     if (value >= 1000000) return (value / 1000000).toFixed(2).replace(/\.00$/, '') + 'M';
     if (value >= 1000) return (value / 1000).toFixed(2).replace(/\.00$/, '') + 'K';
-    return value.toLocaleString();
+    return value.toLocaleString(LOCALE_ID);
 }
 
 function setText(id, value) {
@@ -64,6 +68,10 @@ function apiError(data, fallback) {
 
 function toggleMobileMenu() {
     document.getElementById('sidebar').classList.toggle('mobile-open');
+}
+
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('collapsed');
 }
 
 function formatBotMsg(msg) {
@@ -96,7 +104,7 @@ function showPage(pageId, el) {
     if (pageId === 'logs') loadLogs(1);
     if (pageId === 'simulator') loadSimSelect();
     if (pageId === 'terminal') initTerminal();
-    if (pageId === 'banlist') loadBanList();
+    if (pageId === 'banlist') loadBanList(1);
 }
 
 function initTerminal() {
@@ -136,7 +144,7 @@ function appendTerminalLog(data) {
 
     const time = document.createElement('span');
     time.className = 'term-time';
-    time.textContent = new Date(data.timestamp || Date.now()).toLocaleTimeString();
+    time.textContent = new Date(data.timestamp || Date.now()).toLocaleTimeString(LOCALE_ID, TZ_CONFIG);
 
     const type = document.createElement('span');
     const typeName = String(data.type || 'log').toLowerCase().replace(/[^a-z0-9_-]/g, '');
@@ -321,7 +329,7 @@ function renderLogs(logs) {
             ? `<button class="btn btn-outline" style="margin-top:0.55rem; padding:0.35rem 0.75rem; font-size:0.7rem; border-radius:8px;" onclick="unbanUser(${usernameArg})">Unban</button>`
             : `<button class="btn btn-danger" style="margin-top:0.55rem; padding:0.35rem 0.75rem; font-size:0.7rem; border-radius:8px;" onclick="banUser(${usernameArg})">Ban</button>`;
         return `<tr>
-        <td style="font-size:0.7rem; color:var(--text-muted)">${escapeHTML(new Date(l.timestamp).toLocaleString())}</td>
+        <td style="font-size:0.7rem; color:var(--text-muted)">${escapeHTML(new Date(l.timestamp).toLocaleString(LOCALE_ID, TZ_CONFIG))}</td>
         <td>
             <strong>${escapeHTML(String(l.ai_name || '').toUpperCase())}</strong>
             <span style="background:var(--primary); color:#fff; padding:2px 6px; border-radius:4px; font-size:0.6rem; margin-left:4px">${escapeHTML(l.ai_pose || 'idle')}</span>
@@ -394,7 +402,7 @@ function renderUsers(users) {
     }
     b.innerHTML = users.map(u => {
         const username = jsArg(u.username);
-        return '<tr><td><strong>' + escapeHTML(u.username) + '</strong></td><td>' + escapeHTML(new Date(u.last_seen).toLocaleString()) + '</td><td style="text-align:right"><button class="btn btn-outline" onclick="viewUserDetail(' + username + ')">View Logs</button></td></tr>';
+        return '<tr><td><strong>' + escapeHTML(u.username) + '</strong></td><td>' + escapeHTML(new Date(u.last_seen).toLocaleString(LOCALE_ID, TZ_CONFIG)) + '</td><td style="text-align:right"><button class="btn btn-outline" onclick="viewUserDetail(' + username + ')">View Logs</button></td></tr>';
     }).join('');
 }
 
@@ -418,7 +426,7 @@ async function viewUserDetail(username) {
         document.getElementById('log-popup-title').textContent = 'Logs for @' + username;
         const b = document.getElementById('log-popup-body');
         b.innerHTML = userLogs.length ? userLogs.map(l => `<tr>
-            <td style="font-size:0.7rem">${escapeHTML(new Date(l.timestamp).toLocaleString())}</td>
+            <td style="font-size:0.7rem">${escapeHTML(new Date(l.timestamp).toLocaleString(LOCALE_ID, TZ_CONFIG))}</td>
             <td><strong>${escapeHTML(l.ai_name)}</strong></td>
             <td>
                 <div class="log-user">U: ${escapeHTML(l.user_message)}</div>
@@ -638,12 +646,10 @@ function renderBillingTable(billingData) {
         const modelName = escapeHTML(String(item.model?.model_name || '').split('/').pop());
         const type = item.pricing_type === 'input_tokens' ? 'IN' : 'OUT';
         const usage = Number(item.units || 0).toLocaleString();
-        const rate = '$' + (Number(item.rate || 0) * 10000).toFixed(4) + '/1M';
+        const rate = '$' + (Number(item.rate || 0) * 10000).toFixed(2) + '/1M';
         const cost = '$' + (Number(item.cost || 0) / 100).toFixed(2);
-        return '<tr><td style="font-weight:700; color:#1e293b">' + modelName + ' <span style="font-size:9px; color:#94a3b8; margin-left:5px">' + type + '</span></td><td>' + usage + ' tokens</td><td style="color:#64748b">' + rate + '</td><td style="font-weight:800; color:var(--primary); text-align:right">' + cost + '</td></tr>';
-    }).join('') +
-        '<tr style="background:#f8fafc"><td style="font-weight:800; color:#64748b; padding-bottom:4px">TOTAL USAGE</td><td style="font-weight:800; color:#1e293b; padding-bottom:4px">' + totalTokens.toLocaleString() + ' tokens</td><td colspan="2"></td></tr>' +
-        '<tr style="background:#f8fafc"><td colspan="3" style="font-weight:800; text-align:right; color:#1e293b; padding-top:0">ESTIMATED TOTAL SPEND</td><td style="font-weight:900; color:var(--primary); font-size:1.1rem; text-align:right; padding-top:0">$' + (Number(latestMonth.total_cost || 0) / 100).toFixed(2) + '</td></tr>';
+        return '<tr><td style="font-weight:700; color:var(--text-main)">' + modelName + ' <span style="font-size:9px; color:var(--text-muted); margin-left:5px">' + type + '</span></td><td>' + usage + ' tokens</td><td style="color:var(--text-muted)">' + rate + '</td><td style="font-weight:800; color:var(--primary); text-align:right">' + cost + '</td></tr>';
+    }).join('') + '<tr style="border-top:2px solid var(--border)"><td style="background:var(--bg);font-weight:800;color:var(--text-main);padding:12px 1rem;line-height:1">TOTAL USAGE</td><td style="background:var(--bg);font-weight:800;color:var(--text-main);padding:12px 1rem;line-height:1">' + totalTokens.toLocaleString(LOCALE_ID) + ' tokens</td><td style="background:var(--bg);font-weight:800;text-align:right;color:var(--text-main);padding:12px 1rem;line-height:1">ESTIMATED TOTAL SPEND</td><td style="background:var(--bg);font-weight:800;color:var(--primary);font-size:1.2rem;text-align:right;padding:12px 1rem;line-height:1">$' + (Number(latestMonth.total_cost || 0) / 100).toFixed(2) + '</td></tr>';
 }
 
 function initUsageChart(data) {
@@ -724,22 +730,25 @@ async function fetchStatsFallback() {
     } catch (e) {}
 }
 
-async function loadBanList() {
+async function loadBanList(page = 1) {
+    banPage = page;
     const tbody = document.getElementById('banlist-body');
     if (!tbody) return;
+    const q = document.getElementById('ban-search')?.value || '';
     setTableLoading('banlist-body', 3, 'Memuat daftar ban...');
     try {
-        const res = await fetch('/api/admin/ban-list');
+        const res = await fetch('/api/admin/ban-list?page=' + page + '&q=' + encodeURIComponent(q));
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memuat daftar ban'));
         const banList = data.list || [];
         latestBanList = banList;
         bannedUsers = new Set(banList.map(b => normalizeUsername(b.username)).filter(Boolean));
-        setText('ban-count', banList.length.toLocaleString('id-ID'));
+        renderPagination('banlist-pagination', data.pagination, loadBanList);
+        setText('ban-count', (data.pagination?.total || banList.length).toLocaleString(LOCALE_ID));
         tbody.innerHTML = banList.length ? banList.map(b => `
             <tr>
                 <td style="font-weight:700;">${escapeHTML(b.username)}</td>
-                <td style="color:var(--text-muted);">${escapeHTML(new Date(b.created_at).toLocaleString('id-ID'))}</td>
+                <td style="color:var(--text-muted);">${escapeHTML(new Date(b.created_at).toLocaleString(LOCALE_ID, TZ_CONFIG))}</td>
                 <td style="text-align:right;"><button class="btn btn-danger" onclick="unbanUser(${jsArg(b.username)})">Unban</button></td>
             </tr>
         `).join('') : '<tr><td colspan="3" class="table-state">Belum ada user yang diban.</td></tr>';
@@ -747,6 +756,11 @@ async function loadBanList() {
     } catch (e) {
         setTableError('banlist-body', 3, e.message);
     }
+}
+
+function debouncedLoadBanList() {
+    clearTimeout(banSearchTimer);
+    banSearchTimer = setTimeout(() => loadBanList(1), 250);
 }
 
 async function banUser(targetUsername = '') {
@@ -764,7 +778,7 @@ async function banUser(targetUsername = '') {
         if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memblokir user'));
         showToast(data.message, 'success');
         if (input && !targetUsername) input.value = '';
-        loadBanList();
+        loadBanList(1);
         loadLogs(logPage);
     } catch (e) {
         showToast(e.message, 'error');
@@ -782,7 +796,7 @@ async function unbanUser(username) {
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal melepas ban user'));
         showToast(data.message, 'success');
-        loadBanList();
+        loadBanList(banPage);
         loadLogs(logPage);
     } catch (e) {
         showToast(e.message, 'error');
@@ -790,19 +804,22 @@ async function unbanUser(username) {
 }
 
 async function exportBanListTxt() {
-    if (!latestBanList.length) {
-        await loadBanList();
+    // Note: Export still uses all-at-once approach for now by fetching without limit on a separate endpoint if needed,
+    // but here we just use whatever is currently loaded in 'latestBanList' (which is now only 35).
+    // Better to fetch all for export.
+    if (!latestBanList.length || latestBanList.length < 35) {
+        await loadBanList(1);
     }
     if (!latestBanList.length) return showToast('Daftar ban masih kosong, tidak ada yang diexport.', 'error');
 
-    const exportedAt = new Date().toLocaleString('id-ID');
+    const exportedAt = new Date().toLocaleString(LOCALE_ID, TZ_CONFIG);
     const lines = [
         'DAFTAR BAN USER - NPC SYSTEM',
         `Export: ${exportedAt}`,
         `Total: ${latestBanList.length} orang`,
         '',
         ...latestBanList.map((b, idx) => {
-            const date = b.created_at ? new Date(b.created_at).toLocaleString('id-ID') : '-';
+            const date = b.created_at ? new Date(b.created_at).toLocaleString(LOCALE_ID, TZ_CONFIG) : '-';
             return `${idx + 1}. ${b.username} | ${date}`;
         })
     ];

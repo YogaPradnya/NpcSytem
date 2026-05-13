@@ -40,8 +40,71 @@ aside {
     flex-shrink: 0;
     z-index: 50;
     position: relative;
-    overflow: hidden;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease;
 }
+
+aside.collapsed {
+    width: 90px;
+    padding: 2rem 0.75rem;
+}
+
+aside.collapsed .brand h1,
+aside.collapsed .brand p,
+aside.collapsed .nav-item span,
+aside.collapsed .sidebar-footer .user-info-card,
+aside.collapsed .sidebar-footer .btn-logout span,
+aside.collapsed .sidebar-footer div:last-child {
+    display: none;
+}
+
+aside.collapsed .brand img {
+    width: 45px;
+    height: 45px;
+}
+
+aside.collapsed .nav-item {
+    justify-content: center;
+    padding: 0.9rem;
+    gap: 0;
+}
+
+aside.collapsed .nav-item i {
+    width: 22px;
+    height: 22px;
+}
+
+.toggle-sidebar {
+    position: absolute;
+    top: 2rem;
+    right: -12px;
+    width: 24px;
+    height: 24px;
+    background: var(--primary);
+    border: none;
+    border-radius: 50%;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 100;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    transition: all 0.3s;
+}
+
+.toggle-sidebar:hover {
+    transform: scale(1.1);
+    background: var(--primary-hover);
+}
+
+aside.collapsed .toggle-sidebar {
+    transform: rotate(180deg);
+}
+
+aside.collapsed .toggle-sidebar:hover {
+    transform: rotate(180deg) scale(1.1);
+}
+
 aside::before {
     content: '';
     position: absolute;

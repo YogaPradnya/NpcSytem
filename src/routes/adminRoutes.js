@@ -266,9 +266,40 @@ function createAdminRoutes({
 
     router.get('/api/admin/ban-list', apiAuth, adminOnly, async (req, res) => {
         try {
-            const bans = await db.execute("SELECT * FROM banned_users ORDER BY created_at DESC");
+            const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+            const limit = 35; // Per page 35 as requested
+            const offset = (page - 1) * limit;
+            const q = String(req.query.q || '').trim();
+
+            let where = '';
+            let args = [];
+            if (q) {
+                where = "WHERE LOWER(username) LIKE LOWER(?)";
+                args = [`%${q}%`];
+            }
+
+            const bans = await db.execute({
+                sql: `SELECT * FROM banned_users ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+                args: [...args, limit, offset]
+            });
+            const countRes = await db.execute({
+                sql: `SELECT COUNT(*) as total FROM banned_users ${where}`,
+                args
+            });
+            const total = Number(countRes.rows[0]?.total || 0);
+
             const settings = await db.execute("SELECT value FROM settings WHERE key = 'ban_message'");
-            res.json({ success: true, list: bans.rows, ban_message: settings.rows[0]?.value });
+            res.json({
+                success: true,
+                list: bans.rows,
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    totalPages: Math.max(1, Math.ceil(total / limit))
+                },
+                ban_message: settings.rows[0]?.value
+            });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
         }

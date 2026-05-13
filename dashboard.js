@@ -44,18 +44,14 @@ function renderBillingTable(billingData) {
         const modelName = escapeHTML(item.model.model_name.split('/').pop());
         const type = item.pricing_type === 'input_tokens' ? 'IN' : 'OUT';
         const usage = (item.units).toLocaleString();
-        const rate = '$' + (item.rate * 10000).toFixed(4) + '/1M';
+        const rate = '$' + (item.rate * 10000).toFixed(2) + '/1M';
         const cost = '$' + (item.cost / 100).toFixed(2);
-        return '<tr><td style="font-weight:700; color:#1e293b">' + modelName + ' <span style="font-size:9px; color:#94a3b8; margin-left:5px">' + type + '</span></td><td>' + usage + ' tokens</td><td style="color:#64748b">' + rate + '</td><td style="font-weight:800; color:var(--primary); text-align:right">' + cost + '</td></tr>';
-    }).join('') + `
-        <tr style="background:#f8fafc">
-            <td style="font-weight:800; color:#64748b; padding-bottom: 4px">TOTAL USAGE</td>
-            <td style="font-weight:800; color:#1e293b; padding-bottom: 4px">${totalTokens.toLocaleString()} tokens</td>
-            <td colspan="2"></td>
-        </tr>
-        <tr style="background:#f8fafc">
-            <td colspan="3" style="font-weight:800; text-align:right; color:#1e293b; padding-top: 0">ESTIMATED TOTAL SPEND</td>
-            <td style="font-weight:900; color:var(--primary); font-size:1.1rem; text-align:right; padding-top: 0">$${(latestMonth.total_cost / 100).toFixed(2)}</td>
+        return '<tr><td style="font-weight:700; color:var(--text-main)">' + modelName + ' <span style="font-size:9px; color:var(--text-muted); margin-left:5px">' + type + '</span></td><td>' + usage + ' tokens</td><td style="color:var(--text-muted)">' + rate + '</td><td style="font-weight:800; color:var(--primary); text-align:right">' + cost + '</td></tr>';
+    }).join('') + `<tr style="border-top:2px solid var(--border)">
+            <td style="background:var(--bg);font-weight:800;color:var(--text-main);padding:12px 1rem;line-height:1">TOTAL USAGE</td>
+            <td style="background:var(--bg);font-weight:800;color:var(--text-main);padding:12px 1rem;line-height:1">${totalTokens.toLocaleString()} tokens</td>
+            <td style="background:var(--bg);font-weight:800;text-align:right;color:var(--text-main);padding:12px 1rem;line-height:1">ESTIMATED TOTAL SPEND</td>
+            <td style="background:var(--bg);font-weight:900;color:var(--primary);font-size:1.2rem;text-align:right;padding:12px 1rem;line-height:1">$${(latestMonth.total_cost / 100).toFixed(2)}</td>
         </tr>`;
 }
 
@@ -84,23 +80,24 @@ function getAdminDashboardHTML(stats, user) {
         </div>
 
         <aside id="sidebar">
+            <button class="toggle-sidebar" onclick="toggleSidebar()"><i data-lucide="chevron-left"></i></button>
             <div class="brand">
                 <img src="/logo.png" style="width:70px; height:70px; border-radius:18px; box-shadow: 0 8px 25px rgba(0,0,0,0.5)">
                 <h1>ANIMEIN.AI</h1>
                 <p>SYSTEM ENGINE V1</p>
             </div>
             <nav>
-                ${isAdmin ? `<div class="nav-item active" onclick="showPage('dashboard', this)"><i data-lucide="layout-dashboard"></i> Dashboard</div>` : ''}
-                <div class="nav-item ${!isAdmin ? 'active' : ''}" onclick="showPage('karakter', this)"><i data-lucide="users"></i> Data Karakter</div>
+                ${isAdmin ? `<div class="nav-item active" onclick="showPage('dashboard', this)"><i data-lucide="layout-dashboard"></i> <span>Dashboard</span></div>` : ''}
+                <div class="nav-item ${!isAdmin ? 'active' : ''}" onclick="showPage('karakter', this)"><i data-lucide="users"></i> <span>Data Karakter</span></div>
                 ${isAdmin ? `
-                    <div class="nav-item" onclick="showPage('otak', this)"><i data-lucide="cpu"></i> Manajemen Otak</div>
-                    <div class="nav-item" onclick="showPage('users', this)"><i data-lucide="user-cog"></i> Daftar User</div>
-                    <div class="nav-item" onclick="showPage('banlist', this)"><i data-lucide="ban"></i> Daftar Ban</div>
+                    <div class="nav-item" onclick="showPage('otak', this)"><i data-lucide="cpu"></i> <span>Manajemen Otak</span></div>
+                    <div class="nav-item" onclick="showPage('users', this)"><i data-lucide="user-cog"></i> <span>Daftar User</span></div>
+                    <div class="nav-item" onclick="showPage('banlist', this)"><i data-lucide="ban"></i> <span>Daftar Ban</span></div>
                 ` : ''}
-                <div class="nav-item" onclick="showPage('simulator', this)"><i data-lucide="play-circle"></i> Live Simulator</div>
+                <div class="nav-item" onclick="showPage('simulator', this)"><i data-lucide="play-circle"></i> <span>Live Simulator</span></div>
                 ${isAdmin ? `
-                    <div class="nav-item" onclick="showPage('logs', this)"><i data-lucide="message-square"></i> Log Percakapan</div>
-                    <div class="nav-item" onclick="showPage('terminal', this)"><i data-lucide="terminal"></i> Logs</div>
+                    <div class="nav-item" onclick="showPage('logs', this)"><i data-lucide="message-square"></i> <span>Log Percakapan</span></div>
+                    <div class="nav-item" onclick="showPage('terminal', this)"><i data-lucide="terminal"></i> <span>Logs</span></div>
                 ` : ''}
             </nav>
             
@@ -113,7 +110,7 @@ function getAdminDashboardHTML(stats, user) {
                     </div>
                 </div>
                 <button class="btn-logout" onclick="window.location.href='/logout'">
-                    <i data-lucide="log-out"></i> LOGOUT
+                    <i data-lucide="log-out"></i> <span>LOGOUT</span>
                 </button>
                 <div style="text-align: center; margin-top: 1.5rem;">
                     <span style="color: rgba(255,255,255,0.2); font-size: 10px; font-weight: 700;">VERSI 1.0.6</span>
@@ -236,6 +233,10 @@ function getAdminDashboardHTML(stats, user) {
             <div id="page-banlist" class="hidden">
                 <header>
                     <h1>Daftar Ban User</h1>
+                    <div style="display:flex; gap:1rem; align-items:center">
+                        <input type="text" id="ban-search" placeholder="Search username..." onkeyup="debouncedLoadBanList()" style="padding:0.6rem 1rem; border-radius:10px; border:1px solid var(--border); width:250px; font-size:0.9rem">
+                        <button class="btn btn-outline" onclick="loadBanList()">Refresh</button>
+                    </div>
                 </header>
                 <div style="display: grid; grid-template-columns: 350px 1fr; gap: 2rem;">
                     <!-- Bagian Kiri: Form & Setting -->
@@ -275,6 +276,7 @@ function getAdminDashboardHTML(stats, user) {
                                 <tbody id="banlist-body"></tbody>
                             </table>
                         </div>
+                        <div id="banlist-pagination" style="margin-top:1.5rem; display:flex; justify-content:center; gap:0.5rem; align-items:center"></div>
                     </div>
                 </div>
             </div>

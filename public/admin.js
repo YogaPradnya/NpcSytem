@@ -108,17 +108,22 @@ function showPage(pageId, el) {
 }
 
 function initTerminal() {
-    if (logEventSource) return;
+    if (!ADMIN_CONFIG.isAdmin || logEventSource) return;
 
     const statusEl = document.getElementById('terminal-status');
-    statusEl.textContent = '● CONNECTING...';
-    statusEl.style.color = 'var(--info)';
+    if (statusEl) {
+        statusEl.textContent = '● CONNECTING...';
+        statusEl.style.color = 'var(--info)';
+    }
 
     logEventSource = new EventSource('/api/admin/logs/stream');
 
     logEventSource.onopen = () => {
-        statusEl.textContent = '● LIVE CONNECTED';
-        statusEl.style.color = 'var(--success)';
+        const liveStatusEl = document.getElementById('terminal-status');
+        if (liveStatusEl) {
+            liveStatusEl.textContent = '● LIVE CONNECTED';
+            liveStatusEl.style.color = 'var(--success)';
+        }
         appendTerminalLog({ message: 'Engine connection established.', type: 'system' });
     };
 
@@ -127,8 +132,11 @@ function initTerminal() {
     };
 
     logEventSource.onerror = () => {
-        statusEl.textContent = '● DISCONNECTED';
-        statusEl.style.color = 'var(--danger)';
+        const statusEl = document.getElementById('terminal-status');
+        if (statusEl) {
+            statusEl.textContent = '● DISCONNECTED';
+            statusEl.style.color = 'var(--danger)';
+        }
         logEventSource.close();
         logEventSource = null;
         setTimeout(initTerminal, 5000);
@@ -138,6 +146,10 @@ function initTerminal() {
 function appendTerminalLog(data) {
     const term = document.getElementById('terminal-output');
     if (!term) return;
+    if (term.dataset.initialized !== 'true') {
+        term.innerHTML = '';
+        term.dataset.initialized = 'true';
+    }
 
     const line = document.createElement('div');
     line.className = 'term-line';
@@ -882,6 +894,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (ADMIN_CONFIG.isAdmin) {
         startStatsStream();
+        initTerminal();
     }
     if (window.lucide) lucide.createIcons();
     showPage(ADMIN_CONFIG.initialPage || 'karakter');

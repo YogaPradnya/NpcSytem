@@ -41,12 +41,43 @@ function isRateLimit(error) {
     return error?.status === 429 || message.includes('rate limit');
 }
 
+const FALLBACK_RPM_LIMIT = Number(process.env.FALLBACK_API_RPM_LIMIT || 30);
+const RPM_WINDOW_MS = 60 * 1000;
+
+function makeClientState(extra = {}) {
+    return {
+        cooldownUntil: 0,
+        isEnabled: true,
+        requestTimestamps: [],
+        stats: makeStats(),
+        ...extra
+    };
+}
+
+function pruneRequestWindow(clientObj, now = Date.now()) {
+    clientObj.requestTimestamps = (clientObj.requestTimestamps || []).filter(ts => now - ts < RPM_WINDOW_MS);
+}
+
+function canUseClientByRpm(clientObj, limit = FALLBACK_RPM_LIMIT) {
+    pruneRequestWindow(clientObj);
+    return clientObj.requestTimestamps.length < limit;
+}
+
+function markClientRequest(clientObj) {
+    pruneRequestWindow(clientObj);
+    clientObj.requestTimestamps.push(Date.now());
+}
+
+function getRpmCooldownMs(clientObj, limit = FALLBACK_RPM_LIMIT) {
+    pruneRequestWindow(clientObj);
+    if (clientObj.requestTimestamps.length < limit) return 0;
+    return Math.max(1000, RPM_WINDOW_MS - (Date.now() - clientObj.requestTimestamps[0]));
+}
+
 const groqClients = collectKeys('GROQ_API_KEY', 20).map((key, index) => ({
     id: index + 1,
     client: new Groq({ apiKey: key }),
-    cooldownUntil: 0,
-    isEnabled: true,
-    stats: makeStats()
+    ...makeClientState()
 }));
 
 if (groqClients.length === 0) {
@@ -56,9 +87,7 @@ if (groqClients.length === 0) {
 const cerebrasClients = collectKeys('CEREBRAS_API_KEY', 20).map((key, index) => ({
     id: index + 1,
     client: new Cerebras({ apiKey: key }),
-    cooldownUntil: 0,
-    isEnabled: true,
-    stats: makeStats()
+    ...makeClientState()
 }));
 
 const deepInfraClients = collectKeys('DEEPINFRA_API_KEY', 5).map((key, index) => ({
@@ -67,9 +96,7 @@ const deepInfraClients = collectKeys('DEEPINFRA_API_KEY', 5).map((key, index) =>
         apiKey: key,
         baseURL: 'https://api.deepinfra.com/v1/openai',
     }),
-    cooldownUntil: 0,
-    isEnabled: true,
-    stats: makeStats()
+    ...makeClientState()
 }));
 
 if (deepInfraClients.length === 0) {
@@ -155,6 +182,8 @@ function serializeClient(clientObj, type) {
         isEnabled: clientObj.isEnabled,
         isCoolingDown: now < clientObj.cooldownUntil,
         cooldownRemaining: Math.max(0, Math.floor((clientObj.cooldownUntil - now) / 1000)),
+        rpmUsed: (clientObj.requestTimestamps || []).filter(ts => now - ts < RPM_WINDOW_MS).length,
+        rpmLimit: type === 'GROQ' || type === 'CEREBRAS' ? FALLBACK_RPM_LIMIT : null,
         stats: clientObj.stats
     };
 }
@@ -215,9 +244,14 @@ function toggleClient(type, id, enabled) {
 
 async function tryClients({ clients, providerName, model, messages, cooldownMs, skipClient }) {
     for (const clientObj of clients) {
-        if (skipClient && skipClient(clientObj)) continue;
+        const rpmLimited = providerName === 'GROQ' || providerName === 'CEREBRAS' || providerName === 'FALLBACK';
+        if (rpmLimited && !canUseClientByRpm(clientObj)) {
+            clientObj.cooldownUntil = Date.now() + getRpmCooldownMs(clientObj);
+            continue;
+        }
 
         clientObj.stats.requests++;
+        if (rpmLimited) markClientRequest(clientObj);
         try {
             const completion = await clientObj.client.chat.completions.create({
                 model,
@@ -256,9 +290,9 @@ async function createChatCompletion({ finalSystemPrompt, chatHistory, message })
 
     const now = Date.now();
     const availableDeepInfra = deepInfraClients.filter(c => c.isEnabled && now > c.cooldownUntil);
-    const availableGroq = groqClients.filter(c => c.isEnabled && now > c.cooldownUntil);
-    const availableCerebras = cerebrasClients.filter(c => c.isEnabled && now > c.cooldownUntil);
-    const fallbackClients = groqClients.filter(c => c.isEnabled);
+    const availableGroq = groqClients.filter(c => c.isEnabled && now > c.cooldownUntil && canUseClientByRpm(c));
+    const availableCerebras = cerebrasClients.filter(c => c.isEnabled && now > c.cooldownUntil && canUseClientByRpm(c));
+    const fallbackClients = groqClients.filter(c => c.isEnabled && canUseClientByRpm(c));
 
     if (availableDeepInfra.length === 0 && availableGroq.length === 0 && availableCerebras.length === 0 && fallbackClients.length === 0) {
         const error = new Error('Semua token/otak sedang sibuk. Silakan coba lagi nanti.');

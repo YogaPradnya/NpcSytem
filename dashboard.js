@@ -234,26 +234,26 @@ function getAdminDashboardHTML(stats, user) {
                 <header>
                     <h1>Daftar Ban User</h1>
                     <div style="display:flex; gap:1rem; align-items:center">
-                        <input type="text" id="ban-search" placeholder="Search username..." onkeyup="debouncedLoadBanList()" style="padding:0.6rem 1rem; border-radius:10px; border:1px solid var(--border); width:250px; font-size:0.9rem">
-                        <button class="btn btn-outline" onclick="loadBanList()">Refresh</button>
+                        <input type="text" id="ban-search" placeholder="Search username..." onkeyup="debouncedLoadBanList()" style="padding: 0.65rem 1rem; border-radius: 10px; border: 1px solid var(--border); background: #ffffff; color: var(--text-main); width: 250px; font-family: inherit; font-size: 0.88rem; outline: none;">
+                        <button class="btn btn-outline" onclick="loadBanList()" style="border-radius: 10px; padding: 0.65rem 1.2rem;">Refresh</button>
                     </div>
                 </header>
                 <div style="display: grid; grid-template-columns: 350px 1fr; gap: 2rem;">
                     <!-- Bagian Kiri: Form & Setting -->
                     <div style="display: flex; flex-direction: column; gap: 1.5rem;">
                         <div class="card-section" style="padding: 1.5rem;">
-                            <h2 style="font-size: 1rem; margin-bottom: 1rem; color: var(--danger);">Ban User Baru</h2>
+                            <h2 style="font-size: 0.9rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1.25rem; color: var(--text-main);">Ban User Baru</h2>
                             <div style="display: flex; gap: 0.5rem;">
-                                <input type="text" id="ban-username-input" placeholder="Username..." style="flex: 1; padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid var(--border); outline: none;">
-                                <button class="btn btn-danger" onclick="banUser()" style="border-radius: 8px;">Ban</button>
+                                <input type="text" id="ban-username-input" placeholder="Username..." style="flex: 1; padding: 0.75rem 1rem; border-radius: 10px; border: 1px solid var(--border); background: #ffffff; color: var(--text-main); font-family: inherit; font-size: 0.88rem; outline: none; transition: border-color .2s, box-shadow .2s;">
+                                <button class="btn btn-danger" onclick="banUser()" style="border-radius: 10px; padding: 0.75rem 1.2rem; font-size: 0.85rem; background: #fee2e2; border-color: #fee2e2;">Ban</button>
                             </div>
                         </div>
 
-                        <div class="card-section" style="padding: 1.5rem; background: linear-gradient(135deg, rgba(239,68,68,0.1), rgba(249,115,22,0.08)); border: 1px solid rgba(239,68,68,0.18);">
+                        <div class="card-section" style="padding: 1.5rem; border-left: 4px solid var(--danger);">
                             <div style="font-size: 0.72rem; font-weight: 900; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: .45rem;">Total User Diban</div>
                             <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:1rem;">
                                 <div>
-                                    <span id="ban-count" style="font-size: 2.4rem; line-height: 1; font-weight: 900; color: var(--danger);">0</span>
+                                    <span id="ban-count" style="font-size: 1.8rem; line-height: 1; font-weight: 800; color: var(--text-main);">0</span>
                                     <span style="font-size:.85rem; font-weight:800; color:var(--text-muted); margin-left:.35rem;">orang</span>
                                 </div>
                                 <button class="btn btn-outline" onclick="exportBanListTxt()" style="border-radius: 10px; padding: .65rem .9rem; white-space: nowrap;">Export TXT</button>
@@ -262,9 +262,9 @@ function getAdminDashboardHTML(stats, user) {
                         </div>
                         
                         <div class="card-section" style="padding: 1.5rem;">
-                            <h2 style="font-size: 1rem; margin-bottom: 1rem;">Pengaturan Pesan Ban</h2>
-                            <textarea id="ban-message-input" rows="3" style="width: 100%; padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border); outline: none; margin-bottom: 0.8rem; resize: vertical;"></textarea>
-                            <button class="btn" style="width: 100%;" onclick="updateBanMessage()">Simpan Pesan</button>
+                            <h2 style="font-size: 0.9rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1.25rem; color: var(--text-main);">Pengaturan Pesan Ban</h2>
+                            <textarea id="ban-message-input" rows="3" style="width: 100%; padding: 0.85rem 1rem; border-radius: 10px; border: 1px solid var(--border); background: #ffffff; color: var(--text-main); font-family: inherit; font-size: 0.88rem; outline: none; margin-bottom: 0.9rem; resize: vertical; transition: border-color .2s, box-shadow .2s;"></textarea>
+                            <button class="btn" style="width: 100%; padding: 0.75rem 1.2rem; border-radius: 10px;" onclick="updateBanMessage()">Simpan Pesan</button>
                         </div>
                     </div>
 

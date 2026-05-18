@@ -63,7 +63,7 @@ function normalizeHeartProfiles(raw, base = {}) {
 
 function renderHeartProfileFields() {
     return HEART_LEVELS.map((item, index) => `
-        <article class="heart-profile-card" style="--heart-accent: hsl(${24 + index * 23} 90% 55%); --heart-soft: hsl(${24 + index * 23} 95% 96%);">
+        <article class="heart-profile-card">
             <div class="heart-card-top">
                 <div class="heart-orb">${index}</div>
                 <div>

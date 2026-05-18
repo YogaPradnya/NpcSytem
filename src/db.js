@@ -18,6 +18,7 @@ async function initDB(characters) {
                 npc_personality TEXT,
                 npc_speaking_style TEXT,
                 world_setting TEXT,
+                character_background TEXT,
                 language TEXT,
                 heart_profiles TEXT,
                 signature_style TEXT,
@@ -45,6 +46,7 @@ async function initDB(characters) {
         try { await db.execute("ALTER TABLE chat_logs ADD COLUMN user_level INTEGER"); } catch (e) {}
         try { await db.execute("ALTER TABLE characters ADD COLUMN heart_profiles TEXT"); } catch (e) {}
         try { await db.execute("ALTER TABLE characters ADD COLUMN signature_style TEXT"); } catch (e) {}
+        try { await db.execute("ALTER TABLE characters ADD COLUMN character_background TEXT"); } catch (e) {}
 
         await db.execute(`CREATE TABLE IF NOT EXISTS banned_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -85,8 +87,8 @@ async function initDB(characters) {
                 const c = jsonData[id];
                 const isEnabled = c.is_enabled !== undefined ? (c.is_enabled ? 1 : 0) : 1;
                 await db.execute({
-                    sql: "INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, world_setting, language, heart_profiles, signature_style, is_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    args: [id, c.npc_name, c.npc_description, c.npc_personality, c.npc_speaking_style, c.world_setting, c.language || 'id', stringifyHeartProfiles(c.heart_profiles), c.signature_style || '', isEnabled]
+                    sql: "INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, world_setting, character_background, language, heart_profiles, signature_style, is_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    args: [id, c.npc_name, c.npc_description, c.npc_personality, c.npc_speaking_style, c.world_setting, c.character_background || '', c.language || 'id', stringifyHeartProfiles(c.heart_profiles), c.signature_style || '', isEnabled]
                 });
                 characters[id] = { id, ...c, is_enabled: !!isEnabled };
             }

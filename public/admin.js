@@ -16,6 +16,15 @@ let statsEventSource = null;
 let bannedUsers = new Set();
 let latestBanList = [];
 
+const HEART_LEVELS = [
+    { key: 'heart_0', title: 'Heart 0', label: 'Baru pertama kali ketemu' },
+    { key: 'heart_1', title: 'Heart 1', label: 'Ketemu lagi' },
+    { key: 'heart_2', title: 'Heart 2', label: 'Teman' },
+    { key: 'heart_3', title: 'Heart 3', label: 'Sahabat' },
+    { key: 'heart_4', title: 'Heart 4', label: 'Mulai ada rasa' },
+    { key: 'heart_5', title: 'Heart 5', label: 'Cinta' }
+];
+
 const sendIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
 
 function escapeHTML(value) {
@@ -34,6 +43,60 @@ function escapeAttr(value) {
 
 function jsArg(value) {
     return escapeAttr(JSON.stringify(String(value ?? '')));
+}
+
+function normalizeHeartProfiles(raw, base = {}) {
+    let source = raw;
+    if (typeof source === 'string') {
+        try { source = JSON.parse(source); } catch (e) { source = {}; }
+    }
+    source = source && typeof source === 'object' ? source : {};
+    return HEART_LEVELS.reduce((acc, item) => {
+        const profile = source[item.key] || {};
+        acc[item.key] = {
+            description: profile.description || base.npc_description || '',
+            speaking_style: profile.speaking_style || base.npc_speaking_style || ''
+        };
+        return acc;
+    }, {});
+}
+
+function renderHeartProfileFields() {
+    return HEART_LEVELS.map((item, index) => `
+        <article class="heart-profile-card" style="--heart-accent: hsl(${24 + index * 23} 90% 55%); --heart-soft: hsl(${24 + index * 23} 95% 96%);">
+            <div class="heart-card-top">
+                <div class="heart-orb">${index}</div>
+                <div>
+                    <strong>${item.title}</strong>
+                    <small>${item.label}</small>
+                </div>
+            </div>
+            <div class="heart-card-fields">
+                <div class="form-group"><label>Description ${item.title}</label><textarea id="f-${item.key}-desc" rows="3" placeholder="Deskripsi karakter saat ${item.label.toLowerCase()}..."></textarea></div>
+                <div class="form-group"><label>Speaking Style ${item.title}</label><textarea id="f-${item.key}-style" rows="3" placeholder="Gaya bicara karakter saat ${item.label.toLowerCase()}..."></textarea></div>
+            </div>
+        </article>
+    `).join('');
+}
+
+function collectHeartProfiles() {
+    return HEART_LEVELS.reduce((acc, item) => {
+        acc[item.key] = {
+            description: document.getElementById(`f-${item.key}-desc`)?.value || '',
+            speaking_style: document.getElementById(`f-${item.key}-style`)?.value || ''
+        };
+        return acc;
+    }, {});
+}
+
+function fillHeartProfiles(c = {}) {
+    const profiles = normalizeHeartProfiles(c.heart_profiles, c);
+    HEART_LEVELS.forEach(item => {
+        const desc = document.getElementById(`f-${item.key}-desc`);
+        const style = document.getElementById(`f-${item.key}-style`);
+        if (desc) desc.value = profiles[item.key].description;
+        if (style) style.value = profiles[item.key].speaking_style;
+    });
 }
 
 function normalizeUsername(value) {
@@ -591,6 +654,8 @@ async function toggleOtak(id, enabled, type = 'GROQ') {
 
 function openModal(id = null) {
     document.getElementById('modal').style.display = 'flex';
+    const heartFields = document.getElementById('heart-profile-fields');
+    if (heartFields) heartFields.innerHTML = renderHeartProfileFields();
     const idInput = document.getElementById('f-id');
     if (id) {
         const c = characters.find(x => x.id === id);
@@ -602,12 +667,14 @@ function openModal(id = null) {
             document.getElementById('f-pers').value = c.npc_personality || '';
             document.getElementById('f-style').value = c.npc_speaking_style || '';
             document.getElementById('f-world').value = c.world_setting || '';
+            fillHeartProfiles(c);
             document.getElementById('m-title').textContent = 'NPC Configuration';
         }
     } else {
         document.getElementById('char-form').reset();
         idInput.disabled = false;
         document.getElementById('m-title').textContent = 'Create New NPC';
+        fillHeartProfiles({});
     }
 }
 
@@ -878,6 +945,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 npc_personality: document.getElementById('f-pers').value,
                 npc_speaking_style: document.getElementById('f-style').value,
                 world_setting: document.getElementById('f-world').value,
+                heart_profiles: collectHeartProfiles(),
                 is_enabled: c ? c.is_enabled : true,
                 language: 'id'
             };

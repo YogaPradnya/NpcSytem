@@ -372,21 +372,44 @@ function getAdminDashboardHTML(stats, user) {
             </div>
         </main>
 
-        <div id="modal" class="modal"><div class="modal-content">
-            <h2 id="m-title">NPC Setup</h2>
-            <form id="char-form">
-                <input type="hidden" id="f-old-id">
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem">
-                    <div class="form-group"><label>Unique ID</label><input type="text" id="f-id" required></div>
-                    <div class="form-group"><label>NPC Name</label><input type="text" id="f-name" required></div>
+        <div id="modal" class="modal"><div class="modal-content npc-modal-content">
+            <div class="npc-modal-hero">
+                <div>
+                    <span class="npc-modal-kicker">Character Studio</span>
+                    <h2 id="m-title">NPC Setup</h2>
+                    <p>Atur identitas, dunia, dan evolusi gaya bicara per heart level.</p>
                 </div>
-                <div class="form-group"><label>Description</label><textarea id="f-desc" rows="3"></textarea></div>
-                <div class="form-group"><label>Personality</label><textarea id="f-pers" rows="3"></textarea></div>
-                <div class="form-group"><label>Speaking Style</label><textarea id="f-style" rows="2"></textarea></div>
-                <div class="form-group"><label>World Context</label><textarea id="f-world" rows="2"></textarea></div>
-                <div style="display:flex; justify-content:flex-end; gap:0.5rem">
+                <button type="button" class="npc-modal-close" onclick="closeModal()" aria-label="Close NPC modal">×</button>
+            </div>
+            <form id="char-form" class="npc-form">
+                <input type="hidden" id="f-old-id">
+                <section class="npc-form-section">
+                    <div class="section-title"><span>01</span><div><strong>Core Identity</strong><small>Data utama karakter dan kepribadian dasar.</small></div></div>
+                    <div class="npc-form-grid two">
+                        <div class="form-group"><label>Unique ID</label><input type="text" id="f-id" placeholder="contoh: alya" required></div>
+                        <div class="form-group"><label>NPC Name</label><input type="text" id="f-name" placeholder="Nama karakter" required></div>
+                    </div>
+                    <div class="form-group"><label>Description Fallback</label><textarea id="f-desc" rows="3" placeholder="Deskripsi dasar jika heart profile kosong..."></textarea></div>
+                    <div class="form-group"><label>Personality</label><textarea id="f-pers" rows="3" placeholder="Kepribadian utama karakter..."></textarea></div>
+                </section>
+
+                <section class="npc-form-section">
+                    <div class="section-title"><span>02</span><div><strong>Voice & World</strong><small>Gaya bicara fallback dan latar suasana karakter.</small></div></div>
+                    <div class="form-group"><label>Speaking Style Fallback</label><textarea id="f-style" rows="2" placeholder="Gaya bicara default..."></textarea></div>
+                    <div class="form-group"><label>World Context</label><textarea id="f-world" rows="2" placeholder="Tempat, suasana, atau lore singkat..."></textarea></div>
+                </section>
+
+                <section class="npc-form-section heart-section">
+                    <div class="section-title"><span>03</span><div><strong>Heart Level Personality</strong><small>6 deskripsi dan 6 speaking style untuk perkembangan relasi.</small></div></div>
+                    <div class="heart-note">
+                        <b>Tip:</b> Heart 0 dibuat lebih asing, Heart 5 dibuat paling dekat. Jika kosong, sistem memakai fallback dasar.
+                    </div>
+                    <div id="heart-profile-fields" class="heart-profile-grid"></div>
+                </section>
+
+                <div class="npc-modal-actions">
                     <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
-                    <button type="submit" class="btn">Save</button>
+                    <button type="submit" class="btn npc-save-btn">Save Character</button>
                 </div>
             </form>
         </div></div>

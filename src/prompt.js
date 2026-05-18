@@ -1,3 +1,5 @@
+const { getHeartProfile, clampHeartLevel } = require('./heart_profiles');
+
 function getTimeOfDay() {
     const hour = new Date().getHours();
     if (hour >= 4 && hour < 11) return "PAGI";
@@ -6,24 +8,20 @@ function getTimeOfDay() {
     return "MALAM";
 }
 
-function getLevelGuide(level) {
-    const lv = Number(level) || 0;
-    if (lv <= 0) return "[LV0:ASING] Dingin, formal, jaga jarak.";
-    if (lv === 1) return "[LV1:KENALAN] Ramah, sedikit kaku.";
-    if (lv === 2) return "[LV2:TEMAN] Santai, luwes, bercanda.";
-    if (lv === 3) return "[LV3:TEMAN BAIK] Jujur, terbuka, antusias.";
-    if (lv === 4) return "[LV4:SAHABAT] Protektif, manja, takut kehilangan.";
-    return "[LV5:PASANGAN] Intim, setia, manja, cinta mati.";
+function getLevelGuide(level, label = '') {
+    const lv = clampHeartLevel(level);
+    const stage = label || getDefaultStageLabel(lv);
+    return `[HEART ${lv}: ${stage}] Gunakan description dan speaking style khusus karakter untuk level ini.`;
 }
 
 function getDefaultStageLabel(level) {
-    const lv = Number(level) || 0;
-    if (lv === 1) return "kenalan";
-    if (lv === 2) return "teman_biasa";
-    if (lv === 3) return "teman_baik";
-    if (lv === 4) return "sahabat_dekat";
-    if (lv >= 5) return "orang_terspesial";
-    return "belum_kenal";
+    const lv = clampHeartLevel(level);
+    if (lv === 1) return "ketemu_lagi";
+    if (lv === 2) return "teman";
+    if (lv === 3) return "sahabat";
+    if (lv === 4) return "mulai_ada_rasa";
+    if (lv === 5) return "cinta";
+    return "baru_pertama_kali_ketemu";
 }
 
 function normalizeAllowedPoses(system, context) {
@@ -41,14 +39,17 @@ function buildSystemPrompt({ char, currentUsername, user, context, system, allow
     const lv5Owner = relationship.lv5_username || system?.lv5_username || context?.lv5_username || "";
     const isOwner = lv5Owner && currentUsername.toLowerCase() === lv5Owner.toLowerCase();
 
+    const heartProfile = getHeartProfile(char, user?.level);
+
     const finalSystemPrompt = `Kamu ${char.npc_name}.
-Bio:${char.npc_description}
+Bio:${heartProfile.description}
 Sifat:${char.npc_personality}
-Gaya:${char.npc_speaking_style}
+Gaya:${heartProfile.speaking_style}
+Heart:${getLevelGuide(heartProfile.level, heartProfile.label)}
 Ctx:${problem || '-'}|Mood:${mood || '-'}
-User:${currentUsername}|Lv${user?.level||0}=${getLevelGuide(user?.level)}
+User:${currentUsername}|HeartLv:${heartProfile.level}
 ${lv5Owner ? `Loyal:@${lv5Owner}. ${!isOwner ? `Tolak romansa; bilang Aku sudah punya pasangan yaitu @${lv5Owner}.` : `Manja pada @${lv5Owner}.`}` : ""}
-Aturan: tetap IC, panggil user "Kamu", pakai "Aku" bukan Saya/Gue/Anda, max 2 kalimat/200 karakter.
+Aturan: tetap IC, ikuti Bio+Gaya khusus HeartLv ini, panggil user "Kamu", pakai "Aku" bukan Saya/Gue/Anda, max 2 kalimat/200 karakter.
 Akhiri tepat 1 pose: [POSE: ${allowedPoses[0]}]. Pose:${allowedPoses.join(',')}`.trim(); 
 
     return {

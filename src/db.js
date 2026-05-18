@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { createClient } = require('@libsql/client');
+const { stringifyHeartProfiles } = require('./heart_profiles');
 
 const db = createClient({
     url: process.env.TURSO_URL,
@@ -18,6 +19,7 @@ async function initDB(characters) {
                 npc_speaking_style TEXT,
                 world_setting TEXT,
                 language TEXT,
+                heart_profiles TEXT,
                 is_enabled INTEGER DEFAULT 1
             )
         `);
@@ -40,6 +42,7 @@ async function initDB(characters) {
 
         try { await db.execute("ALTER TABLE chat_logs ADD COLUMN ai_pose TEXT"); } catch (e) {}
         try { await db.execute("ALTER TABLE chat_logs ADD COLUMN user_level INTEGER"); } catch (e) {}
+        try { await db.execute("ALTER TABLE characters ADD COLUMN heart_profiles TEXT"); } catch (e) {}
 
         await db.execute(`CREATE TABLE IF NOT EXISTS banned_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,8 +83,8 @@ async function initDB(characters) {
                 const c = jsonData[id];
                 const isEnabled = c.is_enabled !== undefined ? (c.is_enabled ? 1 : 0) : 1;
                 await db.execute({
-                    sql: "INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, world_setting, language, is_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    args: [id, c.npc_name, c.npc_description, c.npc_personality, c.npc_speaking_style, c.world_setting, c.language || 'id', isEnabled]
+                    sql: "INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, world_setting, language, heart_profiles, is_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    args: [id, c.npc_name, c.npc_description, c.npc_personality, c.npc_speaking_style, c.world_setting, c.language || 'id', stringifyHeartProfiles(c.heart_profiles), isEnabled]
                 });
                 characters[id] = { id, ...c, is_enabled: !!isEnabled };
             }

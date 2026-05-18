@@ -170,11 +170,18 @@ function getAdminDashboardHTML(stats, user) {
             ` : ''}
 
             <div id="page-karakter" class="${isAdmin ? 'hidden' : ''}">
-                <header><h1>Management Karakter</h1><button class="btn" onclick="openModal()">+ Add New NPC</button></header>
+                <header>
+                    <h1>Management Karakter</h1>
+                    <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+                        <span id="char-total" style="font-size:0.78rem; font-weight:800; color:var(--text-muted); background:#f8fafc; border:1px solid var(--border); border-radius:999px; padding:0.55rem 0.9rem; white-space:nowrap;">Total: 0 karakter</span>
+                        <input type="text" id="char-search" placeholder="Search karakter..." oninput="debouncedRenderCharacters()" style="padding:0.65rem 1rem; border-radius:10px; border:1px solid var(--border); background:#ffffff; color:var(--text-main); width:240px; font-family:inherit; font-size:0.88rem; outline:none;">
+                        <button class="btn" onclick="openModal()">+ Add New NPC</button>
+                    </div>
+                </header>
                 <div class="card-section"><div class="table-container"><table>
                     <thead><tr><th>CHARACTER</th><th>STATUS</th><th>SWITCH</th><th style="text-align:right">ACTIONS</th></tr></thead>
                     <tbody id="char-body"></tbody>
-                </table></div></div>
+                </table></div><div id="char-pagination" style="margin-top:1.5rem; display:flex; justify-content:center; gap:0.5rem; align-items:center; flex-wrap:wrap;"></div></div>
             </div>
 
             ${isAdmin ? `

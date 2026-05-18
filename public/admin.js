@@ -15,6 +15,9 @@ let logEventSource = null;
 let statsEventSource = null;
 let bannedUsers = new Set();
 let latestBanList = [];
+let charPage = 1;
+let charSearchTimer = null;
+const CHAR_PAGE_SIZE = 30;
 
 const HEART_LEVELS = [
     { key: 'heart_0', title: 'Heart 0', label: 'Baru pertama kali ketemu' },
@@ -252,20 +255,42 @@ async function load() {
         if (!r.ok) throw new Error(apiError(d, 'Gagal memuat karakter'));
         characters = d.characters || [];
         window.characters = characters;
-        renderCharacters(characters);
+        charPage = 1;
+        renderCharacters();
     } catch (e) {
         setTableError('char-body', 4, e.message);
     }
 }
 
-function renderCharacters(list) {
+function getFilteredCharacters() {
+    const q = String(document.getElementById('char-search')?.value || '').trim().toLowerCase();
+    if (!q) return characters;
+    return characters.filter(c => [c.id, c.npc_name, c.npc_description, c.npc_personality]
+        .some(value => String(value || '').toLowerCase().includes(q)));
+}
+
+function renderCharacters(page = charPage) {
     const b = document.getElementById('char-body');
     if (!b) return;
-    if (!list.length) {
-        b.innerHTML = '<tr><td colspan="4" class="table-state">Belum ada karakter.</td></tr>';
+    const filtered = getFilteredCharacters();
+    const totalEl = document.getElementById('char-total');
+    if (totalEl) {
+        totalEl.textContent = filtered.length === characters.length
+            ? `Total: ${characters.length.toLocaleString(LOCALE_ID)} karakter`
+            : `Total: ${filtered.length.toLocaleString(LOCALE_ID)} dari ${characters.length.toLocaleString(LOCALE_ID)} karakter`;
+    }
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / CHAR_PAGE_SIZE));
+    charPage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+    const start = (charPage - 1) * CHAR_PAGE_SIZE;
+    const visible = filtered.slice(start, start + CHAR_PAGE_SIZE);
+
+    if (!visible.length) {
+        b.innerHTML = '<tr><td colspan="4" class="table-state">Tidak ada karakter yang cocok.</td></tr>';
+        renderPagination('char-pagination', { page: 1, totalPages: 1, total: filtered.length }, renderCharacters);
         return;
     }
-    b.innerHTML = list.map(c => {
+    b.innerHTML = visible.map(c => {
         const id = jsArg(c.id);
         return '<tr>' +
             '<td><b>' + escapeHTML(c.npc_name) + '</b><br><small>' + escapeHTML(c.id) + '</small></td>' +
@@ -277,6 +302,12 @@ function renderCharacters(list) {
             '</td>' +
         '</tr>';
     }).join('');
+    renderPagination('char-pagination', { page: charPage, totalPages, total: filtered.length }, renderCharacters);
+}
+
+function debouncedRenderCharacters() {
+    clearTimeout(charSearchTimer);
+    charSearchTimer = setTimeout(() => renderCharacters(1), 180);
 }
 
 async function loadModels() {

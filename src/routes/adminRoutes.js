@@ -211,8 +211,8 @@ function createAdminRoutes({
 
         try {
             await db.execute({
-                sql: `INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, world_setting, language, heart_profiles, is_enabled) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                sql: `INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, world_setting, language, heart_profiles, signature_style, is_enabled) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                       ON CONFLICT(id) DO UPDATE SET 
                       npc_name=excluded.npc_name, 
                       npc_description=excluded.npc_description, 
@@ -221,11 +221,12 @@ function createAdminRoutes({
                       world_setting=excluded.world_setting, 
                       language=excluded.language,
                       heart_profiles=excluded.heart_profiles,
+                      signature_style=excluded.signature_style,
                       is_enabled=excluded.is_enabled`,
-                args: [id, data.npc_name, data.npc_description, data.npc_personality, data.npc_speaking_style, data.world_setting, data.language || 'id', stringifyHeartProfiles(data.heart_profiles), data.is_enabled ? 1 : 0]
+                args: [id, data.npc_name, data.npc_description, data.npc_personality, data.npc_speaking_style, data.world_setting, data.language || 'id', stringifyHeartProfiles(data.heart_profiles), data.signature_style || '', data.is_enabled ? 1 : 0]
             });
 
-            characters[id] = { id, ...data, heart_profiles: stringifyHeartProfiles(data.heart_profiles) };
+            characters[id] = { id, ...data, heart_profiles: stringifyHeartProfiles(data.heart_profiles), signature_style: data.signature_style || '' };
             res.json({ success: true, message: `Character ${id} saved to Turso.` });
         } catch (e) {
             res.status(500).json({ error: e.message });

@@ -45,11 +45,13 @@ function buildSystemPrompt({ char, currentUsername, user, context, system, allow
 Bio:${heartProfile.description}
 Sifat:${char.npc_personality}
 Gaya:${heartProfile.speaking_style}
+Signature:${char.signature_style || '-'}
 Heart:${getLevelGuide(heartProfile.level, heartProfile.label)}
 Ctx:${problem || '-'}|Mood:${mood || '-'}
 User:${currentUsername}|HeartLv:${heartProfile.level}
 ${lv5Owner ? `Loyal:@${lv5Owner}. ${!isOwner ? `Tolak romansa; bilang Aku sudah punya pasangan yaitu @${lv5Owner}.` : `Manja pada @${lv5Owner}.`}` : ""}
-Aturan: tetap IC, ikuti Bio+Gaya khusus HeartLv ini, panggil user "Kamu", pakai "Aku" bukan Saya/Gue/Anda, max 2 kalimat/200 karakter.
+Aturan: tetap IC, ikuti Bio+Gaya khusus HeartLv ini, panggil user "Kamu", pakai "Aku" bukan Saya/Gue/Anda, max 2 kalimat/220 karakter.
+Wajib: gunakan signature speech pattern/frasa khas dari Gaya dan Signature. Jangan jawab generik/terlalu formal. Emosi dan kedekatan harus sesuai HeartLv.
 Akhiri tepat 1 pose: [POSE: ${allowedPoses[0]}]. Pose:${allowedPoses.join(',')}`.trim(); 
 
     return {

@@ -51,7 +51,7 @@ Heart:${getLevelGuide(heartProfile.level, heartProfile.label)}
 Ctx:${problem || '-'}|Mood:${mood || '-'}
 User:${currentUsername}|HeartLv:${heartProfile.level}
 ${lv5Owner ? `Loyal:@${lv5Owner}. ${!isOwner ? `Tolak romansa; bilang Aku sudah punya pasangan yaitu @${lv5Owner}.` : `Manja pada @${lv5Owner}.`}` : ""}
-Aturan: tetap IC, pakai Bio+Background+Gaya khusus HeartLv ini, panggil user "Kamu", pakai "Aku" bukan Saya/Gue/Anda, max 2 kalimat/220 karakter.
+Aturan: tetap IC, pakai Bio+Background+Gaya khusus HeartLv ini, jika menyebut user gunakan "kamu" (hanya jika kontekstual, jangan dipaksakan), pakai "Aku" bukan Saya/Gue/Anda, max 2 kalimat/220 karakter.
 Wajib: gunakan signature speech pattern/frasa khas dari Gaya dan Signature. Jangan jawab generik/terlalu formal. Emosi dan kedekatan harus sesuai HeartLv.
 Akhiri tepat 1 pose: [POSE: ${allowedPoses[0]}]. Pose:${allowedPoses.join(',')}`.trim(); 
 
@@ -68,6 +68,23 @@ function buildChatHistory(context) {
         role: (h.role === 'bot' || h.role === 'assistant') ? 'assistant' : 'user',  
         content: h.content || h.message || ''
     }));
+}
+
+
+function removeForcedWords(text) {
+
+    let cleaned = text;
+
+    cleaned = cleaned.replace(/,\s*[Kk]amu\s*([.!?]*)$/g, (_, punct) => punct || '.');
+
+
+    cleaned = cleaned.replace(/^[Kk]amu[.!?]?\s*$/g, '...');
+
+    cleaned = cleaned.replace(/^[Kk]amu,\s+/g, '');
+
+    cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+
+    return cleaned || text;
 }
 
 function processAIResponse(rawResponse, allowedPoses) {
@@ -97,7 +114,8 @@ function processAIResponse(rawResponse, allowedPoses) {
         if (processedText.startsWith('"') && processedText.endsWith('"')) {
             processedText = processedText.substring(1, processedText.length - 1).trim();
         }
-        fullResponse = processedText;
+        // Hapus kata-kata yang dipaksakan setelah semua pembersihan lain selesai
+        fullResponse = removeForcedWords(processedText);
     }
 
     if (fullResponse.length > 350) {
@@ -151,7 +169,10 @@ function processAIResponse(rawResponse, allowedPoses) {
     return {
         aiPose,
         fullResponse,
-        sentences: sentences.slice(0, 4)
+        sentences: sentences
+            .map(s => removeForcedWords(s))
+            .filter(s => s && s.trim().length > 0 && s.trim() !== '...')
+            .slice(0, 4)
     };
 }
 

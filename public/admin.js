@@ -265,7 +265,7 @@ async function load() {
 function getFilteredCharacters() {
     const q = String(document.getElementById('char-search')?.value || '').trim().toLowerCase();
     if (!q) return characters;
-    return characters.filter(c => [c.id, c.npc_name, c.npc_description, c.npc_personality]
+    return characters.filter(c => [c.id, c.npc_name]
         .some(value => String(value || '').toLowerCase().includes(q)));
 }
 

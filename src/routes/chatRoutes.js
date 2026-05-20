@@ -12,7 +12,8 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
     router.post('/api/npc/v1/chat', async (req, res) => {
         const startTime = Date.now();
         try {
-            const { user, message, context, system } = req.body;
+            const { user, message, context: rawContext, contex: rawContex, system } = req.body;
+            const context = rawContext || rawContex;
             let currentUsername = user?.username || system?.user_name || 'Guest';
             currentUsername = currentUsername.toString().trim().replace(/^@/, '');
 

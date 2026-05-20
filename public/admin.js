@@ -699,7 +699,6 @@ function openModal(id = null) {
             document.getElementById('f-style').value = c.npc_speaking_style || '';
             document.getElementById('f-signature').value = c.signature_style || '';
             document.getElementById('f-background').value = c.character_background || '';
-            document.getElementById('f-world').value = c.world_setting || '';
             fillHeartProfiles(c);
             document.getElementById('m-title').textContent = 'NPC Configuration';
         }
@@ -979,7 +978,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 npc_speaking_style: document.getElementById('f-style').value,
                 signature_style: document.getElementById('f-signature').value,
                 character_background: document.getElementById('f-background').value,
-                world_setting: document.getElementById('f-world').value,
                 heart_profiles: collectHeartProfiles(),
                 is_enabled: c ? c.is_enabled : true,
                 language: 'id'

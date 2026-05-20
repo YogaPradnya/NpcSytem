@@ -17,7 +17,6 @@ async function initDB(characters) {
                 npc_description TEXT,
                 npc_personality TEXT,
                 npc_speaking_style TEXT,
-                world_setting TEXT,
                 character_background TEXT,
                 language TEXT,
                 heart_profiles TEXT,
@@ -87,8 +86,8 @@ async function initDB(characters) {
                 const c = jsonData[id];
                 const isEnabled = c.is_enabled !== undefined ? (c.is_enabled ? 1 : 0) : 1;
                 await db.execute({
-                    sql: "INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, world_setting, character_background, language, heart_profiles, signature_style, is_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    args: [id, c.npc_name, c.npc_description, c.npc_personality, c.npc_speaking_style, c.world_setting, c.character_background || '', c.language || 'id', stringifyHeartProfiles(c.heart_profiles), c.signature_style || '', isEnabled]
+                    sql: "INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, character_background, language, heart_profiles, signature_style, is_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    args: [id, c.npc_name, c.npc_description, c.npc_personality, c.npc_speaking_style, c.character_background || '', c.language || 'id', stringifyHeartProfiles(c.heart_profiles), c.signature_style || '', isEnabled]
                 });
                 characters[id] = { id, ...c, is_enabled: !!isEnabled };
             }

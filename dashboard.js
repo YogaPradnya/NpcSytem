@@ -400,7 +400,6 @@ function getAdminDashboardHTML(stats, user) {
                     <div class="form-group"><label>Speaking Style Fallback</label><textarea id="f-style" rows="2" placeholder="Gaya bicara default..."></textarea></div>
                     <div class="form-group"><label>Signature Style</label><textarea id="f-signature" rows="3" placeholder="Frasa khas, pola bicara, larangan, atau kebiasaan unik karakter..."></textarea></div>
                     <div class="form-group"><label>Character Background</label><textarea id="f-background" rows="4" placeholder="Latar belakang karakter, sejarah, konflik, dunia asal, dan konteks penting..."></textarea></div>
-                    <div class="form-group"><label>World Context</label><textarea id="f-world" rows="2" placeholder="Tempat, suasana, atau lore singkat..."></textarea></div>
 
                     <div class="heart-inline-title">
                         <strong>Heart Level Personality</strong>

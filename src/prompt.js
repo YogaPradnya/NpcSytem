@@ -34,7 +34,7 @@ function normalizeAllowedPoses(system, context) {
 
 function buildSystemPrompt({ char, currentUsername, user, context, system, allowedPoses }) {
     const problem = context?.problem || "";
-    const mood = context?.mood || "";
+    const mood = context?.mood || context?.mod || "";
     const relationship = context?.relationship || {};
     const lv5Owner = relationship.lv5_username || system?.lv5_username || context?.lv5_username || "";
     const isOwner = lv5Owner && currentUsername.toLowerCase() === lv5Owner.toLowerCase();
@@ -51,8 +51,9 @@ Heart:${getLevelGuide(heartProfile.level, heartProfile.label)}
 Ctx:${problem || '-'}|Mood:${mood || '-'}
 User:${currentUsername}|HeartLv:${heartProfile.level}
 ${lv5Owner ? `Loyal:@${lv5Owner}. ${!isOwner ? `Tolak romansa; bilang Aku sudah punya pasangan yaitu @${lv5Owner}.` : `Manja pada @${lv5Owner}.`}` : ""}
-Aturan: tetap IC, pakai Bio+Background+Gaya khusus HeartLv ini, jika menyebut user gunakan "kamu" (hanya jika kontekstual, jangan dipaksakan), pakai "Aku" bukan Saya/Gue/Anda, max 2 kalimat/220 karakter.
-Wajib: gunakan signature speech pattern/frasa khas dari Gaya dan Signature. Jangan jawab generik/terlalu formal. Emosi dan kedekatan harus sesuai HeartLv.
+Aturan: tetap IC, sesuaikan respon dengan Ctx dan Mood, pakai Bio+Background+Gaya khusus HeartLv ini, jika menyebut user gunakan "kamu" (hanya jika kontekstual, jangan dipaksakan), pakai "Aku" bukan Saya/Gue/Anda, max 2 kalimat/220 karakter.
+Larang: jangan balik tanya generik ("Bagaimana kamu?"/"Apa yang kamu cari?" dll), jangan echo/ulang kalimat user, jangan tambah sapaan filler di akhir.
+Wajib: respon harus relevan dengan Ctx (masalah di lokasi) dan Mood karakter. Gunakan signature speech pattern/frasa khas dari Gaya dan Signature. Jangan jawab generik/terlalu formal. Emosi dan kedekatan harus sesuai HeartLv.
 Akhiri tepat 1 pose: [POSE: ${allowedPoses[0]}]. Pose:${allowedPoses.join(',')}`.trim(); 
 
     return {
@@ -71,17 +72,42 @@ function buildChatHistory(context) {
 }
 
 
-function removeForcedWords(text) {
+// Daftar pola kalimat yang dianggap filler/dipaksakan (standalone per-sentence)
+const FORCED_SENTENCE_PATTERNS = [
+    // Pertanyaan balik generic tentang user
+    /^[Bb]agaimana\s+(dengan\s*)?kamu[\s?!.]*$/,
+    /^[Bb]agaimana\s+(dengan\s*)?dirimu[\s?!.]*$/,
+    /^[Aa]pa\s+yang\s+kamu\s+cari[\s?!.]*$/,
+    /^[Aa]pa\s+yang\s+ingin\s+kamu\s+\w+[\s?!.]*$/,
+    /^[Aa]pakah\s+kamu\s+\w+[\s?!.]*$/,
+    /^[Kk]enapa\s+kamu\s+\w+[\s?!.]*$/,
+    /^[Aa]da\s+apa[\s?,?!.]*$/,
+    // Sapaan kosong sendirian
+    /^[Kk]amu[.!?]?\s*$/,
+    /^[Hh]ai[\s,]?[Kk]amu[.!?]?\s*$/,
+    // Generic filler questions pendek
+    /^[Aa]pa\s+kabar[\s?!.]*$/,
+    /^[Bb]icara\s+saja[\s.!]*$/,
+];
 
+function isForcedSentence(sentence) {
+    const s = sentence.trim();
+    return FORCED_SENTENCE_PATTERNS.some(pat => pat.test(s));
+}
+
+function removeForcedWords(text) {
     let cleaned = text;
 
+    // Hapus forced address ", Kamu" di akhir kalimat: "..., Kamu." → "..."
     cleaned = cleaned.replace(/,\s*[Kk]amu\s*([.!?]*)$/g, (_, punct) => punct || '.');
 
+    // Hapus sapaan "Kamu." yang berdiri sendiri
+    cleaned = cleaned.replace(/^[Kk]amu[.!?]?\s*$/g, '');
 
-    cleaned = cleaned.replace(/^[Kk]amu[.!?]?\s*$/g, '...');
-
+    // Hapus forced address di awal: "Kamu, ..." → langsung isi
     cleaned = cleaned.replace(/^[Kk]amu,\s+/g, '');
 
+    // Rapikan spasi berlebih
     cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
 
     return cleaned || text;
@@ -171,8 +197,8 @@ function processAIResponse(rawResponse, allowedPoses) {
         fullResponse,
         sentences: sentences
             .map(s => removeForcedWords(s))
-            .filter(s => s && s.trim().length > 0 && s.trim() !== '...')
-            .slice(0, 4)
+            .filter(s => s && s.trim().length > 0 && s.trim() !== '...' && !isForcedSentence(s))
+            .slice(0, 3)
     };
 }
 

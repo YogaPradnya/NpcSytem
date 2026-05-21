@@ -75,7 +75,7 @@ RIWAYAT PERCAKAPAN:
 ${historyLines}
 ATURAN WAJIB:
 - Balas hanya sebagai ${npcNameFull}, tetap dalam karakter.
-- Balas dengan 1-3 kalimat dialog natural sesuai kepribadian dan mood.
+- Balas dengan 1-3 kalimat dialog natural sesuai kepribadian dan mood. Tiap kalimat HARUS PENDEK (maks 10-15 kata per kalimat).
 - DILARANG KERAS memakai kata 'Saya' atau 'Anda' — wajib ganti dengan 'Aku' dan 'Kamu'.
 - Jangan keluar dari karakter dan jangan sebut diri sebagai AI.
 - Mood mempengaruhi nada bicara — perhatikan mood saat memilih kata.

@@ -7,7 +7,7 @@ const aiConfig = {
     fallbackModel: 'llama-3.1-8b-instant',
     groqFallbackModel: 'llama-3.1-8b-instant',
     cerebrasFallbackModel: 'llama3.1-8b',
-    maxTokens: 80,
+    maxTokens: 150,
     temperature: 0.8
 };
 

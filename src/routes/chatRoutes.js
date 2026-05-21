@@ -75,36 +75,61 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
 
             const rawResponse = completion.choices[0].message.content;
 
-            let aiPose = allowedPoses[0];
-            let fullResponse = '';
-            let sentences = [];
-
-            try {
-                // Bersihkan markdown code block jika ada
-                let cleaned = rawResponse.replace(/```json|```/gi, '').trim();
-
-                // Jika tidak langsung parseable, coba extract JSON object via regex
+            function parseJsonResponse(raw, poses) {
+                let cleaned = raw.replace(/```json|```/gi, '').trim();
                 if (!cleaned.startsWith('{')) {
                     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
                     if (jsonMatch) cleaned = jsonMatch[0];
                 }
-
                 const parsed = JSON.parse(cleaned);
-
-                sentences = Array.isArray(parsed.sentences)
-                    ? parsed.sentences.filter(s => s && typeof s === 'string' && s.trim().length > 0)
+                const s = Array.isArray(parsed.sentences)
+                    ? parsed.sentences.filter(x => x && typeof x === 'string' && x.trim().length > 0)
                     : [];
+                const pose = (parsed.ai_pose && poses.includes(parsed.ai_pose.toLowerCase()))
+                    ? parsed.ai_pose.toLowerCase()
+                    : poses[0];
+                return { sentences: s, aiPose: pose };
+            }
 
-                if (parsed.ai_pose && allowedPoses.includes(parsed.ai_pose.toLowerCase())) {
-                    aiPose = parsed.ai_pose.toLowerCase();
-                }
+            let aiPose = allowedPoses[0];
+            let fullResponse = '';
+            let sentences = [];
 
+            // Attempt 1: parse response pertama
+            let firstParseOk = false;
+            try {
+                const r = parseJsonResponse(rawResponse, allowedPoses);
+                sentences = r.sentences;
+                aiPose = r.aiPose;
                 fullResponse = sentences.join(' ');
+                firstParseOk = sentences.length > 0;
             } catch (parseErr) {
-                console.error('[JSON PARSE ERROR] Raw response tidak valid JSON:', parseErr.message);
-                console.error('[RAW RESPONSE]:', rawResponse.substring(0, 300));
-                // Jangan tampilkan raw JSON ke user — biarkan sentences kosong
-                // Frontend harus handle gracefully jika sentences kosong
+                console.error('[JSON PARSE ERROR] Attempt 1:', parseErr.message);
+            }
+
+            // Attempt 2: retry ke AI jika sentences kosong
+            if (!firstParseOk) {
+                console.warn('[RETRY] Sentences kosong atau parse gagal, mencoba ulang ke AI...');
+                try {
+                    const { completion: retryCompletion } = await providers.createChatCompletion({
+                        finalSystemPrompt,
+                        chatHistory: [],
+                        message
+                    });
+                    const retryRaw = retryCompletion.choices[0].message.content;
+                    const r = parseJsonResponse(retryRaw, allowedPoses);
+                    sentences = r.sentences;
+                    aiPose = r.aiPose;
+                    fullResponse = sentences.join(' ');
+                } catch (retryErr) {
+                    console.error('[RETRY ERROR]:', retryErr.message);
+                }
+            }
+
+            // Fallback final: jangan kirim kosong
+            if (sentences.length === 0) {
+                sentences = ['...'];
+                fullResponse = '...';
             }
 
             const endTime = Date.now();

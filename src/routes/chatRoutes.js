@@ -59,9 +59,11 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 user,
                 context,
                 system,
-                allowedPoses
+                allowedPoses,
+                history: context?.history,
+                message
             });
-            const chatHistory = buildChatHistory(context);
+            const chatHistory = [];
 
             const { completion, usedProvider, usedClientId } = await providers.createChatCompletion({
                 finalSystemPrompt,
@@ -72,7 +74,19 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
             console.log(`[DEBUG] MODEL USED: ${completion.model}`);
 
             const rawResponse = completion.choices[0].message.content;
-            const { aiPose, fullResponse, sentences } = processAIResponse(rawResponse, allowedPoses);
+
+            let aiPose, fullResponse, sentences;
+            try {
+                const cleaned = rawResponse.replace(/```json|```/gi, '').trim();
+                const parsed = JSON.parse(cleaned);
+                sentences = Array.isArray(parsed.sentences) ? parsed.sentences.filter(s => s && s.trim()) : [];
+                aiPose = (parsed.ai_pose && allowedPoses.includes(parsed.ai_pose.toLowerCase()))
+                    ? parsed.ai_pose.toLowerCase()
+                    : allowedPoses[0];
+                fullResponse = sentences.join(' ');
+            } catch (_) {
+                ({ aiPose, fullResponse, sentences } = processAIResponse(rawResponse, allowedPoses));
+            }
 
             const endTime = Date.now();
             const usage = completion.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };

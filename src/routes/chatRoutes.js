@@ -75,17 +75,36 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
 
             const rawResponse = completion.choices[0].message.content;
 
-            let aiPose, fullResponse, sentences;
+            let aiPose = allowedPoses[0];
+            let fullResponse = '';
+            let sentences = [];
+
             try {
-                const cleaned = rawResponse.replace(/```json|```/gi, '').trim();
+                // Bersihkan markdown code block jika ada
+                let cleaned = rawResponse.replace(/```json|```/gi, '').trim();
+
+                // Jika tidak langsung parseable, coba extract JSON object via regex
+                if (!cleaned.startsWith('{')) {
+                    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) cleaned = jsonMatch[0];
+                }
+
                 const parsed = JSON.parse(cleaned);
-                sentences = Array.isArray(parsed.sentences) ? parsed.sentences.filter(s => s && s.trim()) : [];
-                aiPose = (parsed.ai_pose && allowedPoses.includes(parsed.ai_pose.toLowerCase()))
-                    ? parsed.ai_pose.toLowerCase()
-                    : allowedPoses[0];
+
+                sentences = Array.isArray(parsed.sentences)
+                    ? parsed.sentences.filter(s => s && typeof s === 'string' && s.trim().length > 0)
+                    : [];
+
+                if (parsed.ai_pose && allowedPoses.includes(parsed.ai_pose.toLowerCase())) {
+                    aiPose = parsed.ai_pose.toLowerCase();
+                }
+
                 fullResponse = sentences.join(' ');
-            } catch (_) {
-                ({ aiPose, fullResponse, sentences } = processAIResponse(rawResponse, allowedPoses));
+            } catch (parseErr) {
+                console.error('[JSON PARSE ERROR] Raw response tidak valid JSON:', parseErr.message);
+                console.error('[RAW RESPONSE]:', rawResponse.substring(0, 300));
+                // Jangan tampilkan raw JSON ke user — biarkan sentences kosong
+                // Frontend harus handle gracefully jika sentences kosong
             }
 
             const endTime = Date.now();

@@ -43,7 +43,7 @@ function createAdminRoutes({
     router.get('/api/admin/logs/stream', apiAuth, adminOnly, openLogStream);
     router.get('/api/admin/stats/stream', apiAuth, adminOnly, streamStats);
 
-    router.get('/api/stats', async (req, res) => {
+    router.get('/api/stats', apiAuth, async (req, res) => {
         if (Date.now() - cachedDBStats.lastUpdate > 30000) {
             try {
                 const logRes = await db.execute("SELECT ai_name, username, user_message, bot_response, timestamp, ai_pose, user_level FROM chat_logs ORDER BY id DESC LIMIT 5");
@@ -102,16 +102,6 @@ function createAdminRoutes({
             res.json({ success: true, id, enabled, type });
         } else {
             res.status(404).json({ error: "Otak not found" });
-        }
-    });
-
-    router.post('/api/admin/models/switch', apiAuth, adminOnly, (req, res) => {
-        const { primaryModel } = req.body;
-        if (primaryModel) {
-            providers.setPrimaryModel(primaryModel);
-            res.json({ success: true, primaryModel });
-        } else {
-            res.status(400).json({ error: "Missing model name" });
         }
     });
 
@@ -201,11 +191,7 @@ function createAdminRoutes({
         }
     });
 
-    router.get('/api/admin/usage', apiAuth, adminOnly, async (req, res) => {
-        res.json({ usage: [] });
-    });
-
-    router.post('/api/characters/save', apiAuth, async (req, res) => {
+    router.post('/api/characters/save', apiAuth, adminOnly, async (req, res) => {
         const { id, data } = req.body;
         if (!id || !data) return res.status(400).json({ error: "Missing data" });
 
@@ -233,7 +219,7 @@ function createAdminRoutes({
         }
     });
 
-    router.post('/api/characters/delete', apiAuth, async (req, res) => {
+    router.post('/api/characters/delete', apiAuth, adminOnly, async (req, res) => {
         const { id } = req.body;
         if (!id) return res.status(400).json({ error: "Missing ID" });
 
@@ -249,7 +235,7 @@ function createAdminRoutes({
         }
     });
 
-    router.get('/api/characters', async (req, res) => {
+    router.get('/api/characters', apiAuth, async (req, res) => {
         try {
             const result = await db.execute("SELECT * FROM characters");
             const list = result.rows.map(row => ({

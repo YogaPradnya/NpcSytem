@@ -1,6 +1,10 @@
 function parseSignedUser(req) {
     if (!req.signedCookies.user) return null;
-    return JSON.parse(req.signedCookies.user);
+    try {
+        return JSON.parse(req.signedCookies.user);
+    } catch (e) {
+        return null;
+    }
 }
 
 function sessionAuth(req, res, next) {

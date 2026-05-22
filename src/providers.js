@@ -197,9 +197,6 @@ function getModelsStatus() {
     };
 }
 
-function setPrimaryModel(primaryModel) {
-    aiConfig.primaryModel = primaryModel;
-}
 
 function updateModelConfig(config = {}) {
     if (typeof config.primaryModel === 'string' && config.primaryModel.trim()) {
@@ -242,7 +239,7 @@ function toggleClient(type, id, enabled) {
     return clientObj;
 }
 
-async function tryClients({ clients, providerName, model, messages, cooldownMs, skipClient }) {
+async function tryClients({ clients, providerName, model, messages, cooldownMs }) {
     for (const clientObj of clients) {
         const rpmLimited = providerName === 'GROQ' || providerName === 'CEREBRAS' || providerName === 'FALLBACK';
         if (rpmLimited && !canUseClientByRpm(clientObj)) {
@@ -291,7 +288,14 @@ async function createChatCompletion({ finalSystemPrompt, chatHistory, message })
     const now = Date.now();
     const availableDeepInfra = deepInfraClients.filter(c => c.isEnabled && now > c.cooldownUntil);
     const availableGroq = groqClients.filter(c => c.isEnabled && now > c.cooldownUntil && canUseClientByRpm(c));
-    const availableCerebras = cerebrasClients.filter(c => c.isEnabled && now > c.cooldownUntil && canUseClientByRpm(c));
+    const availableCerebras = cerebrasClients.filter(c => {
+        if (!c.isEnabled || now <= c.cooldownUntil || !canUseClientByRpm(c)) return false;
+        if (c.stats.tokens >= 900000) {
+            c.cooldownUntil = now + (24 * 3600 * 1000);
+            return false;
+        }
+        return true;
+    });
     const fallbackClients = groqClients.filter(c => c.isEnabled && canUseClientByRpm(c));
 
     if (availableDeepInfra.length === 0 && availableGroq.length === 0 && availableCerebras.length === 0 && fallbackClients.length === 0) {
@@ -331,12 +335,7 @@ async function createChatCompletion({ finalSystemPrompt, chatHistory, message })
             providerName: 'CEREBRAS',
             model: aiConfig.cerebrasFallbackModel,
             messages,
-            cooldownMs: 30 * 60 * 1000,
-            skipClient: clientObj => {
-                if (clientObj.stats.tokens < 900000) return false;
-                clientObj.cooldownUntil = Date.now() + (24 * 3600 * 1000);
-                return true;
-            }
+            cooldownMs: 30 * 60 * 1000
         });
         if (result) return result;
     }
@@ -366,7 +365,6 @@ module.exports = {
     startDailyStatsReset,
     getProviderStats,
     getModelsStatus,
-    setPrimaryModel,
     updateModelConfig,
     toggleClient,
     createChatCompletion

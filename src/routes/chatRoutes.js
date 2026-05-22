@@ -2,8 +2,7 @@ const express = require('express');
 const {
     normalizeAllowedPoses,
     buildSystemPrompt,
-    buildChatHistory,
-    processAIResponse
+    buildChatHistory
 } = require('../prompt');
 
 function createChatRoutes({ db, characters, providers, globalStats }) {
@@ -11,6 +10,13 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
 
     router.post('/api/npc/v1/chat', async (req, res) => {
         const startTime = Date.now();
+        let isAdminCaller = false;
+        try {
+            if (req.signedCookies && req.signedCookies.user) {
+                const parsed = JSON.parse(req.signedCookies.user);
+                isAdminCaller = parsed && parsed.role === 'admin';
+            }
+        } catch (e) { /* ignore */ }
         try {
             const { user, message, context: rawContext, contex: rawContex, system } = req.body;
             const context = rawContext || rawContex;
@@ -29,17 +35,19 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 });
                 const banMsg = banMsgSetting.rows[0]?.value || "Aku malas berbicara dengan kamu.";
 
+                const banDebug = {
+                    model: "BLOCKED",
+                    tokens: 0,
+                    otak_id: "BAN-SYSTEM",
+                    latency: Date.now() - startTime
+                };
+                if (isAdminCaller) banDebug.system_prompt = "USER BANNED";
+
                 return res.json({
                     ai_name: system?.ai_name || "NPC",
                     ai_pose: "sad",
                     sentences: [banMsg],
-                    debug: {
-                        model: "BLOCKED",
-                        tokens: 0,
-                        otak_id: "BAN-SYSTEM",
-                        system_prompt: "USER BANNED",
-                        latency: Date.now() - startTime
-                    }
+                    debug: banDebug
                 });
             }
 
@@ -184,6 +192,14 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 console.error("[DB LOG ERROR]: Gagal menyimpan percakapan!", logErr.message);
             }
 
+            const debugPayload = {
+                model: completion.model,
+                tokens,
+                otak_id: usedProvider === 'FALLBACK' ? 'FALLBACK' : `${usedProvider} #${usedClientId}`,
+                latency: endTime - startTime
+            };
+            if (isAdminCaller) debugPayload.system_prompt = finalSystemPrompt;
+
             const result = {
                 ai_name: aiKey,
                 ai_pose: aiPose,
@@ -192,13 +208,7 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 processing_time_ms: endTime - startTime,
                 sentence_count: sentences.length,
                 sentences,
-                debug: {
-                    model: completion.model,
-                    tokens,
-                    otak_id: usedProvider === 'FALLBACK' ? 'FALLBACK' : `${usedProvider} #${usedClientId}`,
-                    system_prompt: finalSystemPrompt,
-                    latency: endTime - startTime
-                }
+                debug: debugPayload
             };
 
             console.log(`[NPC] Name: ${char.npc_name} | Lv: ${currentHeartLv} | Sentences: ${sentences.length} | Tokens: ${tokens} | ${endTime - startTime}ms`);

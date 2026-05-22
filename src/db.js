@@ -58,17 +58,16 @@ async function initDB(characters) {
             value TEXT
         )`);
 
-        await db.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('ban_message', 'Aku malas berbicara dengan kamu.')");
-
-        console.log("[DB] Tables 'characters', 'chat_logs', 'users', 'banned_users', & 'settings' ready.");
-
         await db.execute(`
             CREATE TABLE IF NOT EXISTS users (
                 username TEXT PRIMARY KEY,
                 last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         `);
-        console.log("[DB] Tables 'characters', 'chat_logs', & 'users' ready.");
+
+        await db.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('ban_message', 'Aku malas berbicara dengan kamu.')");
+
+        console.log("[DB] Tables 'characters', 'chat_logs', 'users', 'banned_users', & 'settings' ready.");
 
         const result = await db.execute("SELECT * FROM characters");
         if (result.rows.length > 0) {

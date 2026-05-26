@@ -23,7 +23,7 @@ const chatLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 100,
     standardHeaders: true,
-    legacyHeaders: false,
+    legacyHeaders: false, 
     message: { success: false, error: 'Terlalu banyak request, coba lagi nanti.' }
 });
 

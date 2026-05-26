@@ -105,6 +105,7 @@ if (deepInfraClients.length === 0) {
 
 let deepinfraBillingData = null;
 let deepinfraAccountData = null;
+let deepinfraFetchError = null;
 let billingInterval = null;
 let dailyResetInterval = null;
 let lastResetDate = new Date().getDate();
@@ -117,15 +118,20 @@ async function fetchDeepInfraBilling() {
         const period = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}`;
         const urlBilling = `https://api.deepinfra.com/payment/usage/tokens?from=${period}`;
         const urlAccount = `https://api.deepinfra.com/payment/checklist`;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
 
         const [resB, resA] = await Promise.all([
-            fetch(urlBilling, { headers: { 'Authorization': `Bearer ${apiKey}` } }),
-            fetch(urlAccount, { headers: { 'Authorization': `Bearer ${apiKey}` } })
+            fetch(urlBilling, { headers: { 'Authorization': `Bearer ${apiKey}` }, signal: controller.signal }),
+            fetch(urlAccount, { headers: { 'Authorization': `Bearer ${apiKey}` }, signal: controller.signal })
         ]);
 
+        clearTimeout(timeout);
         if (resB.ok) deepinfraBillingData = await resB.json();
         if (resA.ok) deepinfraAccountData = await resA.json();
+        deepinfraFetchError = null;
     } catch (e) {
+        deepinfraFetchError = e.message;
         console.error("[DEEPINFRA SYNC ERROR]:", e.message);
     }
 }
@@ -170,7 +176,8 @@ function getProviderStats() {
         groq_stats: getStatsSummary(groqClients),
         cerebras_stats: getStatsSummary(cerebrasClients),
         deepinfra_billing: deepinfraBillingData,
-        deepinfra_account: deepinfraAccountData
+        deepinfra_account: deepinfraAccountData,
+        deepinfra_fetch_error: deepinfraFetchError
     };
 }
 

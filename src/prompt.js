@@ -41,6 +41,8 @@ KEPRIBADIAN:
 ${char.npc_personality}
 GAYA BICARA:
 ${heartProfile.speaking_style}
+GAYA KHAS / SIGNATURE STYLE:
+${char.signature_style || '-'}
 DUNIA:
 ${char.character_background || '-'}
 KONDISI KAMU SAAT INI:

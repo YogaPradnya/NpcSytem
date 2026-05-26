@@ -3,6 +3,7 @@ const path = require('path');
 
 let logListeners = [];
 let consoleAttached = false;
+let _originalError = console.error;
 
 const LOG_DIR = path.join(__dirname, '..', 'logs');
 const LOG_FILE = path.join(LOG_DIR, 'system.log.jsonl');
@@ -28,7 +29,9 @@ function loadPersistedLogs() {
 
 function persistLog(logEntry) {
     ensureLogFile();
-    fs.appendFile(LOG_FILE, JSON.stringify(logEntry) + '\n', () => {});
+    fs.appendFile(LOG_FILE, JSON.stringify(logEntry) + '\n', (err) => {
+        if (err) _originalError('[LOGGER] Failed to persist log:', err.message);
+    });
 }
 
 function writeToListeners(logEntry) {
@@ -54,6 +57,7 @@ function attachConsoleBroadcast() {
     const originalLog = console.log;
     const originalWarn = console.warn;
     const originalError = console.error;
+    _originalError = originalError;
 
     console.log = (...args) => {
         originalLog(...args);

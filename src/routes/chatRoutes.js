@@ -4,6 +4,7 @@ const {
     buildSystemPrompt,
     buildChatHistory
 } = require('../prompt');
+const { parseJsonResponse } = require('../parser');
 
 function createChatRoutes({ db, characters, providers, globalStats }) {
     const router = express.Router();
@@ -21,7 +22,7 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
             const { user, message, context: rawContext, contex: rawContex, system } = req.body;
             const context = rawContext || rawContex;
             let currentUsername = user?.username || system?.user_name || 'Guest';
-            currentUsername = currentUsername.toString().trim().replace(/^@/, '');
+            currentUsername = currentUsername.toString().trim().replace(/^@/, '').toLowerCase();
 
             const banCheck = await db.execute({
                 sql: "SELECT * FROM banned_users WHERE LOWER(TRIM(username)) = LOWER(?)",
@@ -83,41 +84,7 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
 
             const rawResponse = completion.choices[0].message.content;
 
-            function parseJsonResponse(raw, poses) {
-                let cleaned = raw.replace(/```json|```/gi, '').trim();
-                if (!cleaned.startsWith('{')) {
-                    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-                    if (jsonMatch) cleaned = jsonMatch[0];
-                }
-                const parsed = JSON.parse(cleaned);
-                const rawSentences = Array.isArray(parsed.sentences)
-                    ? parsed.sentences.filter(x => x && typeof x === 'string' && x.trim().length > 0)
-                    : [];
-                let s = [];
-                for (let text of rawSentences) {
-                    if (text.length <= 130) {
-                        s.push(text);
-                    } else {
-                        const words = text.split(' ');
-                        let currentBubble = '';
-                        for (const word of words) {
-                            if ((currentBubble.length + word.length + 1) > 120) {
-                                s.push(currentBubble.trim());
-                                currentBubble = word;
-                            } else {
-                                currentBubble += (currentBubble ? ' ' : '') + word;
-                            }
-                        }
-                        if (currentBubble) s.push(currentBubble.trim());
-                    }
-                }
-                s = s.slice(0, 3); // Batasi maks 3 bubble
-                
-                const pose = (parsed.ai_pose && poses.includes(parsed.ai_pose.toLowerCase()))
-                    ? parsed.ai_pose.toLowerCase()
-                    : poses[0];
-                return { sentences: s, aiPose: pose };
-            }
+
 
             let aiPose = allowedPoses[0];
             let fullResponse = '';

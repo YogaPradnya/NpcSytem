@@ -72,13 +72,15 @@ function createAdminRoutes({
             topChars = topRes.rows;
         } catch(e) {}
 
-        let recentLogs = [];
-        try {
-            const logRes = await db.execute("SELECT ai_name, username, user_message, bot_response, timestamp, ai_pose, user_level FROM chat_logs ORDER BY id DESC LIMIT 5");
-            recentLogs = logRes.rows;
-        } catch(e) {}
+        if (Date.now() - cachedDBStats.lastUpdate > 30000) {
+            try {
+                const logRes = await db.execute("SELECT ai_name, username, user_message, bot_response, timestamp, ai_pose, user_level FROM chat_logs ORDER BY id DESC LIMIT 5");
+                cachedDBStats.recentLogs = logRes.rows;
+                cachedDBStats.lastUpdate = Date.now();
+            } catch(e) {}
+        }
 
-        res.send(getAdminDashboardHTML(runtimeStats({ topChars, recentLogs }), req.user));
+        res.send(getAdminDashboardHTML(runtimeStats({ topChars, recentLogs: cachedDBStats.recentLogs }), req.user));
     });
 
     router.get('/api/admin/models', apiAuth, adminOnly, (req, res) => {
@@ -309,7 +311,7 @@ function createAdminRoutes({
 
     router.post('/api/admin/ban-user', apiAuth, adminOnly, async (req, res) => {
         let { username } = req.body;
-        username = username.toString().trim().replace(/^@/, '');
+        username = username.toString().trim().replace(/^@/, '').toLowerCase();
         try {
             await db.execute({
                 sql: "INSERT OR IGNORE INTO banned_users (username) VALUES (?)",
@@ -323,7 +325,7 @@ function createAdminRoutes({
 
     router.post('/api/admin/unban-user', apiAuth, adminOnly, async (req, res) => {
         let { username } = req.body;
-        username = username.toString().trim().replace(/^@/, '');
+        username = username.toString().trim().replace(/^@/, '').toLowerCase();
         try {
             await db.execute({
                 sql: "DELETE FROM banned_users WHERE username = ?",

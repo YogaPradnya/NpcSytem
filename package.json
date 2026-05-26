@@ -1,6 +1,6 @@
 {
   "name": "npc_system",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "description": "",
   "main": "dashboard.js",
   "scripts": {
@@ -26,6 +26,7 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
     "groq-sdk": "^1.1.2",
     "openai": "^6.37.0"
   }

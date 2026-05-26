@@ -68,7 +68,7 @@ function getAdminDashboardHTML(stats, user) {
         <link rel="icon" type="image/png" href="/favicon.png?v=2">
         <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        <script src="https://unpkg.com/lucide@latest"></script>
+        <script src="https://unpkg.com/lucide@0.263.1"></script>
         <link rel="stylesheet" href="/admin.css?v=2">
     </head>
     <body>
@@ -113,7 +113,7 @@ function getAdminDashboardHTML(stats, user) {
                     <i data-lucide="log-out"></i> <span>LOGOUT</span>
                 </button>
                 <div style="text-align: center; margin-top: 1.5rem;">
-                    <span style="color: rgba(255,255,255,0.2); font-size: 10px; font-weight: 700;">VERSI 1.0.6</span>
+                    <span style="color: rgba(255,255,255,0.2); font-size: 10px; font-weight: 700;">VERSI 1.1.0</span>
                 </div>
             </div>
         </aside>

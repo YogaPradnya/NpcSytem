@@ -194,10 +194,20 @@ function getAdminDashboardHTML(stats, user) {
                         <label>DeepInfra Primary</label>
                         <input id="model-primary" list="deepinfra-models" placeholder="meta-llama/Meta-Llama-3.1-8B-Instruct">
                         <datalist id="deepinfra-models">
-                            <option value="meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"></option>
                             <option value="meta-llama/Meta-Llama-3.1-8B-Instruct"></option>
+                            <option value="meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"></option>
                             <option value="meta-llama/Llama-3.3-70B-Instruct-Turbo"></option>
+                            <option value="mistralai/Mistral-Small-24B-Instruct-2501"></option>
+                            <option value="Qwen/Qwen3.5-0.8B"></option>
+                            <option value="Qwen/Qwen2.5-7B-Instruct"></option>
+                            <option value="Qwen/Qwen2.5-Coder-7B-Instruct"></option>
+                            <option value="deepseek-ai/DeepSeek-V3"></option>
+                            <option value="google/gemma-2-9b-it"></option>
                         </datalist>
+                    </div>
+                    <div class="form-group">
+                        <label>DeepInfra Fallback</label>
+                        <input id="model-deepinfra-fallback" list="deepinfra-models" placeholder="meta-llama/Meta-Llama-3.1-8B-Instruct">
                     </div>
                     <div class="form-group">
                         <label>Groq Fallback</label>

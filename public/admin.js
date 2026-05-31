@@ -327,6 +327,7 @@ async function loadModels() {
 function syncModelForm(config) {
     const map = {
         'model-primary': config.primaryModel,
+        'model-deepinfra-fallback': config.deepinfraFallbackModel || config.primaryModel,
         'model-groq': config.groqFallbackModel || config.fallbackModel,
         'model-cerebras': config.cerebrasFallbackModel,
         'model-max-tokens': config.maxTokens,
@@ -372,6 +373,7 @@ function statItem(label, value, color = '') {
 async function saveModelConfig() {
     const body = {
         primaryModel: document.getElementById('model-primary').value,
+        deepinfraFallbackModel: document.getElementById('model-deepinfra-fallback').value,
         groqFallbackModel: document.getElementById('model-groq').value,
         cerebrasFallbackModel: document.getElementById('model-cerebras').value,
         maxTokens: document.getElementById('model-max-tokens').value,

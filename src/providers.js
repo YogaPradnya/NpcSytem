@@ -2,13 +2,29 @@ const Groq = require('groq-sdk');
 const Cerebras = require('@cerebras/cerebras_cloud_sdk');
 const OpenAI = require('openai');
 
+const DEFAULT_DEEPINFRA_MODEL = 'meta-llama/Meta-Llama-3.1-8B-Instruct';
+const DEFAULT_DEEPINFRA_FALLBACK_MODEL = DEFAULT_DEEPINFRA_MODEL;
+
+const deepInfraModelProfiles = {
+    'meta-llama/Meta-Llama-3.1-8B-Instruct': { provider: 'deepinfra' },
+    'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo': { provider: 'deepinfra' },
+    'meta-llama/Llama-3.3-70B-Instruct-Turbo': { provider: 'deepinfra' },
+    'mistralai/Mistral-Small-24B-Instruct-2501': { provider: 'deepinfra' },
+    'Qwen/Qwen3.5-0.8B': { provider: 'deepinfra', supportsTemperature: false },
+    'Qwen/Qwen2.5-7B-Instruct': { provider: 'deepinfra' },
+    'Qwen/Qwen2.5-Coder-7B-Instruct': { provider: 'deepinfra' },
+    'deepseek-ai/DeepSeek-V3': { provider: 'deepinfra' },
+    'google/gemma-2-9b-it': { provider: 'deepinfra' }
+};
+
 const aiConfig = {
-    primaryModel: 'meta-llama/Meta-Llama-3.1-8B-Instruct',
-    fallbackModel: 'llama-3.1-8b-instant',
-    groqFallbackModel: 'llama-3.1-8b-instant',
-    cerebrasFallbackModel: 'llama3.1-8b',
-    maxTokens: 150,
-    temperature: 0.8
+    primaryModel: process.env.DEEPINFRA_MODEL || DEFAULT_DEEPINFRA_MODEL,
+    deepinfraFallbackModel: process.env.DEEPINFRA_FALLBACK_MODEL || DEFAULT_DEEPINFRA_FALLBACK_MODEL,
+    fallbackModel: process.env.GROQ_FALLBACK_MODEL || 'llama-3.1-8b-instant',
+    groqFallbackModel: process.env.GROQ_FALLBACK_MODEL || 'llama-3.1-8b-instant',
+    cerebrasFallbackModel: process.env.CEREBRAS_FALLBACK_MODEL || 'llama3.1-8b',
+    maxTokens: Number(process.env.AI_MAX_TOKENS || 150),
+    temperature: Number(process.env.AI_TEMPERATURE || 0.8)
 };
 
 function makeStats() {
@@ -195,9 +211,17 @@ function serializeClient(clientObj, type) {
     };
 }
 
+function getSupportedDeepInfraModels() {
+    const configuredModels = [aiConfig.primaryModel, aiConfig.deepinfraFallbackModel]
+        .filter(Boolean)
+        .filter(model => !deepInfraModelProfiles[model]);
+    return [...Object.keys(deepInfraModelProfiles), ...configuredModels];
+}
+
 function getModelsStatus() {
     return {
         config: aiConfig,
+        supportedDeepinfraModels: getSupportedDeepInfraModels(),
         deepinfra: deepInfraClients.map(c => serializeClient(c, 'DEEPINFRA')),
         otak: groqClients.map(c => serializeClient(c, 'GROQ')),
         cerebras: cerebrasClients.map(c => serializeClient(c, 'CEREBRAS'))
@@ -211,6 +235,9 @@ function updateModelConfig(config = {}) {
     }
     if (typeof config.fallbackModel === 'string' && config.fallbackModel.trim()) {
         aiConfig.fallbackModel = config.fallbackModel.trim();
+    }
+    if (typeof config.deepinfraFallbackModel === 'string' && config.deepinfraFallbackModel.trim()) {
+        aiConfig.deepinfraFallbackModel = config.deepinfraFallbackModel.trim();
     }
     if (typeof config.groqFallbackModel === 'string' && config.groqFallbackModel.trim()) {
         aiConfig.groqFallbackModel = config.groqFallbackModel.trim();
@@ -246,6 +273,40 @@ function toggleClient(type, id, enabled) {
     return clientObj;
 }
 
+function buildChatCompletionPayload({ providerName, model, messages }) {
+    const payload = {
+        model,
+        messages,
+        max_tokens: aiConfig.maxTokens
+    };
+
+    const profile = providerName === 'DEEPINFRA'
+        ? deepInfraModelProfiles[model] || { provider: 'deepinfra' }
+        : {};
+
+    if (profile.supportsTemperature !== false) {
+        payload.temperature = aiConfig.temperature;
+    }
+
+    return payload;
+}
+
+function getDeepInfraModelQueue() {
+    const models = [aiConfig.primaryModel, aiConfig.deepinfraFallbackModel, DEFAULT_DEEPINFRA_FALLBACK_MODEL]
+        .map(model => String(model || '').trim())
+        .filter(Boolean);
+    return [...new Set(models)];
+}
+
+function isModelCompatibilityError(error) {
+    const message = String(error?.message || '').toLowerCase();
+    return error?.status === 400 || error?.status === 404 ||
+        message.includes('model') ||
+        message.includes('unsupported') ||
+        message.includes('invalid') ||
+        message.includes('temperature');
+}
+
 async function tryClients({ clients, providerName, model, messages, cooldownMs }) {
     for (const clientObj of clients) {
         const rpmLimited = providerName === 'GROQ' || providerName === 'CEREBRAS' || providerName === 'FALLBACK';
@@ -257,12 +318,9 @@ async function tryClients({ clients, providerName, model, messages, cooldownMs }
         clientObj.stats.requests++;
         if (rpmLimited) markClientRequest(clientObj);
         try {
-            const completion = await clientObj.client.chat.completions.create({
-                model,
-                messages,
-                max_tokens: aiConfig.maxTokens,
-                temperature: aiConfig.temperature
-            });
+            const completion = await clientObj.client.chat.completions.create(
+                buildChatCompletionPayload({ providerName, model, messages })
+            );
             clientObj.stats.success++;
             addUsageStats(clientObj, completion);
             return {
@@ -278,7 +336,8 @@ async function tryClients({ clients, providerName, model, messages, cooldownMs }
                     console.warn(`[NPC] DeepInfra #${clientObj.id} Limit! Cooldown 5m.`);
                 }
             } else if (providerName === 'DEEPINFRA') {
-                console.warn(`[NPC] DeepInfra #${clientObj.id} Error:`, error.message);
+                console.warn(`[NPC] DeepInfra #${clientObj.id} Error (${model}):`, error.message);
+                if (isModelCompatibilityError(error)) break;
             }
         }
     }
@@ -312,15 +371,17 @@ async function createChatCompletion({ finalSystemPrompt, chatHistory, message })
     }
 
     if (availableDeepInfra.length > 0) {
-        console.log(`[NPC] Mencoba DeepInfra Utama (${availableDeepInfra.length} node)...`);
-        const result = await tryClients({
-            clients: availableDeepInfra,
-            providerName: 'DEEPINFRA',
-            model: aiConfig.primaryModel,
-            messages,
-            cooldownMs: 5 * 60 * 1000
-        });
-        if (result) return result;
+        for (const model of getDeepInfraModelQueue()) {
+            console.log(`[NPC] Mencoba DeepInfra Utama (${availableDeepInfra.length} node) model ${model}...`);
+            const result = await tryClients({
+                clients: availableDeepInfra,
+                providerName: 'DEEPINFRA',
+                model,
+                messages,
+                cooldownMs: 5 * 60 * 1000
+            });
+            if (result) return result;
+        }
     }
 
     if (availableGroq.length > 0) {
@@ -374,5 +435,6 @@ module.exports = {
     getModelsStatus,
     updateModelConfig,
     toggleClient,
-    createChatCompletion
+    createChatCompletion,
+    getSupportedDeepInfraModels
 };

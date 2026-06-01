@@ -15,12 +15,123 @@ function createAdminRoutes({
 }) {
     const router = express.Router();
     const cachedDBStats = { topChars: [], recentLogs: [], lastUpdate: 0, usage: null, usageLastUpdate: 0, logs: null, logsLastUpdate: 0 };
+    const deepInfraPricingPerMillion = {
+        'meta-llama/meta-llama-3.1-8b-instruct': { input: 0.02, output: 0.05 },
+        'meta-llama-3.1-8b-instruct': { input: 0.02, output: 0.05 },
+        'meta-llama/meta-llama-3.1-8b-instruct-turbo': { input: 0.02, output: 0.03 },
+        'meta-llama-3.1-8b-instruct-turbo': { input: 0.02, output: 0.03 },
+        'nousresearch/hermes-3-llama-3.1-70b': { input: 0.30, output: 0.30 },
+        'hermes-3-llama-3.1-70b': { input: 0.30, output: 0.30 },
+        'mistralai/mistral-small-24b-instruct-2501': { input: 0.05, output: 0.08 },
+        'mistral-small-24b-instruct-2501': { input: 0.05, output: 0.08 },
+        'qwen/qwen3.5-0.8b': { input: 0.01, output: 0.05 },
+        'qwen3.5-0.8b': { input: 0.01, output: 0.05 }
+    };
 
-    function runtimeStats(extra = {}) {
+    function normalizeModelName(model = '') {
+        return String(model).trim().toLowerCase();
+    }
+
+    function getDeepInfraRates(model = '') {
+        const normalized = normalizeModelName(model);
+        if (deepInfraPricingPerMillion[normalized]) {
+            return deepInfraPricingPerMillion[normalized];
+        }
+
+        const shortName = normalized.split('/').pop();
+        return deepInfraPricingPerMillion[shortName] || { input: 0.02, output: 0.05 };
+    }
+
+    async function getLocalBillingUsage() {
+        if (Date.now() - cachedDBStats.usageLastUpdate <= 30000 && cachedDBStats.usage) {
+            return cachedDBStats.usage;
+        }
+
+        try {
+            const usageRes = await db.execute(`
+                SELECT
+                    COALESCE(NULLIF(model, ''), 'unknown') as model,
+                    SUM(COALESCE(tokens, 0)) as tokens,
+                    SUM(COALESCE(prompt_tokens, 0)) as prompt_tokens,
+                    SUM(COALESCE(completion_tokens, 0)) as completion_tokens,
+                    COUNT(*) as requests
+                FROM chat_logs
+                WHERE model IS NOT NULL
+                    AND TRIM(model) != ''
+                    AND (provider = 'DEEPINFRA' OR provider IS NULL)
+                    AND LOWER(model) NOT IN ('llama-3.1-8b-instant', 'llama3.1-8b')
+                GROUP BY model
+                ORDER BY tokens DESC
+            `);
+
+            let totalCostCents = 0;
+            const items = [];
+
+            usageRes.rows.forEach(row => {
+                const model = row.model;
+                const totalTokens = Number(row.tokens || 0);
+                let promptTokens = Number(row.prompt_tokens || 0);
+                let completionTokens = Number(row.completion_tokens || 0);
+
+                if (promptTokens + completionTokens === 0 && totalTokens > 0) {
+                    promptTokens = Math.round(totalTokens * 0.95);
+                    completionTokens = totalTokens - promptTokens;
+                }
+
+                const rates = getDeepInfraRates(model);
+                const inputCostCents = (promptTokens / 1000000) * rates.input * 100;
+                const outputCostCents = (completionTokens / 1000000) * rates.output * 100;
+                totalCostCents += inputCostCents + outputCostCents;
+
+                items.push({
+                    model: { model_name: model },
+                    pricing_type: 'input_tokens',
+                    units: promptTokens,
+                    rate: rates.input / 10000,
+                    cost: inputCostCents,
+                    requests: Number(row.requests || 0),
+                    source: 'local_chat_logs'
+                });
+
+                items.push({
+                    model: { model_name: model },
+                    pricing_type: 'output_tokens',
+                    units: completionTokens,
+                    rate: rates.output / 10000,
+                    cost: outputCostCents,
+                    requests: Number(row.requests || 0),
+                    source: 'local_chat_logs'
+                });
+            });
+
+            cachedDBStats.usage = {
+                source: 'local_chat_logs',
+                months: [{
+                    period: new Date().toISOString().slice(0, 7),
+                    items,
+                    total_cost: totalCostCents
+                }]
+            };
+            cachedDBStats.usageLastUpdate = Date.now();
+        } catch (e) {
+            cachedDBStats.usage = null;
+            cachedDBStats.usageLastUpdate = Date.now();
+        }
+
+        return cachedDBStats.usage;
+    }
+
+    async function runtimeStats(extra = {}) {
+        const providerStats = providers.getProviderStats();
+        const deepinfraBilling = providerStats.deepinfra_billing;
+        const hasLiveBilling = !!(deepinfraBilling && deepinfraBilling.months && deepinfraBilling.months.length);
+
         return {
             ...globalStats,
             uptime: formatUptime(Math.floor((new Date() - globalStats.startTime) / 1000)),
-            ...providers.getProviderStats(),
+            ...providerStats,
+            deepinfra_billing: hasLiveBilling ? deepinfraBilling : await getLocalBillingUsage(),
+            deepinfra_billing_source: hasLiveBilling ? 'deepinfra_api' : 'local_chat_logs',
             ...extra
         };
     }
@@ -31,8 +142,8 @@ function createAdminRoutes({
         res.setHeader('Connection', 'keep-alive');
         res.flushHeaders();
 
-        const send = () => {
-            res.write(`data: ${JSON.stringify(runtimeStats())}\n\n`);
+        const send = async () => {
+            res.write(`data: ${JSON.stringify(await runtimeStats())}\n\n`);
         };
 
         send();
@@ -53,7 +164,7 @@ function createAdminRoutes({
             cachedDBStats.lastUpdate = Date.now();
         }
 
-        res.json(runtimeStats({ recentLogs: cachedDBStats.recentLogs }));
+        res.json(await runtimeStats({ recentLogs: cachedDBStats.recentLogs }));
     });
 
     router.get('/admin', sessionAuth, async (req, res) => {
@@ -80,7 +191,7 @@ function createAdminRoutes({
             } catch(e) {}
         }
 
-        res.send(getAdminDashboardHTML(runtimeStats({ topChars, recentLogs: cachedDBStats.recentLogs }), req.user));
+        res.send(getAdminDashboardHTML(await runtimeStats({ topChars, recentLogs: cachedDBStats.recentLogs }), req.user));
     });
 
     router.get('/api/admin/models', apiAuth, adminOnly, (req, res) => {

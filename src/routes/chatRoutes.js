@@ -151,8 +151,8 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
             try {
                 const botResponse = (sentences.join('\n') || fullResponse).trim();
                 await db.execute({
-                    sql: "INSERT INTO chat_logs (ai_name, username, user_message, bot_response, tokens, model, latency, ai_pose, user_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    args: [aiKey, currentUsername, message, botResponse, tokens, completion.model, endTime - startTime, aiPose, currentHeartLv]
+                    sql: "INSERT INTO chat_logs (ai_name, username, user_message, bot_response, tokens, prompt_tokens, completion_tokens, model, provider, latency, ai_pose, user_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    args: [aiKey, currentUsername, message, botResponse, tokens, usage.prompt_tokens || 0, usage.completion_tokens || 0, completion.model, usedProvider, endTime - startTime, aiPose, currentHeartLv]
                 });
                 console.log(`[DB] Log saved for @${currentUsername} | Pose: ${aiPose} | Lv: ${currentHeartLv}`);
             } catch (logErr) {

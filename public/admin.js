@@ -759,7 +759,8 @@ function renderBillingTable(billingData) {
         const modelName = escapeHTML(String(item.model?.model_name || '').split('/').pop());
         const type = item.pricing_type === 'input_tokens' ? 'IN' : 'OUT';
         const usage = Number(item.units || 0).toLocaleString();
-        const rate = '$' + (Number(item.rate || 0) * 10000).toFixed(2) + '/1M';
+        const rateValue = Number(item.rate || 0) * 10000;
+        const rate = '$' + rateValue.toFixed(4).replace(/0+$/, '').replace(/\.$/, '') + '/1M';
         const cost = '$' + (Number(item.cost || 0) / 100).toFixed(2);
         return '<tr><td style="font-weight:700; color:var(--text-main)">' + modelName + ' <span style="font-size:9px; color:var(--text-muted); margin-left:5px">' + type + '</span></td><td>' + usage + ' tokens</td><td style="color:var(--text-muted)">' + rate + '</td><td style="font-weight:800; color:var(--primary); text-align:right">' + cost + '</td></tr>';
     }).join('') + '<tr style="border-top:2px solid var(--border)"><td style="background:var(--bg);font-weight:800;color:var(--text-main);padding:12px 1rem;line-height:1">TOTAL USAGE</td><td style="background:var(--bg);font-weight:800;color:var(--text-main);padding:12px 1rem;line-height:1">' + totalTokens.toLocaleString(LOCALE_ID) + ' tokens</td><td style="background:var(--bg);font-weight:800;text-align:right;color:var(--text-main);padding:12px 1rem;line-height:1">ESTIMATED TOTAL SPEND</td><td style="background:var(--bg);font-weight:800;color:var(--primary);font-size:1.2rem;text-align:right;padding:12px 1rem;line-height:1">$' + (Number(latestMonth.total_cost || 0) / 100).toFixed(2) + '</td></tr>';
@@ -820,7 +821,8 @@ function updateStats(d) {
     if (billingBody && d.deepinfra_billing) billingBody.innerHTML = renderBillingTable(d.deepinfra_billing);
     const billingHeader = document.getElementById('billing-header-tools');
     if (billingHeader && d.deepinfra_account) {
-        billingHeader.innerHTML = renderBalanceBadge(d.deepinfra_account) + '<span style="font-size:11px; font-weight:800; color:#64748b; background:#f1f5f9; padding:4px 10px; border-radius:6px; text-transform:uppercase">LIVE DATA</span>';
+        const sourceLabel = d.deepinfra_billing_source === 'local_chat_logs' ? 'LOCAL USAGE' : 'LIVE DATA';
+        billingHeader.innerHTML = renderBalanceBadge(d.deepinfra_account) + '<span style="font-size:11px; font-weight:800; color:#64748b; background:#f1f5f9; padding:4px 10px; border-radius:6px; text-transform:uppercase">' + sourceLabel + '</span>';
     }
 }
 

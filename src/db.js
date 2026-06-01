@@ -34,7 +34,10 @@ async function initDB(characters) {
                 user_message TEXT,
                 bot_response TEXT,
                 tokens INTEGER,
+                prompt_tokens INTEGER DEFAULT 0,
+                completion_tokens INTEGER DEFAULT 0,
                 model TEXT,
+                provider TEXT,
                 latency INTEGER,
                 ai_pose TEXT,
                 user_level INTEGER
@@ -43,6 +46,9 @@ async function initDB(characters) {
 
         try { await db.execute("ALTER TABLE chat_logs ADD COLUMN ai_pose TEXT"); } catch (e) {}
         try { await db.execute("ALTER TABLE chat_logs ADD COLUMN user_level INTEGER"); } catch (e) {}
+        try { await db.execute("ALTER TABLE chat_logs ADD COLUMN provider TEXT"); } catch (e) {}
+        try { await db.execute("ALTER TABLE chat_logs ADD COLUMN prompt_tokens INTEGER DEFAULT 0"); } catch (e) {}
+        try { await db.execute("ALTER TABLE chat_logs ADD COLUMN completion_tokens INTEGER DEFAULT 0"); } catch (e) {}
         try { await db.execute("ALTER TABLE characters ADD COLUMN heart_profiles TEXT"); } catch (e) {}
         try { await db.execute("ALTER TABLE characters ADD COLUMN signature_style TEXT"); } catch (e) {}
         try { await db.execute("ALTER TABLE characters ADD COLUMN character_background TEXT"); } catch (e) {}

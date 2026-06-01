@@ -44,7 +44,8 @@ function renderBillingTable(billingData) {
         const modelName = escapeHTML(item.model.model_name.split('/').pop());
         const type = item.pricing_type === 'input_tokens' ? 'IN' : 'OUT';
         const usage = (item.units).toLocaleString();
-        const rate = '$' + (item.rate * 10000).toFixed(2) + '/1M';
+        const rateValue = Number(item.rate || 0) * 10000;
+        const rate = '$' + rateValue.toFixed(4).replace(/0+$/, '').replace(/\.$/, '') + '/1M';
         const cost = '$' + (item.cost / 100).toFixed(2);
         return '<tr><td style="font-weight:700; color:var(--text-main)">' + modelName + ' <span style="font-size:9px; color:var(--text-muted); margin-left:5px">' + type + '</span></td><td>' + usage + ' tokens</td><td style="color:var(--text-muted)">' + rate + '</td><td style="font-weight:800; color:var(--primary); text-align:right">' + cost + '</td></tr>';
     }).join('') + `<tr style="border-top:2px solid var(--border)">

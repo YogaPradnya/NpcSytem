@@ -740,7 +740,14 @@ function renderBalanceBadge(account) {
     if (!account || account.limit === undefined) return '';
     const limit = account.limit || 0;
     const recent = account.recent || 0;
-    const available = limit - recent;
+    
+    let available;
+    if (account.billing_type === 'balance' && account.stripe_balance !== undefined) {
+        available = Math.max(0, -account.stripe_balance - recent);
+    } else {
+        available = limit - recent;
+    }
+    
     const color = available > 0 ? '#22c55e' : '#ef4444';
     const bg = available > 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)';
     const label = available > 0 ? 'AVAILABLE' : 'OVER LIMIT';

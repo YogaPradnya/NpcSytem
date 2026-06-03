@@ -344,11 +344,10 @@ async function tryClients({ clients, providerName, model, messages, cooldownMs }
     return null;
 }
 
-async function createChatCompletion({ finalSystemPrompt, chatHistory, message }) {
+async function createChatCompletion({ staticSystemPrompt, dynamicUserContent }) {
     const messages = [
-        { role: 'system', content: finalSystemPrompt },
-        ...chatHistory,
-        { role: 'user', content: message }
+        { role: 'system', content: staticSystemPrompt },
+        { role: 'user', content: dynamicUserContent }
     ];
 
     const now = Date.now();

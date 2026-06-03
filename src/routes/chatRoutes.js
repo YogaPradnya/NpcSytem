@@ -1,8 +1,7 @@
 const express = require('express');
 const {
     normalizeAllowedPoses,
-    buildSystemPrompt,
-    buildChatHistory
+    buildSystemPrompt
 } = require('../prompt');
 const { parseJsonResponse } = require('../parser');
 
@@ -62,7 +61,7 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
             }
 
             const allowedPoses = normalizeAllowedPoses(system, context);
-            const { finalSystemPrompt, lv5Owner, isOwner } = buildSystemPrompt({
+            const { staticSystemPrompt, dynamicUserContent, lv5Owner, isOwner } = buildSystemPrompt({
                 char,
                 currentUsername,
                 user,
@@ -72,12 +71,10 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 history: context?.history,
                 message
             });
-            const chatHistory = [];
 
             const { completion, usedProvider, usedClientId } = await providers.createChatCompletion({
-                finalSystemPrompt,
-                chatHistory,
-                message
+                staticSystemPrompt,
+                dynamicUserContent
             });
 
             console.log(`[DEBUG] MODEL USED: ${completion.model}`);
@@ -107,9 +104,8 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 console.warn('[RETRY] Sentences kosong atau parse gagal, mencoba ulang ke AI...');
                 try {
                     const { completion: retryCompletion } = await providers.createChatCompletion({
-                        finalSystemPrompt,
-                        chatHistory: [],
-                        message
+                        staticSystemPrompt,
+                        dynamicUserContent
                     });
                     const retryRaw = retryCompletion.choices[0].message.content;
                     const r = parseJsonResponse(retryRaw, allowedPoses);
@@ -165,7 +161,7 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 otak_id: usedProvider === 'FALLBACK' ? 'FALLBACK' : `${usedProvider} #${usedClientId}`,
                 latency: endTime - startTime
             };
-            if (isAdminCaller) debugPayload.system_prompt = finalSystemPrompt;
+            if (isAdminCaller) debugPayload.system_prompt = staticSystemPrompt;
 
             const result = {
                 ai_name: aiKey,

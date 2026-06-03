@@ -36,7 +36,9 @@ function buildSystemPrompt({ char, currentUsername, user, context, system, allow
         ? `- ${currentUsername} adalah orang yang paling dekat denganmu saat ini, boleh sedikit lebih hangat.`
         : '';
 
-const finalSystemPrompt = `Kamu adalah ${npcNameFull}.
+    // STATIC SYSTEM PROMPT -- identik untuk kombinasi character + heart level yang sama.
+    // DeepInfra akan meng-cache prefix ini dan memberikan diskon 50% input tokens.
+    const staticSystemPrompt = `Kamu adalah ${npcNameFull}.
 KEPRIBADIAN:
 ${char.npc_personality}
 GAYA BICARA:
@@ -45,12 +47,6 @@ GAYA KHAS / SIGNATURE STYLE:
 ${char.signature_style || '-'}
 DUNIA:
 ${char.character_background || '-'}
-KONDISI KAMU SAAT INI:
-${problem || '-'}
-MOOD KAMU:
-${mood || '-'}
-RIWAYAT PERCAKAPAN:
-${historyLines}
 ATURAN WAJIB:
 - Balas hanya sebagai ${npcNameFull}, tetap dalam karakter.
 - Balas dengan 1-3 kalimat dialog natural sesuai kepribadian dan mood. Tiap kalimat HARUS PENDEK (maks 10-15 kata per kalimat).
@@ -59,15 +55,12 @@ ATURAN WAJIB:
 - Mood mempengaruhi nada bicara — perhatikan mood saat memilih kata.
 - Jika pesan user mengandung typo atau salah ketik, pahami MAKSUD sebenarnya lalu balas sesuai maksud itu. JANGAN meniru atau mengulangi typo user.
 - Untuk sapaan biasa (halo, hai, apa kabar, dll), balas dengan natural dan ramah sesuai kepribadian karakter. Jangan membuat jawaban yang aneh atau tidak nyambung.
-${lv5Block}
-POSE YANG BOLEH DIPAKAI: ${posesStr}
+PANDUAN POSE: idle = datar/netral, smile = senang/hangat, surprised = kaget/tidak terduga, sad = sedih/kecewa, shy = malu/salah tingkah.
 Pilih pose yang paling mencerminkan ekspresi ${npcNameFull} saat mengucapkan kalimat terakhir dalam sentences.
-Panduan umum: idle = datar/netral, smile = senang/hangat, surprised = kaget/tidak terduga, sad = sedih/kecewa, shy = malu/salah tingkah.
-${currentUsername} berkata: ${message || ''}
 Format output wajib JSON valid:
 {
   "sentences": ["kalimat dialog 1", "kalimat dialog 2"],
-  "ai_pose": "pilih 1 dari: ${posesStr}",
+  "ai_pose": "pilih 1 dari daftar pose yang diberikan",
   "ai_name": "${aiName}"
 }
 Pastikan:
@@ -75,8 +68,22 @@ Pastikan:
 - Jangan menambahkan penjelasan di luar JSON.
 - Jangan gunakan markdown.
 - Tidak ada kata 'Saya' atau 'Anda' dalam sentences.`.trim();
+
+    // DYNAMIC USER CONTENT -- berubah setiap request, bayar harga penuh.
+    // Semua variabel dinamis dikumpulkan di sini agar tidak merusak cache system prompt.
+    const dynamicUserContent = `[KONDISI SAAT INI]
+- Mood: ${mood || '-'}
+- Kondisi: ${problem || '-'}
+${lv5Block ? lv5Block + '\n' : ''}[POSE YANG TERSEDIA]
+${posesStr}
+[RIWAYAT PERCAKAPAN]
+${historyLines}
+[PESAN]
+${currentUsername}: ${message || ''}`.trim();
+
     return {
-        finalSystemPrompt,
+        staticSystemPrompt,
+        dynamicUserContent,
         lv5Owner,
         isOwner
     };

@@ -812,6 +812,7 @@ function updateStats(d) {
     setText('s-req', Number(d.totalRequests || 0).toLocaleString());
     setText('s-prompt-tok', nFormatter(d.totalPromptTokens || 0));
     setText('s-completion-tok', nFormatter(d.totalCompletionTokens || 0));
+    setText('s-cached-tok', nFormatter(d.totalCachedTokens || 0));
     setText('s-active', (d.deepinfra_stats?.active || 0) + '/' + (d.deepinfra_stats?.available || 0));
     setText('s-groq', (d.groq_stats?.active || 0) + '/' + (d.groq_stats?.available || 0));
     setText('s-cerebras', (d.cerebras_stats?.active || 0) + '/' + (d.cerebras_stats?.available || 0));
@@ -830,6 +831,26 @@ function updateStats(d) {
     if (billingHeader && d.deepinfra_account) {
         const sourceLabel = d.deepinfra_billing_source === 'local_chat_logs' ? 'LOCAL USAGE' : 'LIVE DATA';
         billingHeader.innerHTML = renderBalanceBadge(d.deepinfra_account) + '<span style="font-size:11px; font-weight:800; color:#64748b; background:#f1f5f9; padding:4px 10px; border-radius:6px; text-transform:uppercase">' + sourceLabel + '</span>';
+    }
+
+    // Update cache usage table
+    const cacheBody = document.getElementById('cache-body');
+    const cacheTotalEl = document.getElementById('cache-total-saved');
+    if (cacheBody && d.cache_savings) {
+        if (d.cache_savings.length === 0) {
+            cacheBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#64748b; padding:2rem">Belum ada data cache. Menunggu request masuk...</td></tr>';
+        } else {
+            cacheBody.innerHTML = d.cache_savings.map(function(item) {
+                var modelName = escapeHTML(String(item.model || '').split('/').pop());
+                var cachedToks = Number(item.cached_tokens || 0).toLocaleString();
+                var rate = '$' + Number(item.rate || 0).toFixed(2) + '/1M';
+                var cost = '$' + Number(item.saved || 0).toFixed(2);
+                return '<tr><td style="font-weight:700; color:var(--text-main)">' + modelName + ' <span style="font-size:9px; color:var(--text-muted); margin-left:5px">CACHED</span></td><td>' + cachedToks + ' tokens</td><td style="color:var(--text-muted)">' + rate + ' (50%)</td><td style="font-weight:800; color:var(--primary); text-align:right">' + cost + '</td></tr>';
+            }).join('');
+        }
+    }
+    if (cacheTotalEl) {
+        cacheTotalEl.textContent = 'CACHE COST: $' + Number(d.cache_total_saved || 0).toFixed(2);
     }
 }
 

@@ -135,6 +135,7 @@ function getAdminDashboardHTML(stats, user) {
                     <div class="stat-card blue"><h3>Uptime Session</h3><p id="s-uptime" class="uptime-val">${stats.uptime}</p></div>
                     <div class="stat-card blue"><h3>Input Tokens</h3><p id="s-prompt-tok">${nFormatter(stats.totalPromptTokens || 0)}</p></div>
                     <div class="stat-card blue"><h3>Output Tokens</h3><p id="s-completion-tok">${nFormatter(stats.totalCompletionTokens || 0)}</p></div>
+                    <div class="stat-card green"><h3>Cached Tokens</h3><p id="s-cached-tok">${nFormatter(stats.totalCachedTokens || 0)}</p></div>
                     <div class="stat-card green"><h3>DeepInfra (Utama)</h3><p id="s-active">${(stats.deepinfra_stats && stats.deepinfra_stats.active) || 0}/${(stats.deepinfra_stats && stats.deepinfra_stats.available) || 0}</p></div>
                     <div class="stat-card purple"><h3>Node Groq</h3><p id="s-groq">${(stats.groq_stats && stats.groq_stats.active) || 0}/${(stats.groq_stats && stats.groq_stats.available) || 0}</p></div>
                     <div class="stat-card orange"><h3>Node Cerebras</h3><p id="s-cerebras">${(stats.cerebras_stats && stats.cerebras_stats.active) || 0}/${(stats.cerebras_stats && stats.cerebras_stats.available) || 0}</p></div>
@@ -168,6 +169,31 @@ function getAdminDashboardHTML(stats, user) {
                                 </thead>
                                 <tbody id="billing-body">
                                     ${renderBillingTable(stats.deepinfra_billing)}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="card-section">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem">
+                            <h3 style="margin-bottom:0">Prompt Cache Usage</h3>
+                            <div style="display:flex; gap:0.75rem; align-items:center">
+                                <span id="cache-total-saved" style="font-size:13px; font-weight:800; color:var(--primary); background:rgba(249,115,22,0.1); padding:4px 12px; border-radius:8px; border:1px solid var(--primary)">CACHE COST: $0.00</span>
+                                <span style="font-size:11px; font-weight:800; color:#64748b; background:#f1f5f9; padding:4px 10px; border-radius:6px; text-transform:uppercase">SESSION DATA</span>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>MODEL</th>
+                                        <th>CACHED TOKENS</th>
+                                        <th>INPUT RATE</th>
+                                        <th style="text-align:right">COST (EST)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cache-body">
+                                    <tr><td colspan="4" style="text-align:center; color:#64748b; padding:2rem">Belum ada data cache. Menunggu request masuk...</td></tr>
                                 </tbody>
                             </table>
                         </div>

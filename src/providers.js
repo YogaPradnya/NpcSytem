@@ -34,7 +34,8 @@ function makeStats() {
         errors: 0,
         tokens: 0,
         prompt_tokens: 0,
-        completion_tokens: 0
+        completion_tokens: 0,
+        cached_tokens: 0
     };
 }
 
@@ -50,6 +51,7 @@ function addUsageStats(clientObj, completion) {
     clientObj.stats.tokens += usage.total_tokens || 0;
     clientObj.stats.prompt_tokens += usage.prompt_tokens || 0;
     clientObj.stats.completion_tokens += usage.completion_tokens || 0;
+    clientObj.stats.cached_tokens += usage.prompt_tokens_details?.cached_tokens || 0;
 }
 
 function isRateLimit(error) {
@@ -182,7 +184,8 @@ function getStatsSummary(clients) {
         errors: clients.reduce((acc, c) => acc + c.stats.errors, 0),
         total_tokens: clients.reduce((acc, c) => acc + c.stats.tokens, 0),
         prompt_tokens: clients.reduce((acc, c) => acc + c.stats.prompt_tokens, 0),
-        completion_tokens: clients.reduce((acc, c) => acc + c.stats.completion_tokens, 0)
+        completion_tokens: clients.reduce((acc, c) => acc + c.stats.completion_tokens, 0),
+        cached_tokens: clients.reduce((acc, c) => acc + c.stats.cached_tokens, 0)
     };
 }
 

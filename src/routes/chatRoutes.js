@@ -126,10 +126,17 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
             const endTime = Date.now();
             const usage = completion.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
             const tokens = usage.total_tokens || 0;
+            const cachedTokens = usage.prompt_tokens_details?.cached_tokens || 0;
             globalStats.totalRequests++;
             globalStats.totalTokens += tokens;
             globalStats.totalPromptTokens += usage.prompt_tokens || 0;
             globalStats.totalCompletionTokens += usage.completion_tokens || 0;
+            globalStats.totalCachedTokens += cachedTokens;
+            if (cachedTokens > 0) {
+                const modelKey = completion.model || 'unknown';
+                if (!globalStats.cachedByModel[modelKey]) globalStats.cachedByModel[modelKey] = 0;
+                globalStats.cachedByModel[modelKey] += cachedTokens;
+            }
             if (!globalStats.charUsage[aiKey]) globalStats.charUsage[aiKey] = 0;
             globalStats.charUsage[aiKey] += tokens;
 
@@ -174,7 +181,7 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 debug: debugPayload
             };
 
-            console.log(`[NPC] Name: ${char.npc_name} | Lv: ${currentHeartLv} | Sentences: ${sentences.length} | Tokens: ${tokens} | ${endTime - startTime}ms`);
+            console.log(`[NPC] Name: ${char.npc_name} | Lv: ${currentHeartLv} | Sentences: ${sentences.length} | Tokens: ${tokens}${cachedTokens > 0 ? ' (cached: ' + cachedTokens + ')' : ''} | ${endTime - startTime}ms`);
             res.json(result);
         } catch (e) {
             console.error("[NPC V1 API ERROR]:", e.message);

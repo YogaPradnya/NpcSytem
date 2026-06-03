@@ -126,12 +126,25 @@ function createAdminRoutes({
         const deepinfraBilling = providerStats.deepinfra_billing;
         const hasLiveBilling = !!(deepinfraBilling && deepinfraBilling.months && deepinfraBilling.months.length);
 
+        // Hitung penghematan cache per model
+        const cacheSavings = [];
+        let totalSaved = 0;
+        for (const [model, cached] of Object.entries(globalStats.cachedByModel || {})) {
+            const rates = getDeepInfraRates(model);
+            // Cached tokens mendapat diskon 50%, jadi savings = cached * rate * 0.5
+            const saved = (cached / 1000000) * rates.input * 0.5;
+            totalSaved += saved;
+            cacheSavings.push({ model, cached_tokens: cached, rate: rates.input, saved });
+        }
+
         return {
             ...globalStats,
             uptime: formatUptime(Math.floor((new Date() - globalStats.startTime) / 1000)),
             ...providerStats,
             deepinfra_billing: hasLiveBilling ? deepinfraBilling : await getLocalBillingUsage(),
             deepinfra_billing_source: hasLiveBilling ? 'deepinfra_api' : 'local_chat_logs',
+            cache_savings: cacheSavings,
+            cache_total_saved: totalSaved,
             ...extra
         };
     }

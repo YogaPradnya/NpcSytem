@@ -3,6 +3,8 @@ const globalStats = {
     totalTokens: 0,
     totalPromptTokens: 0,
     totalCompletionTokens: 0,
+    totalCachedTokens: 0,
+    cachedByModel: {},
     startTime: new Date(),
     charUsage: {}
 };

@@ -72,16 +72,25 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 message
             });
 
+            const cacheKey = `npc-${aiKey}-lv${Number(user?.level) || 0}`;
+
             const { completion, usedProvider, usedClientId } = await providers.createChatCompletion({
                 staticSystemPrompt,
-                dynamicUserContent
+                dynamicUserContent,
+                cacheKey
             });
 
             console.log(`[DEBUG] MODEL USED: ${completion.model}`);
 
+            const usageCheck = completion.usage || {};
+            const cachedCheck = usageCheck.prompt_tokens_details?.cached_tokens || 0;
+            if (cachedCheck > 0) {
+                console.log(`[CACHE HIT] ${cachedCheck}/${usageCheck.prompt_tokens} prompt tokens cached (${Math.round(cachedCheck / usageCheck.prompt_tokens * 100)}%) | key: ${cacheKey}`);
+            } else {
+                console.log(`[CACHE MISS] 0/${usageCheck.prompt_tokens || 0} cached | key: ${cacheKey}`);
+            }
+
             const rawResponse = completion.choices[0].message.content;
-
-
 
             let aiPose = allowedPoses[0];
             let fullResponse = '';

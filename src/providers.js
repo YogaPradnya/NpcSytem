@@ -276,7 +276,7 @@ function toggleClient(type, id, enabled) {
     return clientObj;
 }
 
-function buildChatCompletionPayload({ providerName, model, messages }) {
+function buildChatCompletionPayload({ providerName, model, messages, cacheKey }) {
     const payload = {
         model,
         messages,
@@ -289,6 +289,12 @@ function buildChatCompletionPayload({ providerName, model, messages }) {
 
     if (profile.supportsTemperature !== false) {
         payload.temperature = aiConfig.temperature;
+    }
+
+    // Kirim prompt_cache_key ke DeepInfra agar prefix caching lebih reliable
+    // daripada mengandalkan automatic byte-matching yang mudah di-evict
+    if (providerName === 'DEEPINFRA' && cacheKey) {
+        payload.prompt_cache_key = cacheKey;
     }
 
     return payload;
@@ -310,7 +316,7 @@ function isModelCompatibilityError(error) {
         message.includes('temperature');
 }
 
-async function tryClients({ clients, providerName, model, messages, cooldownMs }) {
+async function tryClients({ clients, providerName, model, messages, cooldownMs, cacheKey }) {
     for (const clientObj of clients) {
         const rpmLimited = providerName === 'GROQ' || providerName === 'CEREBRAS' || providerName === 'FALLBACK';
         if (rpmLimited && !canUseClientByRpm(clientObj)) {
@@ -322,7 +328,7 @@ async function tryClients({ clients, providerName, model, messages, cooldownMs }
         if (rpmLimited) markClientRequest(clientObj);
         try {
             const completion = await clientObj.client.chat.completions.create(
-                buildChatCompletionPayload({ providerName, model, messages })
+                buildChatCompletionPayload({ providerName, model, messages, cacheKey })
             );
             clientObj.stats.success++;
             addUsageStats(clientObj, completion);
@@ -347,7 +353,7 @@ async function tryClients({ clients, providerName, model, messages, cooldownMs }
     return null;
 }
 
-async function createChatCompletion({ staticSystemPrompt, dynamicUserContent }) {
+async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, cacheKey }) {
     const messages = [
         { role: 'system', content: staticSystemPrompt },
         { role: 'user', content: dynamicUserContent }
@@ -380,7 +386,8 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent }) 
                 providerName: 'DEEPINFRA',
                 model,
                 messages,
-                cooldownMs: 5 * 60 * 1000
+                cooldownMs: 5 * 60 * 1000,
+                cacheKey
             });
             if (result) return result;
         }

@@ -75,7 +75,14 @@ function getAdminDashboardHTML(stats, user) {
         <link rel="icon" type="image/png" href="/favicon.png?v=2">
         <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        <script src="https://unpkg.com/lucide@0.263.1"></script>
+        <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.1/dist/umd/lucide.min.js"></script>
+        <script>
+            if (!window.lucide) {
+                var script = document.createElement('script');
+                script.src = "https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.js";
+                document.head.appendChild(script);
+            }
+        </script>
         <link rel="stylesheet" href="/admin.css?v=2">
     </head>
     <body>

@@ -61,36 +61,29 @@ ATURAN TEKNIS FORMAT OUTPUT:
 - Anda WAJIB memberikan respon akhir hanya dalam bentuk JSON valid dengan struktur berikut:
 {
   "sentences": ["kalimat dialog 1", "kalimat dialog 2"],
-  "ai_pose": "pilih 1 dari daftar pose: idle, smile, surprised, sad, shy",
+  "ai_pose": "pilih 1 dari: ${posesStr}",
   "ai_name": "${aiName}"
 }
-- Nilai dari "ai_pose" harus dipilih secara logis yang paling mencerminkan ekspresi terakhir dari kalimat dialog Anda.
-- Dilarang menambahkan penjelasan, pembukaan, penutup, atau teks apapun di luar blok JSON. Jangan gunakan markdown formatting seperti \`\`\`json.
+- Output hanya JSON. Jangan tambah penjelasan, pembukaan, penutup, atau markdown.
+- Tidak ada kata 'Saya' atau 'Anda' dalam sentences.
+- Pilih ai_pose yang paling mencerminkan ekspresi ${npcNameFull} pada kalimat terakhir.
 
-[PANDUAN POSE DAN EKSPRESI DETIL]
-- idle: Gunakan ketika karakter sedang berada dalam keadaan biasa saja, tenang, netral, menerangkan informasi objektif, atau tidak menunjukkan emosi yang menonjol.
-- smile: Gunakan ketika karakter sedang merasa senang, gembira, menyambut dengan hangat, memberikan pujian, tertawa kecil, bersikap manis, atau menunjukkan kepuasan hati.
-- surprised: Gunakan ketika karakter terkejut, heran, bingung dengan situasi sekitar, merasa aneh, atau mendapatkan kejutan tak terduga dari perkataan user.
-- sad: Gunakan ketika karakter merasa sedih, kecewa, murung, lesu, khawatir tentang sesuatu hal, merasa bersalah, atau menyesali kejadian yang telah berlalu.
-- shy: Gunakan ketika karakter sedang merasa malu, merona merah di pipi, salah tingkah (misal ketika gengsi mengakui kepeduliannya pada user), gugup, atau bertingkah canggung manis.
+POSE: idle=netral, smile=senang/hangat, surprised=terkejut/bingung, sad=sedih/khawatir, shy=malu/gugup.
+- "sentences" berisi pecahan dialog pendek yang natural sesuai level kedekatan user.
+- Jangan gunakan narasi aksi/format novel seperti *tersenyum*; emosi harus tersirat dari dialog.`.trim();
 
-[PANDUAN STRUKTUR DAN ATURAN BAHASA]
-- Sentences array harus diisi dengan pecahan kalimat yang diucapkan oleh karakter. Hindari menggabungkan kalimat panjang menjadi satu elemen tunggal.
-- Pastikan penggunaan tata bahasa kasual dan natural tetap dipertahankan, terutama penggunaan tanda baca seperti tanda seru (!) atau tanda tanya (?) untuk memperkuat emosi dialog.
-- Jaga konsistensi gaya bahasa agar selaras dengan tingkat kedekatan (level) user saat ini.
-- Jangan gunakan format dialog novel seperti tanda bintang (*) untuk menuliskan gerakan atau deskripsi fisik. Semua emosi harus tersirat langsung dari dialog yang dituliskan.`.trim();
+    const dynamicUserContent = `KONDISI KAMU SAAT INI:
+${problem || '-'}
 
-    // DYNAMIC USER CONTENT -- berubah setiap request, bayar harga penuh.
-    // Semua variabel dinamis dikumpulkan di sini agar tidak merusak cache system prompt.
-    const dynamicUserContent = `[KONDISI SAAT INI]
-- Mood: ${mood || '-'}
-- Kondisi: ${problem || '-'}
-${lv5Block ? lv5Block + '\n' : ''}[POSE YANG TERSEDIA]
-${posesStr}
-[RIWAYAT PERCAKAPAN]
+MOOD KAMU:
+${mood || '-'}
+${lv5Block ? '\n' + lv5Block + '\n' : ''}
+POSE YANG BOLEH DIPAKAI: ${posesStr}
+
+RIWAYAT PERCAKAPAN:
 ${historyLines}
-[PESAN]
-${currentUsername}: ${message || ''}`.trim();
+
+${currentUsername} berkata: ${message || ''}`.trim();
 
     return {
         staticSystemPrompt,

@@ -75,8 +75,8 @@ function getAdminDashboardHTML(stats, user) {
         <link rel="icon" type="image/png" href="/favicon.png?v=2">
         <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        <script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
-        <link rel="stylesheet" href="/admin.css?v=2">
+        <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+        <link rel="stylesheet" href="/admin.css?v=3">
     </head>
     <body>
         <div id="toast-container"></div>
@@ -480,7 +480,7 @@ function getAdminDashboardHTML(stats, user) {
         </div>
 
         <script>window.NPC_ADMIN_CONFIG = { isAdmin: ${isAdmin}, initialPage: ${isAdmin} ? 'dashboard' : 'karakter' };</script>
-        <script src="/admin.js?v=2"></script>
+        <script src="/admin.js?v=3"></script>
     </body>
     </html>
     `;

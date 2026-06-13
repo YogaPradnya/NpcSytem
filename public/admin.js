@@ -149,6 +149,12 @@ function formatBotMsg(msg) {
     )).join('');
 }
 
+function refreshIcons() {
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
+}
+
 function showPage(pageId, el) {
     document.querySelectorAll('main > div').forEach(p => {
         p.classList.add('hidden');
@@ -171,6 +177,7 @@ function showPage(pageId, el) {
     if (pageId === 'simulator') loadSimSelect();
     if (pageId === 'terminal') initTerminal();
     if (pageId === 'banlist') loadBanList(1);
+    refreshIcons();
 }
 
 function initTerminal() {
@@ -1029,6 +1036,8 @@ document.addEventListener('DOMContentLoaded', () => {
         startStatsStream();
         initTerminal();
     }
-    if (window.lucide) lucide.createIcons();
     showPage(ADMIN_CONFIG.initialPage || 'karakter');
+    refreshIcons();
+    setTimeout(refreshIcons, 100);
+    setTimeout(refreshIcons, 500);
 });

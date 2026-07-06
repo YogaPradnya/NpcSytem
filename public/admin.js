@@ -350,8 +350,8 @@ function renderModelRows(d) {
     const list = document.getElementById('otak-list');
     if (!list) return;
     list.innerHTML = providerGroup('INFRASTRUKTUR GROQ (UTAMA)', d.otak || [], 'GROQ', 'var(--success)') +
-        providerGroup('INFRASTRUKTUR DEEPINFRA (CADANGAN 1)', d.deepinfra || [], 'DEEPINFRA', 'var(--primary)') +
-        providerGroup('INFRASTRUKTUR CEREBRAS (CADANGAN 2)', d.cerebras || [], 'CEREBRAS', 'var(--info)');
+        providerGroup('INFRASTRUKTUR CEREBRAS (CADANGAN 1)', d.cerebras || [], 'CEREBRAS', 'var(--info)') +
+        providerGroup('INFRASTRUKTUR DEEPINFRA (CADANGAN 2)', d.deepinfra || [], 'DEEPINFRA', 'var(--primary)');
 }
 
 function providerGroup(title, rows, type, color) {
@@ -800,12 +800,12 @@ function initUsageChart(data) {
     usageChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['Groq (Utama)', 'DeepInfra', 'Cerebras'],
+            labels: ['Groq (Utama)', 'Cerebras', 'DeepInfra'],
             datasets: [{
                 label: 'Tokens Consumed',
                 data: providerTokenData(data),
-                backgroundColor: ['rgba(34, 197, 94, 0.6)', 'rgba(249, 115, 22, 0.6)', 'rgba(59, 130, 246, 0.6)'],
-                borderColor: ['rgb(34, 197, 94)', 'rgb(249, 115, 22)', 'rgb(59, 130, 246)'],
+                backgroundColor: ['rgba(34, 197, 94, 0.6)', 'rgba(59, 130, 246, 0.6)', 'rgba(249, 115, 22, 0.6)'],
+                borderColor: ['rgb(34, 197, 94)', 'rgb(59, 130, 246)', 'rgb(249, 115, 22)'],
                 borderWidth: 2
             }]
         },
@@ -824,8 +824,8 @@ function initUsageChart(data) {
 function providerTokenData(d) {
     return [
         d.groq_stats ? d.groq_stats.total_tokens : 0,
-        d.deepinfra_stats ? d.deepinfra_stats.total_tokens : 0,
-        d.cerebras_stats ? d.cerebras_stats.total_tokens : 0
+        d.cerebras_stats ? d.cerebras_stats.total_tokens : 0,
+        d.deepinfra_stats ? d.deepinfra_stats.total_tokens : 0
     ];
 }
 

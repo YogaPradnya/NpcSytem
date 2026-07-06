@@ -390,8 +390,20 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, ca
         if (result) return result;
     }
 
+    if (availableCerebras.length > 0) {
+        console.warn(`[NPC] Groq gagal/limit, beralih ke Cerebras...`);
+        const result = await tryClients({
+            clients: availableCerebras,
+            providerName: 'CEREBRAS',
+            model: aiConfig.cerebrasFallbackModel,
+            messages,
+            cooldownMs: 30 * 60 * 1000
+        });
+        if (result) return result;
+    }
+
     if (availableDeepInfra.length > 0) {
-        console.warn(`[NPC] Groq gagal/limit, beralih ke DeepInfra...`);
+        console.warn(`[NPC] Cerebras gagal, beralih ke DeepInfra...`);
         for (const model of getDeepInfraModelQueue()) {
             const result = await tryClients({
                 clients: availableDeepInfra,
@@ -403,18 +415,6 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, ca
             });
             if (result) return result;
         }
-    }
-
-    if (availableCerebras.length > 0) {
-        console.warn(`[NPC] DeepInfra gagal, beralih ke Cerebras...`);
-        const result = await tryClients({
-            clients: availableCerebras,
-            providerName: 'CEREBRAS',
-            model: aiConfig.cerebrasFallbackModel,
-            messages,
-            cooldownMs: 30 * 60 * 1000
-        });
-        if (result) return result;
     }
 
     console.warn(`[NPC] Semua API Utama & Cadangan gagal, mencoba fallback terakhir...`);

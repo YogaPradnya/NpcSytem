@@ -39,6 +39,34 @@ app.use((req, res, next) => {
     next();
 });
 
+app.get('/api/status', (req, res) => {
+    const { formatUptime } = require('./src/stats');
+    const uptimeSeconds = Math.floor((Date.now() - globalStats.startTime) / 1000);
+    const providerStats = providers.getProviderStats();
+
+    res.json({
+        status: 'online',
+        uptime: formatUptime(uptimeSeconds),
+        uptime_seconds: uptimeSeconds,
+        providers: {
+            groq: {
+                active: providerStats.groq_stats.active,
+                total: providerStats.groq_stats.available
+            },
+            cerebras: {
+                active: providerStats.cerebras_stats.active,
+                total: providerStats.cerebras_stats.available
+            },
+            deepinfra: {
+                active: providerStats.deepinfra_stats.active,
+                total: providerStats.deepinfra_stats.available
+            }
+        },
+        total_requests: globalStats.totalRequests,
+        timestamp: new Date().toISOString()
+    });
+});
+
 app.get('/', (req, res) => {
     res.redirect('/admin');
 });

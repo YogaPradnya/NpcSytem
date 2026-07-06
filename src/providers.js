@@ -370,7 +370,7 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, ca
         }
         return true;
     });
-    const fallbackClients = groqClients.filter(c => c.isEnabled && canUseClientByRpm(c));
+    const fallbackClients = deepInfraClients.filter(c => c.isEnabled);
 
     if (availableDeepInfra.length === 0 && availableGroq.length === 0 && availableCerebras.length === 0 && fallbackClients.length === 0) {
         const error = new Error('Semua token/otak sedang sibuk. Silakan coba lagi nanti.');
@@ -378,9 +378,21 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, ca
         throw error;
     }
 
+    if (availableGroq.length > 0) {
+        console.log(`[NPC] Mencoba Groq Utama (${availableGroq.length} node)...`);
+        const result = await tryClients({
+            clients: availableGroq,
+            providerName: 'GROQ',
+            model: aiConfig.groqFallbackModel,
+            messages,
+            cooldownMs: 60 * 60 * 1000
+        });
+        if (result) return result;
+    }
+
     if (availableDeepInfra.length > 0) {
+        console.warn(`[NPC] Groq gagal/limit, beralih ke DeepInfra...`);
         for (const model of getDeepInfraModelQueue()) {
-            console.log(`[NPC] Mencoba DeepInfra Utama (${availableDeepInfra.length} node) model ${model}...`);
             const result = await tryClients({
                 clients: availableDeepInfra,
                 providerName: 'DEEPINFRA',
@@ -393,20 +405,8 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, ca
         }
     }
 
-    if (availableGroq.length > 0) {
-        console.warn(`[NPC] DeepInfra gagal/limit, beralih ke Groq...`);
-        const result = await tryClients({
-            clients: availableGroq,
-            providerName: 'GROQ',
-            model: aiConfig.groqFallbackModel,
-            messages,
-            cooldownMs: 30 * 60 * 1000
-        });
-        if (result) return result;
-    }
-
     if (availableCerebras.length > 0) {
-        console.warn(`[NPC] Groq gagal, beralih ke Cerebras...`);
+        console.warn(`[NPC] DeepInfra gagal, beralih ke Cerebras...`);
         const result = await tryClients({
             clients: availableCerebras,
             providerName: 'CEREBRAS',
@@ -420,10 +420,11 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, ca
     console.warn(`[NPC] Semua API Utama & Cadangan gagal, mencoba fallback terakhir...`);
     const fallbackResult = await tryClients({
         clients: fallbackClients,
-        providerName: 'GROQ',
-        model: aiConfig.fallbackModel,
+        providerName: 'DEEPINFRA',
+        model: aiConfig.primaryModel,
         messages,
-        cooldownMs: 30 * 60 * 1000
+        cooldownMs: 5 * 60 * 1000,
+        cacheKey
     });
     if (fallbackResult) {
         fallbackResult.usedProvider = 'FALLBACK';

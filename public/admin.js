@@ -349,8 +349,8 @@ function syncModelForm(config) {
 function renderModelRows(d) {
     const list = document.getElementById('otak-list');
     if (!list) return;
-    list.innerHTML = providerGroup('INFRASTRUKTUR DEEPINFRA (UTAMA)', d.deepinfra || [], 'DEEPINFRA', 'var(--success)') +
-        providerGroup('INFRASTRUKTUR GROQ (CADANGAN 1)', d.otak || [], 'GROQ', 'var(--primary)') +
+    list.innerHTML = providerGroup('INFRASTRUKTUR GROQ (UTAMA)', d.otak || [], 'GROQ', 'var(--success)') +
+        providerGroup('INFRASTRUKTUR DEEPINFRA (CADANGAN 1)', d.deepinfra || [], 'DEEPINFRA', 'var(--primary)') +
         providerGroup('INFRASTRUKTUR CEREBRAS (CADANGAN 2)', d.cerebras || [], 'CEREBRAS', 'var(--info)');
 }
 
@@ -662,12 +662,20 @@ function renderSimDebug(d) {
 async function toggleChar(id, enabled) {
     const existing = characters.find(x => x.id === id);
     if (!existing) return;
-    await fetch('/api/characters/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, data: { ...existing, is_enabled: enabled } })
-    });
-    load();
+    try {
+        const r = await fetch('/api/characters/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, data: { ...existing, is_enabled: enabled } })
+        });
+        const d = await r.json();
+        if (!r.ok || !d.success) throw new Error(d.error || 'Gagal toggle karakter');
+        existing.is_enabled = enabled;
+        showToast(existing.npc_name + ' ' + (enabled ? 'Enabled' : 'Disabled'), enabled ? 'success' : 'error');
+    } catch (e) {
+        showToast(e.message, 'error');
+        load();
+    }
 }
 
 async function deleteChar(id) {
@@ -683,13 +691,19 @@ async function deleteChar(id) {
 }
 
 async function toggleOtak(id, enabled, type = 'GROQ') {
-    await fetch('/api/admin/models/toggle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, enabled, type })
-    });
-    showToast(type + ' Node #' + id + ' ' + (enabled ? 'Enabled' : 'Disabled'), enabled ? 'success' : 'error');
-    loadModels();
+    try {
+        const r = await fetch('/api/admin/models/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, enabled, type })
+        });
+        const d = await r.json();
+        if (!r.ok || !d.success) throw new Error(d.error || 'Gagal toggle node');
+        showToast(type + ' Node #' + id + ' ' + (enabled ? 'Enabled' : 'Disabled'), enabled ? 'success' : 'error');
+    } catch (e) {
+        showToast(e.message, 'error');
+        loadModels();
+    }
 }
 
 function openModal(id = null) {
@@ -786,7 +800,7 @@ function initUsageChart(data) {
     usageChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['DeepInfra (Utama)', 'Groq', 'Cerebras'],
+            labels: ['Groq (Utama)', 'DeepInfra', 'Cerebras'],
             datasets: [{
                 label: 'Tokens Consumed',
                 data: providerTokenData(data),
@@ -809,8 +823,8 @@ function initUsageChart(data) {
 
 function providerTokenData(d) {
     return [
-        d.deepinfra_stats ? d.deepinfra_stats.total_tokens : 0,
         d.groq_stats ? d.groq_stats.total_tokens : 0,
+        d.deepinfra_stats ? d.deepinfra_stats.total_tokens : 0,
         d.cerebras_stats ? d.cerebras_stats.total_tokens : 0
     ];
 }
@@ -820,8 +834,8 @@ function updateStats(d) {
     setText('s-prompt-tok', nFormatter(d.totalPromptTokens || 0));
     setText('s-completion-tok', nFormatter(d.totalCompletionTokens || 0));
     setText('s-cached-tok', nFormatter(d.totalCachedTokens || 0));
-    setText('s-active', (d.deepinfra_stats?.active || 0) + '/' + (d.deepinfra_stats?.available || 0));
-    setText('s-groq', (d.groq_stats?.active || 0) + '/' + (d.groq_stats?.available || 0));
+    setText('s-active', (d.groq_stats?.active || 0) + '/' + (d.groq_stats?.available || 0));
+    setText('s-groq', (d.deepinfra_stats?.active || 0) + '/' + (d.deepinfra_stats?.available || 0));
     setText('s-cerebras', (d.cerebras_stats?.active || 0) + '/' + (d.cerebras_stats?.available || 0));
     setText('s-uptime', d.uptime || '0s');
 

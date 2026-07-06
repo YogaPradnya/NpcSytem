@@ -248,7 +248,7 @@ function getAdminDashboardHTML(stats, user) {
                     </div>
                     <div class="form-group">
                         <label>Cerebras Fallback</label>
-                        <input id="model-cerebras" placeholder="llama3.1-8b">
+                        <input id="model-cerebras" placeholder="gemma-4-31b">
                     </div>
                     <div class="form-group compact">
                         <label>Max Token Output</label>

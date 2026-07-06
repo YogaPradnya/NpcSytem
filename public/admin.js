@@ -335,7 +335,7 @@ function syncModelForm(config) {
     const map = {
         'model-primary': config.primaryModel,
         'model-deepinfra-fallback': config.deepinfraFallbackModel || config.primaryModel,
-        'model-groq': config.groqFallbackModel || config.fallbackModel,
+        'model-groq': config.groqFallbackModel,
         'model-cerebras': config.cerebrasFallbackModel,
         'model-max-tokens': config.maxTokens,
         'model-temperature': config.temperature
@@ -357,8 +357,11 @@ function renderModelRows(d) {
 function providerGroup(title, rows, type, color) {
     return '<h3 class="provider-title">' + escapeHTML(title) + '</h3>' + rows.map(o => {
         const s = o.stats || {};
-        const status = o.isEnabled ? (o.isCoolingDown ? 'COOLDOWN' : 'READY') : 'DISABLED';
-        return '<div class="otak-row ' + (o.isEnabled ? 'active' : '') + '" style="border-left: 4px solid ' + color + '">' +
+        const cooldownUntil = o.isCoolingDown ? Date.now() + (o.cooldownRemaining * 1000) : 0;
+        const statusText = o.isEnabled ? (o.isCoolingDown ? formatCooldown(o.cooldownRemaining) : 'READY') : 'DISABLED';
+        const statusColor = o.isEnabled ? (o.isCoolingDown ? 'var(--warning)' : 'var(--success)') : 'var(--danger)';
+        const statusId = 'status-' + type + '-' + o.id;
+        return '<div class="otak-row ' + (o.isEnabled ? 'active' : '') + '" style="border-left: 4px solid ' + color + '" data-cooldown-until="' + cooldownUntil + '" data-provider-type="' + type + '" data-provider-id="' + o.id + '">' +
             '<div class="otak-name">' + escapeHTML(type) + ' #' + escapeHTML(o.id) + '</div>' +
             '<div class="otak-stats">' +
                 statItem('Reqs', s.requests || 0) +
@@ -366,11 +369,19 @@ function providerGroup(title, rows, type, color) {
                 statItem('Errors', s.errors || 0, 'var(--danger)') +
                 statItem('In', Number(s.prompt_tokens || 0).toLocaleString()) +
                 statItem('Out', Number(s.completion_tokens || 0).toLocaleString()) +
-                statItem('Status', status, o.isEnabled ? 'var(--success)' : 'var(--danger)') +
+                '<div class="otak-stat-item"><span class="otak-stat-label">Status</span><span id="' + statusId + '" class="otak-stat-value" style="color:' + statusColor + '">' + escapeHTML(statusText) + '</span></div>' +
             '</div>' +
             '<label class="switch"><input type="checkbox" ' + (o.isEnabled ? 'checked' : '') + ' onchange="toggleOtak(' + Number(o.id) + ', this.checked, \'' + type + '\')"><span class="slider"></span></label>' +
         '</div>';
     }).join('');
+}
+
+function formatCooldown(seconds) {
+    if (seconds <= 0) return 'READY';
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    if (m > 0) return m + 'm ' + s + 's';
+    return s + 's';
 }
 
 function statItem(label, value, color = '') {
@@ -838,7 +849,7 @@ function updateStats(d) {
     setText('s-groq', (d.deepinfra_stats?.active || 0) + '/' + (d.deepinfra_stats?.available || 0));
     setText('s-cerebras', (d.cerebras_stats?.active || 0) + '/' + (d.cerebras_stats?.available || 0));
     setText('s-uptime', d.uptime || '0s');
-
+                                              
     if (usageChart) {
         usageChart.data.datasets[0].data = providerTokenData(d);
         usageChart.update();
@@ -1049,9 +1060,35 @@ document.addEventListener('DOMContentLoaded', () => {
     if (ADMIN_CONFIG.isAdmin) {
         startStatsStream();
         initTerminal();
+        startCooldownCountdown();
     }
     showPage(ADMIN_CONFIG.initialPage || 'karakter');
     refreshIcons();
     setTimeout(refreshIcons, 100);
     setTimeout(refreshIcons, 500);
 });
+
+function startCooldownCountdown() {
+    setInterval(() => {
+        const now = Date.now();
+        document.querySelectorAll('.otak-row[data-cooldown-until]').forEach(row => {
+            const cooldownUntil = Number(row.getAttribute('data-cooldown-until'));
+            if (cooldownUntil <= 0) return;
+            
+            const type = row.getAttribute('data-provider-type');
+            const id = row.getAttribute('data-provider-id');
+            const statusEl = document.getElementById('status-' + type + '-' + id);
+            if (!statusEl) return;
+            
+            const remaining = Math.max(0, Math.floor((cooldownUntil - now) / 1000));
+            if (remaining > 0) {
+                statusEl.textContent = formatCooldown(remaining);
+                statusEl.style.color = 'var(--warning)';
+            } else {
+                statusEl.textContent = 'READY';
+                statusEl.style.color = 'var(--success)';
+                row.setAttribute('data-cooldown-until', '0');
+            }
+        });
+    }, 1000);
+}

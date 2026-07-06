@@ -20,12 +20,11 @@ const deepInfraModelProfiles = {
 const aiConfig = {
     primaryModel: process.env.DEEPINFRA_MODEL || DEFAULT_DEEPINFRA_MODEL,
     deepinfraFallbackModel: process.env.DEEPINFRA_FALLBACK_MODEL || DEFAULT_DEEPINFRA_FALLBACK_MODEL,
-    fallbackModel: process.env.GROQ_FALLBACK_MODEL || 'llama-3.1-8b-instant',
     groqFallbackModel: process.env.GROQ_FALLBACK_MODEL || 'llama-3.1-8b-instant',
     cerebrasFallbackModel: process.env.CEREBRAS_FALLBACK_MODEL || 'gemma-4-31b',
     maxTokens: Number(process.env.AI_MAX_TOKENS || 100),
     temperature: Number(process.env.AI_TEMPERATURE || 0.8)
-};
+};      
 
 function makeStats() {
     return {
@@ -236,9 +235,6 @@ function updateModelConfig(config = {}) {
     if (typeof config.primaryModel === 'string' && config.primaryModel.trim()) {
         aiConfig.primaryModel = config.primaryModel.trim();
     }
-    if (typeof config.fallbackModel === 'string' && config.fallbackModel.trim()) {
-        aiConfig.fallbackModel = config.fallbackModel.trim();
-    }
     if (typeof config.deepinfraFallbackModel === 'string' && config.deepinfraFallbackModel.trim()) {
         aiConfig.deepinfraFallbackModel = config.deepinfraFallbackModel.trim();
     }
@@ -431,7 +427,7 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, ca
         return fallbackResult;
     }
 
-    throw new Error("Semua provider (DeepInfra, Groq, Cerebras) gagal merespon.");
+    throw new Error("Semua provider (Groq, Cerebras, DeepInfra) gagal merespon.");
 }
 
 module.exports = {

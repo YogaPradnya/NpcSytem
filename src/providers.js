@@ -22,8 +22,8 @@ const aiConfig = {
     deepinfraFallbackModel: process.env.DEEPINFRA_FALLBACK_MODEL || DEFAULT_DEEPINFRA_FALLBACK_MODEL,
     fallbackModel: process.env.GROQ_FALLBACK_MODEL || 'llama-3.1-8b-instant',
     groqFallbackModel: process.env.GROQ_FALLBACK_MODEL || 'llama-3.1-8b-instant',
-    cerebrasFallbackModel: process.env.CEREBRAS_FALLBACK_MODEL || 'llama3.1-8b',
-    maxTokens: Number(process.env.AI_MAX_TOKENS || 150),
+    cerebrasFallbackModel: process.env.CEREBRAS_FALLBACK_MODEL || 'gemma-4-31b',
+    maxTokens: Number(process.env.AI_MAX_TOKENS || 100),
     temperature: Number(process.env.AI_TEMPERATURE || 0.8)
 };
 

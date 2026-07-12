@@ -139,6 +139,7 @@ function getAdminDashboardHTML(stats, user) {
                     <div class="stat-card green"><h3>Groq (Utama)</h3><p id="s-active">${(stats.groq_stats && stats.groq_stats.active) || 0}/${(stats.groq_stats && stats.groq_stats.available) || 0}</p></div>
                     <div class="stat-card purple"><h3>Node Cerebras</h3><p id="s-cerebras">${(stats.cerebras_stats && stats.cerebras_stats.active) || 0}/${(stats.cerebras_stats && stats.cerebras_stats.available) || 0}</p></div>
                     <div class="stat-card orange"><h3>Node DeepInfra</h3><p id="s-groq">${(stats.deepinfra_stats && stats.deepinfra_stats.active) || 0}/${(stats.deepinfra_stats && stats.deepinfra_stats.available) || 0}</p></div>
+                    <div class="stat-card blue"><h3>Node Novita</h3><p id="s-novita">${(stats.novita_stats && stats.novita_stats.active) || 0}/${(stats.novita_stats && stats.novita_stats.available) || 0}</p></div>
                 </div>
 
                 <div class="dashboard-bottom" style="grid-template-columns: 1fr;">
@@ -249,6 +250,10 @@ function getAdminDashboardHTML(stats, user) {
                     <div class="form-group">
                         <label>Cerebras Fallback</label>
                         <input id="model-cerebras" placeholder="gemma-4-31b">
+                    </div>
+                    <div class="form-group">
+                        <label>Novita AI Fallback</label>
+                        <input id="model-novita" placeholder="meta-llama/llama-3.1-8b-instruct">
                     </div>
                     <div class="form-group compact">
                         <label>Max Token Output</label>

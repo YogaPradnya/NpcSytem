@@ -4,6 +4,8 @@ const {
     buildSystemPrompt
 } = require('../prompt');
 const { parseJsonResponse } = require('../parser');
+const { validateChatInput } = require('../guards/input_guard');
+const { validatePrompt, logSuspiciousActivity } = require('../guards/prompt_guard');
 
 function createChatRoutes({ db, characters, providers, globalStats }) {
     const router = express.Router();
@@ -20,8 +22,38 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
         try {
             const { user, message, context: rawContext, contex: rawContex, system } = req.body;
             const context = rawContext || rawContex;
-            let currentUsername = user?.username || system?.user_name || 'Guest';
-            currentUsername = currentUsername.toString().trim().replace(/^@/, '').toLowerCase();
+            
+            // SECURITY: Validate and sanitize all input before processing
+            const validationResult = validateChatInput({
+                user,
+                message,
+                context,
+                system
+            });
+            
+            if (!validationResult.valid) {
+                // Log suspicious activity
+                const username = user?.username || system?.user_name || 'Guest';
+                logSuspiciousActivity({
+                    username,
+                    reason: validationResult.reason,
+                    threat: validationResult.threat,
+                    details: validationResult.details
+                });
+                
+                // Return user-friendly error without revealing security details
+                return res.status(400).json({
+                    success: false,
+                    error: 'Input contains invalid or suspicious content. Please rephrase your message.',
+                    code: 'INVALID_INPUT'
+                });
+            }
+            
+            // Use sanitized values from validation
+            const sanitizedUser = validationResult.sanitized.user || user;
+            const sanitizedMessage = validationResult.sanitized.message;
+            const sanitizedContext = validationResult.sanitized.context || {};
+            let currentUsername = validationResult.sanitized.username || 'Guest';
 
             const banCheck = await db.execute({
                 sql: "SELECT * FROM banned_users WHERE LOWER(TRIM(username)) = LOWER(?)",
@@ -51,7 +83,7 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 });
             }
 
-            if (!message) return res.status(400).json({ success: false, error: 'Message is required' });
+            if (!sanitizedMessage) return res.status(400).json({ success: false, error: 'Message is required' });
 
             const aiKey = (system && system.ai_name) ? system.ai_name.toLowerCase() : 'alya';
             const char = characters[aiKey] || characters['alya'];
@@ -60,19 +92,39 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 return res.status(404).json({ success: false, error: `Character '${aiKey}' not found or disabled.` });
             }
 
-            const allowedPoses = normalizeAllowedPoses(system, context);
+            const allowedPoses = normalizeAllowedPoses(system, sanitizedContext);
             const { staticSystemPrompt, dynamicUserContent, lv5Owner, isOwner } = buildSystemPrompt({
                 char,
                 currentUsername,
-                user,
-                context,
+                user: sanitizedUser,
+                context: sanitizedContext,
                 system,
                 allowedPoses,
-                history: context?.history,
-                message
+                history: sanitizedContext?.history,
+                message: sanitizedMessage
             });
 
-            const cacheKey = `npc-${aiKey}-lv${Number(user?.level) || 0}`;
+            // SECURITY: Validate final prompt before sending to AI
+            const promptValidation = validatePrompt({
+                staticSystemPrompt,
+                dynamicUserContent
+            });
+            
+            if (!promptValidation.valid) {
+                logSuspiciousActivity({
+                    username: currentUsername,
+                    reason: promptValidation.reason,
+                    threat: promptValidation.threat
+                });
+                
+                return res.status(400).json({
+                    success: false,
+                    error: 'Request contains invalid content structure.',
+                    code: 'INVALID_PROMPT'
+                });
+            }
+
+            const cacheKey = `npc-${aiKey}-lv${Number(sanitizedUser?.level) || 0}`;
 
             const { completion, usedProvider, usedClientId } = await providers.createChatCompletion({
                 staticSystemPrompt,
@@ -164,7 +216,7 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 const botResponse = (sentences.join('\n') || fullResponse).trim();
                 await db.execute({
                     sql: "INSERT INTO chat_logs (ai_name, username, user_message, bot_response, tokens, prompt_tokens, completion_tokens, model, provider, latency, ai_pose, user_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    args: [aiKey, currentUsername, message, botResponse, tokens, usage.prompt_tokens || 0, usage.completion_tokens || 0, completion.model, usedProvider, endTime - startTime, aiPose, currentHeartLv]
+                    args: [aiKey, currentUsername, sanitizedMessage, botResponse, tokens, usage.prompt_tokens || 0, usage.completion_tokens || 0, completion.model, usedProvider, endTime - startTime, aiPose, currentHeartLv]
                 });
                 console.log(`[DB] Log saved for @${currentUsername} | Pose: ${aiPose} | Lv: ${currentHeartLv}`);
             } catch (logErr) {

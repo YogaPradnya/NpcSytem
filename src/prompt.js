@@ -1,4 +1,5 @@
 const { getHeartProfile, clampHeartLevel } = require('./heart_profiles');
+const { sanitizeForPrompt } = require('./guards/prompt_guard');
 
 function normalizeAllowedPoses(system, context) {
     let allowedPoses = system?.ai_pose || system?.pose || context?.pose || "";
@@ -9,8 +10,9 @@ function normalizeAllowedPoses(system, context) {
 }
 
 function buildSystemPrompt({ char, currentUsername, user, context, system, allowedPoses, history, message }) {
-    const problem = context?.problem || "";
-    const mood = context?.mood || context?.mod || "";
+    // SECURITY: Apply final sanitization to all user-controlled inputs
+    const problem = sanitizeForPrompt(context?.problem || "");
+    const mood = sanitizeForPrompt(context?.mood || context?.mod || "");
     const relationship = context?.relationship || {};
     const lv5Owner = relationship.lv5_username || system?.lv5_username || context?.lv5_username || "";
     const isOwner = lv5Owner && currentUsername.toLowerCase() === lv5Owner.toLowerCase();
@@ -23,12 +25,14 @@ function buildSystemPrompt({ char, currentUsername, user, context, system, allow
     const historyLines = Array.isArray(history)
         ? history.slice(-5).map(h => {
             const role = (h.role === 'bot' || h.role === 'assistant') ? npcNameFull : currentUsername;
-            return `${role}: ${h.content || h.message || ''}`;
+            const content = sanitizeForPrompt(h.content || h.message || '');
+            return `${role}: ${content}`;
         }).join('\n')
         : (Array.isArray(context?.history)
             ? context.history.slice(-5).map(h => {
                 const role = (h.role === 'bot' || h.role === 'assistant') ? npcNameFull : currentUsername;
-                return `${role}: ${h.content || h.message || ''}`;
+                const content = sanitizeForPrompt(h.content || h.message || '');
+                return `${role}: ${content}`;
             }).join('\n')
             : '-');
 
@@ -72,6 +76,9 @@ POSE: idle=netral, smile=senang/hangat, surprised=terkejut/bingung, sad=sedih/kh
 - "sentences" berisi pecahan dialog pendek yang natural sesuai level kedekatan user.
 - Jangan gunakan narasi aksi/format novel seperti *tersenyum*; emosi harus tersirat dari dialog.`.trim();
 
+    // SECURITY: Final sanitization of user message before adding to prompt
+    const sanitizedMessage = sanitizeForPrompt(message || '');
+    
     const dynamicUserContent = `KONDISI KAMU SAAT INI:
 ${problem || '-'}
 
@@ -83,7 +90,7 @@ POSE YANG BOLEH DIPAKAI: ${posesStr}
 RIWAYAT PERCAKAPAN:
 ${historyLines}
 
-${currentUsername} berkata: ${message || ''}`.trim();
+${currentUsername} berkata: ${sanitizedMessage}`.trim();
 
     return {
         staticSystemPrompt,

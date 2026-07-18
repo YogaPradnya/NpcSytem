@@ -17,6 +17,7 @@ let bannedUsers = new Set();
 let latestBanList = [];
 let charPage = 1;
 let charSearchTimer = null;
+let activeAutoBanWords = [];
 const CHAR_PAGE_SIZE = 30;
 
 const HEART_LEVELS = [
@@ -104,6 +105,25 @@ function fillHeartProfiles(c = {}) {
 
 function normalizeUsername(value) {
     return String(value ?? '').trim().replace(/^@/, '').toLowerCase();
+}
+
+function normalizeAutoBanWords(value = '') {
+    return String(value || '')
+        .split(/[\n,]+/)
+        .map(word => word.trim().toLowerCase())
+        .filter(Boolean);
+}
+
+function escapeRegex(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function findAutoBanWord(message, words = activeAutoBanWords) {
+    const text = String(message || '').toLowerCase();
+    return words.find(word => {
+        const pattern = new RegExp(`(^|[^a-z0-9_])${escapeRegex(word)}(?=$|[^a-z0-9_])`, 'i');
+        return pattern.test(text);
+    }) || null;
 }
 
 function nFormatter(num) {
@@ -426,15 +446,20 @@ async function loadLogs(page = 1, options = {}) {
     const q = document.getElementById('log-search')?.value || '';
     if (!options.silent) setTableLoading('log-body', 4, 'Memuat log...');
     try {
-        const [logRes, banRes] = await Promise.all([
+        const [logRes, banRes, autoBanRes] = await Promise.all([
             fetch('/api/admin/logs?page=' + page + '&q=' + encodeURIComponent(q)),
-            fetch('/api/admin/banned-usernames')
+            fetch('/api/admin/banned-usernames'),
+            fetch('/api/admin/auto-ban-words')
         ]);
         const d = await logRes.json();
         const banData = await banRes.json();
+        const autoBanData = await autoBanRes.json();
         if (!logRes.ok) throw new Error(apiError(d, 'Gagal memuat log'));
         if (banRes.ok && banData.success) {
             bannedUsers = new Set((banData.usernames || []).map(u => normalizeUsername(u)).filter(Boolean));
+        }
+        if (autoBanRes.ok && autoBanData.success) {
+            activeAutoBanWords = normalizeAutoBanWords(autoBanData.words || '');
         }
         renderLogs(d.logs || []);
         renderPagination('log-pagination', d.pagination, loadLogs);
@@ -454,9 +479,15 @@ function renderLogs(logs) {
         const username = String(l.username || '').trim();
         const usernameArg = jsArg(username);
         const isBanned = bannedUsers.has(normalizeUsername(username));
+        const matchedFilterWord = findAutoBanWord(l.user_message);
+        const filterBadge = matchedFilterWord
+            ? `<span style="display:inline-block; margin-top:0.35rem; background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; padding:2px 7px; border-radius:999px; font-size:0.62rem; font-weight:900; letter-spacing:.04em;">FILTER: ${escapeHTML(matchedFilterWord)}</span>`
+            : '';
         const actionButton = isBanned
             ? `<button class="btn btn-outline" style="margin-top:0.55rem; padding:0.35rem 0.75rem; font-size:0.7rem; border-radius:8px;" onclick="unbanUser(${usernameArg})">Unban</button>`
-            : `<button class="btn btn-danger" style="margin-top:0.55rem; padding:0.35rem 0.75rem; font-size:0.7rem; border-radius:8px;" onclick="banUser(${usernameArg})">Ban</button>`;
+            : matchedFilterWord
+                ? `<button class="btn btn-danger" style="margin-top:0.55rem; padding:0.35rem 0.75rem; font-size:0.7rem; border-radius:8px; background:#ffedd5; border-color:#fed7aa; color:#c2410c;" onclick="banUser(${usernameArg})">Ban Filter</button>`
+                : `<button class="btn btn-danger" style="margin-top:0.55rem; padding:0.35rem 0.75rem; font-size:0.7rem; border-radius:8px;" onclick="banUser(${usernameArg})">Ban</button>`;
         return `<tr>
         <td style="font-size:0.7rem; color:var(--text-muted)">${escapeHTML(new Date(l.timestamp).toLocaleString(LOCALE_ID, TZ_CONFIG))}</td>
         <td>
@@ -465,6 +496,7 @@ function renderLogs(logs) {
             <br>
             <span style="color:var(--primary); font-size:0.75rem; font-weight:600">@${escapeHTML(username)}</span>
             <span style="color:var(--text-muted); font-size:0.65rem; font-weight:700">LV.${escapeHTML(l.user_level || 0)}</span>
+            <br>${filterBadge}
         </td>
         <td>
             <div class="log-user"><small>U:</small> ${escapeHTML(l.user_message)}</div>
@@ -1074,6 +1106,9 @@ async function banUsersByAutoBanWords() {
         if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memproses ban sesuai kata filter'));
         showToast(data.message, 'success');
         await loadBanList(1, { silent: true });
+        if (!document.getElementById('page-logs')?.classList.contains('hidden')) {
+            await loadLogs(logPage, { silent: true });
+        }
     } catch (e) {
         showToast(e.message, 'error');
     } finally {

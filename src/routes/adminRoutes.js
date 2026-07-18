@@ -32,6 +32,13 @@ function createAdminRoutes({
         return String(model).trim().toLowerCase();
     }
 
+    function normalizeAutoBanWords(value = '') {
+        return String(value || '')
+            .split(/[\n,]+/)
+            .map(word => word.trim().toLowerCase())
+            .filter(Boolean);
+    }
+
     function getDeepInfraRates(model = '') {
         const normalized = normalizeModelName(model);
         if (deepInfraPricingPerMillion[normalized]) {
@@ -405,6 +412,7 @@ function createAdminRoutes({
             const total = Number(countRes.rows[0]?.total || 0);
 
             const settings = await db.execute("SELECT value FROM settings WHERE key = 'ban_message'");
+            const autoBanSetting = await db.execute("SELECT value FROM settings WHERE key = 'auto_ban_words'");
             res.json({
                 success: true,
                 list: bans.rows,
@@ -414,7 +422,8 @@ function createAdminRoutes({
                     total,
                     totalPages: Math.max(1, Math.ceil(total / limit))
                 },
-                ban_message: settings.rows[0]?.value
+                ban_message: settings.rows[0]?.value,
+                auto_ban_words: autoBanSetting.rows[0]?.value || ''
             });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
@@ -469,6 +478,28 @@ function createAdminRoutes({
                 args: [message]
             });
             res.json({ success: true, message: "Pesan ban berhasil diperbarui." });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    router.get('/api/admin/auto-ban-words', apiAuth, adminOnly, async (req, res) => {
+        try {
+            const result = await db.execute("SELECT value FROM settings WHERE key = 'auto_ban_words'");
+            res.json({ success: true, words: result.rows[0]?.value || '' });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    router.post('/api/admin/auto-ban-words', apiAuth, adminOnly, async (req, res) => {
+        const words = normalizeAutoBanWords(req.body?.words).join('\n');
+        try {
+            await db.execute({
+                sql: "INSERT INTO settings (key, value) VALUES ('auto_ban_words', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                args: [words]
+            });
+            res.json({ success: true, message: "Daftar kata auto-ban berhasil diperbarui.", words });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
         }

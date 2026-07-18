@@ -7,6 +7,33 @@ const { parseJsonResponse } = require('../parser');
 const { validateChatInput } = require('../guards/input_guard');
 const { validatePrompt, logSuspiciousActivity } = require('../guards/prompt_guard');
 
+function normalizeAutoBanWords(value = '') {
+    return String(value || '')
+        .split(/[\n,]+/)
+        .map(word => word.trim().toLowerCase())
+        .filter(Boolean);
+}
+
+function escapeRegex(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function findAutoBanWord(message, words) {
+    const text = String(message || '').toLowerCase();
+    return words.find(word => {
+        const pattern = new RegExp(`(^|[^a-z0-9_])${escapeRegex(word)}(?=$|[^a-z0-9_])`, 'i');
+        return pattern.test(text);
+    }) || null;
+}
+
+async function getBanMessage(db) {
+    const banMsgSetting = await db.execute({
+        sql: "SELECT value FROM settings WHERE key = 'ban_message'",
+        args: []
+    });
+    return banMsgSetting.rows[0]?.value || "Aku malas berbicara dengan kamu.";
+}
+
 function createChatRoutes({ db, characters, providers, globalStats }) {
     const router = express.Router();
 
@@ -61,11 +88,7 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
             });
 
             if (banCheck.rows.length > 0) {
-                const banMsgSetting = await db.execute({
-                    sql: "SELECT value FROM settings WHERE key = 'ban_message'",
-                    args: []
-                });
-                const banMsg = banMsgSetting.rows[0]?.value || "Aku malas berbicara dengan kamu.";
+                const banMsg = await getBanMessage(db);
 
                 const banDebug = {
                     model: "BLOCKED",
@@ -84,6 +107,37 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
             }
 
             if (!sanitizedMessage) return res.status(400).json({ success: false, error: 'Message is required' });
+
+            const autoBanSetting = await db.execute({
+                sql: "SELECT value FROM settings WHERE key = 'auto_ban_words'",
+                args: []
+            });
+            const autoBanWords = normalizeAutoBanWords(autoBanSetting.rows[0]?.value);
+            const matchedAutoBanWord = findAutoBanWord(sanitizedMessage, autoBanWords);
+            if (matchedAutoBanWord) {
+                await db.execute({
+                    sql: "INSERT OR IGNORE INTO banned_users (username) VALUES (?)",
+                    args: [currentUsername]
+                });
+
+                const banMsg = await getBanMessage(db);
+                const autoBanDebug = {
+                    model: "BLOCKED",
+                    tokens: 0,
+                    otak_id: "AUTO-BAN",
+                    latency: Date.now() - startTime,
+                    matched_word: matchedAutoBanWord
+                };
+                if (isAdminCaller) autoBanDebug.system_prompt = "AUTO BAN WORD FILTER";
+
+                console.log(`[AUTO BAN] @${currentUsername} diblokir karena kata: ${matchedAutoBanWord}`);
+                return res.json({
+                    ai_name: system?.ai_name || "NPC",
+                    ai_pose: "sad",
+                    sentences: [banMsg],
+                    debug: autoBanDebug
+                });
+            }
 
             const aiKey = (system && system.ai_name) ? system.ai_name.toLowerCase() : 'alya';
             const char = characters[aiKey] || characters['alya'];

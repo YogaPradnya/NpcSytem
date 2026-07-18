@@ -76,6 +76,10 @@ async function initDB(characters) {
         await db.execute("CREATE INDEX IF NOT EXISTS idx_banned_lower_username ON banned_users(username COLLATE NOCASE)");
 
         await db.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('ban_message', 'Aku malas berbicara dengan kamu.')");
+        await db.execute({
+            sql: "INSERT OR IGNORE INTO settings (key, value) VALUES ('auto_ban_words', ?)",
+            args: ['sex\nkontol\nmemek\nkiktil\nngentod\nentod\nngentot\nentot']
+        });
 
         console.log("[DB] Tables 'characters', 'chat_logs', 'users', 'banned_users', & 'settings' ready.");
 

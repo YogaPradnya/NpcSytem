@@ -932,6 +932,8 @@ async function loadBanList(page = 1) {
             </tr>
         `).join('') : '<tr><td colspan="3" class="table-state">Belum ada user yang diban.</td></tr>';
         document.getElementById('ban-message-input').value = data.ban_message || 'Aku malas berbicara dengan kamu.';
+        const autoBanInput = document.getElementById('auto-ban-words-input');
+        if (autoBanInput) autoBanInput.value = data.auto_ban_words || '';
     } catch (e) {
         setTableError('banlist-body', 3, e.message);
     }
@@ -1027,6 +1029,24 @@ async function updateBanMessage() {
         });
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memperbarui pesan ban'));
+        showToast(data.message, 'success');
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+}
+
+async function updateAutoBanWords() {
+    const words = document.getElementById('auto-ban-words-input')?.value || '';
+    try {
+        const res = await fetch('/api/admin/auto-ban-words', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ words })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memperbarui kata auto-ban'));
+        const input = document.getElementById('auto-ban-words-input');
+        if (input) input.value = data.words || '';
         showToast(data.message, 'success');
     } catch (e) {
         showToast(e.message, 'error');

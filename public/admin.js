@@ -421,10 +421,10 @@ async function updateModel(modelName) {
     return saveModelConfig();
 }
 
-async function loadLogs(page = 1) {
+async function loadLogs(page = 1, options = {}) {
     logPage = page;
     const q = document.getElementById('log-search')?.value || '';
-    setTableLoading('log-body', 4, 'Memuat log...');
+    if (!options.silent) setTableLoading('log-body', 4, 'Memuat log...');
     try {
         const [logRes, banRes] = await Promise.all([
             fetch('/api/admin/logs?page=' + page + '&q=' + encodeURIComponent(q)),
@@ -910,12 +910,12 @@ async function fetchStatsFallback() {
     } catch (e) {}
 }
 
-async function loadBanList(page = 1) {
+async function loadBanList(page = 1, options = {}) {
     banPage = page;
     const tbody = document.getElementById('banlist-body');
     if (!tbody) return;
     const q = document.getElementById('ban-search')?.value || '';
-    setTableLoading('banlist-body', 3, 'Memuat daftar ban...');
+    if (!options.silent) setTableLoading('banlist-body', 3, 'Memuat daftar ban...');
     try {
         const res = await fetch('/api/admin/ban-list?page=' + page + '&q=' + encodeURIComponent(q));
         const data = await res.json();
@@ -959,8 +959,10 @@ async function banUser(targetUsername = '') {
         if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memblokir user'));
         showToast(data.message, 'success');
         if (input && !targetUsername) input.value = '';
-        loadBanList(1);
-        loadLogs(logPage);
+        await loadBanList(1, { silent: true });
+        if (!document.getElementById('page-logs')?.classList.contains('hidden')) {
+            loadLogs(logPage, { silent: true });
+        }
     } catch (e) {
         showToast(e.message, 'error');
     }
@@ -977,8 +979,10 @@ async function unbanUser(username) {
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal melepas ban user'));
         showToast(data.message, 'success');
-        loadBanList(banPage);
-        loadLogs(logPage);
+        await loadBanList(banPage, { silent: true });
+        if (!document.getElementById('page-logs')?.classList.contains('hidden')) {
+            loadLogs(logPage, { silent: true });
+        }
     } catch (e) {
         showToast(e.message, 'error');
     }
@@ -1050,6 +1054,33 @@ async function updateAutoBanWords() {
         showToast(data.message, 'success');
     } catch (e) {
         showToast(e.message, 'error');
+    }
+}
+
+async function banUsersByAutoBanWords() {
+    const btn = document.getElementById('auto-ban-apply-btn');
+    if (!confirm('Ban semua user dari log yang pesannya cocok dengan kata filter aktif?')) return;
+    try {
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Memproses...';
+        }
+        await updateAutoBanWords();
+        const res = await fetch('/api/admin/ban-by-auto-ban-words', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memproses ban sesuai kata filter'));
+        showToast(data.message, 'success');
+        await loadBanList(1, { silent: true });
+    } catch (e) {
+        showToast(e.message, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Ban Sesuai Kata Filter';
+        }
     }
 }
 

@@ -39,6 +39,18 @@ function createAdminRoutes({
             .filter(Boolean);
     }
 
+    function escapeRegex(value) {
+        return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function findAutoBanWord(message, words) {
+        const text = String(message || '').toLowerCase();
+        return words.find(word => {
+            const pattern = new RegExp(`(^|[^a-z0-9_])${escapeRegex(word)}(?=$|[^a-z0-9_])`, 'i');
+            return pattern.test(text);
+        }) || null;
+    }
+
     function getDeepInfraRates(model = '') {
         const normalized = normalizeModelName(model);
         if (deepInfraPricingPerMillion[normalized]) {
@@ -500,6 +512,48 @@ function createAdminRoutes({
                 args: [words]
             });
             res.json({ success: true, message: "Daftar kata auto-ban berhasil diperbarui.", words });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    router.post('/api/admin/ban-by-auto-ban-words', apiAuth, adminOnly, async (req, res) => {
+        try {
+            const setting = await db.execute("SELECT value FROM settings WHERE key = 'auto_ban_words'");
+            const words = normalizeAutoBanWords(setting.rows[0]?.value);
+            if (!words.length) {
+                return res.status(400).json({ success: false, error: 'Daftar kata auto-ban masih kosong.' });
+            }
+
+            const logs = await db.execute(`
+                SELECT username, user_message
+                FROM chat_logs
+                WHERE username IS NOT NULL
+                    AND TRIM(username) != ''
+                ORDER BY id DESC
+                LIMIT 5000
+            `);
+
+            const matchedUsers = new Map();
+            for (const row of logs.rows) {
+                const username = String(row.username || '').trim().replace(/^@/, '').toLowerCase();
+                if (!username || matchedUsers.has(username)) continue;
+                const matchedWord = findAutoBanWord(row.user_message, words);
+                if (matchedWord) matchedUsers.set(username, matchedWord);
+            }
+
+            for (const username of matchedUsers.keys()) {
+                await db.execute({
+                    sql: "INSERT OR IGNORE INTO banned_users (username) VALUES (?)",
+                    args: [username]
+                });
+            }
+
+            res.json({
+                success: true,
+                message: `${matchedUsers.size} user berhasil diproses sesuai kata auto-ban.`,
+                banned: Array.from(matchedUsers, ([username, matched_word]) => ({ username, matched_word }))
+            });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
         }

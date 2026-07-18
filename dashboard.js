@@ -326,7 +326,8 @@ function getAdminDashboardHTML(stats, user) {
                             <h2 style="font-size: 0.9rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem; color: var(--text-main);">Kata Auto-Ban</h2>
                             <p style="margin:0 0 0.9rem; font-size:.75rem; color:var(--text-muted); font-weight:600; line-height:1.45;">Isi 1 kata per baris. Filter memakai kata utuh, jadi sex kena ban tetapi sexy tetap aman.</p>
                             <textarea id="auto-ban-words-input" rows="8" spellcheck="false" style="width: 100%; padding: 0.85rem 1rem; border-radius: 10px; border: 1px solid var(--border); background: #ffffff; color: var(--text-main); font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; outline: none; margin-bottom: 0.9rem; resize: vertical; transition: border-color .2s, box-shadow .2s;"></textarea>
-                            <button class="btn" style="width: 100%; padding: 0.75rem 1.2rem; border-radius: 10px;" onclick="updateAutoBanWords()">Simpan Kata Auto-Ban</button>
+                            <button class="btn" style="width: 100%; padding: 0.75rem 1.2rem; border-radius: 10px; margin-bottom:0.6rem;" onclick="updateAutoBanWords()">Simpan Kata Auto-Ban</button>
+                            <button class="btn btn-danger" id="auto-ban-apply-btn" style="width: 100%; padding: 0.75rem 1.2rem; border-radius: 10px; background:#fee2e2; border-color:#fee2e2;" onclick="banUsersByAutoBanWords()">Ban Sesuai Kata Filter</button>
                         </div>
                     </div>
 

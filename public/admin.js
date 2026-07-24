@@ -194,7 +194,10 @@ function showPage(pageId, el) {
     if (pageId === 'otak') loadModels();
     if (pageId === 'users') loadUsers(1);
     if (pageId === 'logs') loadLogs(1);
-    if (pageId === 'simulator') loadSimSelect();
+    if (pageId === 'simulator') {
+        loadSimSelect();
+        loadSimModels();
+    }
     if (pageId === 'terminal') initTerminal();
     if (pageId === 'banlist') loadBanList(1);
     refreshIcons();
@@ -604,6 +607,20 @@ function closeLogModal() {
     document.getElementById('modal-logs').style.display = 'none';
 }
 
+function loadSimModels() {
+    const s = document.getElementById('sim-model-select');
+    if (!s) return;
+    fetch('/api/admin/models')
+        .then(r => r.json())
+        .then(d => {
+            const list = d.availableModels || [];
+            if (list.length > 0) {
+                s.innerHTML = list.map(m => `<option value="${escapeAttr(m.id)}">${escapeHTML(m.label)}</option>`).join('');
+            }
+        })
+        .catch(() => showToast('Gagal memuat daftar model simulator', 'error'));
+}
+
 function loadSimSelect() {
     const s = document.getElementById('sim-select');
     if (!s) return;
@@ -643,6 +660,7 @@ async function sendMessage() {
     const input = document.getElementById('sim-input');
     const text = input.value.trim();
     const heartLv = document.getElementById('sim-heart').value || 0;
+    const selectedModel = document.getElementById('sim-model-select')?.value || 'auto';
     if (!text) return;
 
     const btn = document.getElementById('sim-send-btn');
@@ -674,7 +692,10 @@ async function sendMessage() {
                         lv5_username: document.getElementById('sim-lv5-owner').value
                     }
                 },
-                system: { ai_name: document.getElementById('sim-select').value }
+                system: {
+                    ai_name: document.getElementById('sim-select').value,
+                    model: selectedModel
+                }
             })
         });
         const d = await r.json();

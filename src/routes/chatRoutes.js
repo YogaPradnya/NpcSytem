@@ -179,11 +179,13 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
             }
 
             const cacheKey = `npc-${aiKey}-lv${Number(sanitizedUser?.level) || 0}`;
+            const requestedModel = system?.model || req.body?.model || null;
 
             const { completion, usedProvider, usedClientId } = await providers.createChatCompletion({
                 staticSystemPrompt,
                 dynamicUserContent,
-                cacheKey
+                cacheKey,
+                requestedModel
             });
 
             console.log(`[DEBUG] MODEL USED: ${completion.model}`);
@@ -220,7 +222,8 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 try {
                     const { completion: retryCompletion } = await providers.createChatCompletion({
                         staticSystemPrompt,
-                        dynamicUserContent
+                        dynamicUserContent,
+                        requestedModel
                     });
                     const retryRaw = retryCompletion.choices[0].message.content;
                     const r = parseJsonResponse(retryRaw, allowedPoses);

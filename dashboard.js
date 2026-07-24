@@ -394,6 +394,13 @@ function getAdminDashboardHTML(stats, user) {
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none; margin-left: -5px;"><path d="m6 9 6 6 6-6"/></svg>
                         </div>
                         <div style="background: #fff; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 10px;">
+                            <label style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Model</label>
+                            <select id="sim-model-select" style="border: none; font-weight: 700; outline: none; cursor: pointer; color: var(--primary); background: transparent; padding-right: 5px; font-size: 14px; -webkit-appearance: none; -moz-appearance: none; appearance: none;">
+                                <option value="auto">Auto (Queue Default)</option>
+                            </select>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none; margin-left: -5px;"><path d="m6 9 6 6 6-6"/></svg>
+                        </div>
+                        <div style="background: #fff; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 10px;">
                             <label style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Heart</label>
                             <input type="number" id="sim-heart" value="0" min="0" max="5" style="border: none; width: 35px; font-weight: 800; outline: none; text-align: center;">
                         </div>

@@ -236,9 +236,44 @@ function getSupportedDeepInfraModels() {
     return [...Object.keys(deepInfraModelProfiles), ...configuredModels];
 }
 
+function getAvailableModels() {
+    const groqModels = [
+        'llama-3.1-8b-instant',
+        'llama-3.3-70b-versatile',
+        'mixtral-8x7b-32768'
+    ].map(m => ({ id: `groq:${m}`, model: m, provider: 'GROQ', label: `Groq - ${m}` }));
+
+    const cerebrasModels = [
+        'gemma-4-31b',
+        'llama3.1-8b',
+        'llama3.1-70b',
+        'llama-3.3-70b'
+    ].map(m => ({ id: `cerebras:${m}`, model: m, provider: 'CEREBRAS', label: `Cerebras - ${m}` }));
+
+    const deepinfraModels = getSupportedDeepInfraModels().map(m => ({
+        id: `deepinfra:${m}`,
+        model: m,
+        provider: 'DEEPINFRA',
+        label: `DeepInfra - ${m}`
+    }));
+
+    const novitaModels = [
+        aiConfig.novitaFallbackModel
+    ].map(m => ({ id: `novita:${m}`, model: m, provider: 'NOVITA', label: `Novita - ${m}` }));
+
+    return [
+        { id: 'auto', model: 'auto', provider: 'AUTO', label: 'Auto (Queue Default)' },
+        ...groqModels,
+        ...cerebrasModels,
+        ...deepinfraModels,
+        ...novitaModels
+    ];
+}
+
 function getModelsStatus() {
     return {
         config: aiConfig,
+        availableModels: getAvailableModels(),
         supportedDeepinfraModels: getSupportedDeepInfraModels(),
         deepinfra: deepInfraClients.map(c => serializeClient(c, 'DEEPINFRA')),
         otak: groqClients.map(c => serializeClient(c, 'GROQ')),
@@ -372,7 +407,7 @@ async function tryClients({ clients, providerName, model, messages, cooldownMs, 
     return null;
 }
 
-async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, cacheKey }) {
+async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, cacheKey, requestedModel }) {
     const messages = [
         { role: 'system', content: staticSystemPrompt },
         { role: 'user', content: dynamicUserContent }
@@ -391,6 +426,51 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, ca
     });
     const availableNovita = novitaClients.filter(c => c.isEnabled && now > c.cooldownUntil && canUseClientByRpm(c));
     const fallbackClients = deepInfraClients.filter(c => c.isEnabled);
+
+    // Pengujian model spesifik (Manual override dari Live Simulator)
+    if (requestedModel && typeof requestedModel === 'string' && requestedModel.trim() && requestedModel.trim() !== 'auto') {
+        let providerHint = null;
+        let actualModel = requestedModel.trim();
+
+        if (actualModel.includes(':')) {
+            const parts = actualModel.split(':');
+            providerHint = parts[0].toUpperCase();
+            actualModel = parts.slice(1).join(':');
+        }
+
+        console.log(`[NPC] Manual Model Selection: '${actualModel}' (Provider: ${providerHint || 'Auto'})`);
+
+        if (providerHint === 'GROQ' || (!providerHint && (actualModel.includes('instant') || actualModel.includes('mixtral')))) {
+            const clients = availableGroq.length > 0 ? availableGroq : groqClients.filter(c => c.isEnabled);
+            if (clients.length > 0) {
+                const res = await tryClients({ clients, providerName: 'GROQ', model: actualModel, messages, cooldownMs: 60 * 60 * 1000 });
+                if (res) return res;
+            }
+        }
+        if (providerHint === 'CEREBRAS' || (!providerHint && (actualModel.startsWith('gemma-4') || actualModel.includes('cerebras')))) {
+            const clients = availableCerebras.length > 0 ? availableCerebras : cerebrasClients.filter(c => c.isEnabled);
+            if (clients.length > 0) {
+                const res = await tryClients({ clients, providerName: 'CEREBRAS', model: actualModel, messages, cooldownMs: 30 * 60 * 1000 });
+                if (res) return res;
+            }
+        }
+        if (providerHint === 'NOVITA') {
+            const clients = availableNovita.length > 0 ? availableNovita : novitaClients.filter(c => c.isEnabled);
+            if (clients.length > 0) {
+                const res = await tryClients({ clients, providerName: 'NOVITA', model: actualModel, messages, cooldownMs: 30 * 60 * 1000 });
+                if (res) return res;
+            }
+        }
+        if (providerHint === 'DEEPINFRA' || !providerHint) {
+            const clients = availableDeepInfra.length > 0 ? availableDeepInfra : fallbackClients;
+            if (clients.length > 0) {
+                const res = await tryClients({ clients, providerName: 'DEEPINFRA', model: actualModel, messages, cooldownMs: 5 * 60 * 1000, cacheKey });
+                if (res) return res;
+            }
+        }
+
+        throw new Error(`Model '${actualModel}' gagal dipanggil. Provider tidak merespon, limit, atau tidak aktif.`);
+    }
 
     if (availableDeepInfra.length === 0 && availableGroq.length === 0 && availableCerebras.length === 0 && availableNovita.length === 0 && fallbackClients.length === 0) {
         const error = new Error('Semua token/otak sedang sibuk. Silakan coba lagi nanti.');
@@ -476,6 +556,7 @@ module.exports = {
     startDailyStatsReset,
     getProviderStats,
     getModelsStatus,
+    getAvailableModels,
     updateModelConfig,
     toggleClient,
     createChatCompletion,

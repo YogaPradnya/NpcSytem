@@ -385,7 +385,6 @@ function getAdminDashboardHTML(stats, user) {
                 <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.5rem; padding: 0 0.5rem;">
                     <div>
                         <h1 style="font-size: 20px; font-weight: 800; color: #0f172a; margin-bottom: 4px;">Live Simulator</h1>
-                        <p style="font-size: 13px; color: var(--text-muted); font-weight: 500;">Uji coba karakter secara realtime dengan data simulasi.</p>
                     </div>
                     <div style="display: flex; gap: 0.75rem;">
                         <div style="background: #fff; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 10px;">

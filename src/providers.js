@@ -60,8 +60,18 @@ function isRateLimit(error) {
     return error?.status === 429 || message.includes('rate limit');
 }
 
+const GROQ_RPM_LIMIT = Number(process.env.GROQ_RPM_LIMIT || 30);
+const CEREBRAS_RPM_LIMIT = Number(process.env.CEREBRAS_RPM_LIMIT || 30);
+const NOVITA_RPM_LIMIT = Number(process.env.NOVITA_RPM_LIMIT || 30);
 const FALLBACK_RPM_LIMIT = Number(process.env.FALLBACK_API_RPM_LIMIT || 30);
 const RPM_WINDOW_MS = 60 * 1000;
+
+function getRpmLimitForType(type) {
+    if (type === 'GROQ') return GROQ_RPM_LIMIT;
+    if (type === 'CEREBRAS') return CEREBRAS_RPM_LIMIT;
+    if (type === 'NOVITA') return NOVITA_RPM_LIMIT;
+    return FALLBACK_RPM_LIMIT;
+}
 
 function makeClientState(extra = {}) {
     return {
@@ -224,7 +234,7 @@ function serializeClient(clientObj, type) {
         isCoolingDown: now < clientObj.cooldownUntil,
         cooldownRemaining: Math.max(0, Math.floor((clientObj.cooldownUntil - now) / 1000)),
         rpmUsed: (clientObj.requestTimestamps || []).filter(ts => now - ts < RPM_WINDOW_MS).length,
-        rpmLimit: (type === 'GROQ' || type === 'CEREBRAS' || type === 'NOVITA') ? FALLBACK_RPM_LIMIT : null,
+        rpmLimit: (type === 'GROQ' || type === 'CEREBRAS' || type === 'NOVITA') ? getRpmLimitForType(type) : null,
         stats: clientObj.stats
     };
 }
@@ -370,9 +380,10 @@ function isModelCompatibilityError(error) {
 
 async function tryClients({ clients, providerName, model, messages, cooldownMs, cacheKey }) {
     for (const clientObj of clients) {
+        const rpmLimit = getRpmLimitForType(providerName);
         const rpmLimited = providerName === 'GROQ' || providerName === 'CEREBRAS' || providerName === 'NOVITA' || providerName === 'FALLBACK';
-        if (rpmLimited && !canUseClientByRpm(clientObj)) {
-            clientObj.cooldownUntil = Date.now() + getRpmCooldownMs(clientObj);
+        if (rpmLimited && !canUseClientByRpm(clientObj, rpmLimit)) {
+            clientObj.cooldownUntil = Date.now() + getRpmCooldownMs(clientObj, rpmLimit);
             continue;
         }
 

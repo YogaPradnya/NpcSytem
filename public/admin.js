@@ -404,12 +404,15 @@ function providerGroup(title, rows, type, color) {
         const statusText = o.isEnabled ? (o.isCoolingDown ? formatCooldown(o.cooldownRemaining) : 'READY') : 'DISABLED';
         const statusColor = o.isEnabled ? (o.isCoolingDown ? 'var(--warning)' : 'var(--success)') : 'var(--danger)';
         const statusId = 'status-' + type + '-' + o.id;
+        const lastErrText = o.lastError ? (o.lastError.code ? String(o.lastError.code) : String(o.lastError.message || '-')) : '-';
+        const lastErrColor = o.lastError ? 'var(--danger)' : '';
         return '<div class="otak-row ' + (o.isEnabled ? 'active' : '') + '" style="border-left: 4px solid ' + color + '" data-cooldown-until="' + cooldownUntil + '" data-provider-type="' + type + '" data-provider-id="' + o.id + '">' +
             '<div class="otak-name">' + escapeHTML(type) + ' #' + escapeHTML(o.id) + '</div>' +
             '<div class="otak-stats">' +
                 statItem('Reqs', s.requests || 0) +
                 statItem('Success', s.success || 0, 'var(--success)') +
                 statItem('Errors', s.errors || 0, 'var(--danger)') +
+                statItem('Last Err', lastErrText, lastErrColor) +
                 statItem('In', Number(s.prompt_tokens || 0).toLocaleString()) +
                 statItem('Out', Number(s.completion_tokens || 0).toLocaleString()) +
                 '<div class="otak-stat-item"><span class="otak-stat-label">Status</span><span id="' + statusId + '" class="otak-stat-value" style="color:' + statusColor + '">' + escapeHTML(statusText) + '</span></div>' +

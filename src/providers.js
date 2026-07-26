@@ -235,7 +235,8 @@ function serializeClient(clientObj, type) {
         cooldownRemaining: Math.max(0, Math.floor((clientObj.cooldownUntil - now) / 1000)),
         rpmUsed: (clientObj.requestTimestamps || []).filter(ts => now - ts < RPM_WINDOW_MS).length,
         rpmLimit: (type === 'GROQ' || type === 'CEREBRAS' || type === 'NOVITA') ? getRpmLimitForType(type) : null,
-        stats: clientObj.stats
+        stats: clientObj.stats,
+        lastError: clientObj.lastError || null
     };
 }
 
@@ -402,6 +403,13 @@ async function tryClients({ clients, providerName, model, messages, cooldownMs, 
             };
         } catch (error) {
             clientObj.stats.errors++;
+            const errStatus = error?.status || error?.statusCode || error?.response?.status || (isRateLimit(error) ? 429 : 500);
+            const errMsg = error?.message || 'Error';
+            clientObj.lastError = {
+                code: errStatus,
+                message: errMsg,
+                at: Date.now()
+            };
             if (isRateLimit(error)) {
                 clientObj.cooldownUntil = Date.now() + cooldownMs;
                 if (providerName === 'DEEPINFRA') {

@@ -53,7 +53,8 @@ async function initDB(characters) {
         try { await db.execute("ALTER TABLE characters ADD COLUMN heart_profiles TEXT"); } catch (e) {}
         try { await db.execute("ALTER TABLE characters ADD COLUMN signature_style TEXT"); } catch (e) {}
         try { await db.execute("ALTER TABLE characters ADD COLUMN character_background TEXT"); } catch (e) {}
-        try { await db.execute("ALTER TABLE characters ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (e) {}
+        try { await db.execute("ALTER TABLE characters ADD COLUMN created_at DATETIME"); } catch (e) {}
+        try { await db.execute("UPDATE characters SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"); } catch (e) {}
 
         await db.execute(`CREATE TABLE IF NOT EXISTS banned_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

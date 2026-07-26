@@ -341,9 +341,10 @@ function createAdminRoutes({
         if (!id || !data) return res.status(400).json({ error: "Missing data" });
 
         try {
+            const createdAt = data.created_at || (characters[id] && characters[id].created_at) || new Date().toISOString();
             await db.execute({
-                sql: `INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, character_background, language, heart_profiles, signature_style, is_enabled) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                sql: `INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, character_background, language, heart_profiles, signature_style, is_enabled, created_at) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                       ON CONFLICT(id) DO UPDATE SET 
                       npc_name=excluded.npc_name, 
                       npc_description=excluded.npc_description, 
@@ -353,11 +354,12 @@ function createAdminRoutes({
                       language=excluded.language,
                       heart_profiles=excluded.heart_profiles,
                       signature_style=excluded.signature_style,
-                      is_enabled=excluded.is_enabled`,
-                args: [id, data.npc_name, data.npc_description, data.npc_personality, data.npc_speaking_style, data.character_background || '', data.language || 'id', stringifyHeartProfiles(data.heart_profiles), data.signature_style || '', data.is_enabled ? 1 : 0]
+                      is_enabled=excluded.is_enabled,
+                      created_at=COALESCE(characters.created_at, excluded.created_at)`,
+                args: [id, data.npc_name, data.npc_description, data.npc_personality, data.npc_speaking_style, data.character_background || '', data.language || 'id', stringifyHeartProfiles(data.heart_profiles), data.signature_style || '', data.is_enabled ? 1 : 0, createdAt]
             });
 
-            characters[id] = { id, ...data, heart_profiles: stringifyHeartProfiles(data.heart_profiles), signature_style: data.signature_style || '', character_background: data.character_background || '' };
+            characters[id] = { id, ...data, heart_profiles: stringifyHeartProfiles(data.heart_profiles), signature_style: data.signature_style || '', character_background: data.character_background || '', created_at: createdAt };
             res.json({ success: true, message: `Character ${id} saved to Turso.` });
         } catch (e) {
             res.status(500).json({ error: e.message });
@@ -382,7 +384,7 @@ function createAdminRoutes({
 
     router.get('/api/characters', apiAuth, async (req, res) => {
         try {
-            const result = await db.execute("SELECT * FROM characters");
+            const result = await db.execute("SELECT * FROM characters ORDER BY created_at DESC");
             const list = result.rows.map(row => ({
                 ...row,
                 heart_profiles: parseHeartProfiles(row.heart_profiles),

@@ -21,7 +21,8 @@ async function initDB(characters) {
                 language TEXT,
                 heart_profiles TEXT,
                 signature_style TEXT,
-                is_enabled INTEGER DEFAULT 1
+                is_enabled INTEGER DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         `);
 
@@ -52,6 +53,7 @@ async function initDB(characters) {
         try { await db.execute("ALTER TABLE characters ADD COLUMN heart_profiles TEXT"); } catch (e) {}
         try { await db.execute("ALTER TABLE characters ADD COLUMN signature_style TEXT"); } catch (e) {}
         try { await db.execute("ALTER TABLE characters ADD COLUMN character_background TEXT"); } catch (e) {}
+        try { await db.execute("ALTER TABLE characters ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (e) {}
 
         await db.execute(`CREATE TABLE IF NOT EXISTS banned_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -98,11 +100,12 @@ async function initDB(characters) {
             for (const id in jsonData) {
                 const c = jsonData[id];
                 const isEnabled = c.is_enabled !== undefined ? (c.is_enabled ? 1 : 0) : 1;
+                const createdAt = c.created_at || new Date().toISOString();
                 await db.execute({
-                    sql: "INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, character_background, language, heart_profiles, signature_style, is_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    args: [id, c.npc_name, c.npc_description, c.npc_personality, c.npc_speaking_style, c.character_background || '', c.language || 'id', stringifyHeartProfiles(c.heart_profiles), c.signature_style || '', isEnabled]
+                    sql: "INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, character_background, language, heart_profiles, signature_style, is_enabled, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    args: [id, c.npc_name, c.npc_description, c.npc_personality, c.npc_speaking_style, c.character_background || '', c.language || 'id', stringifyHeartProfiles(c.heart_profiles), c.signature_style || '', isEnabled, createdAt]
                 });
-                characters[id] = { id, ...c, is_enabled: !!isEnabled };
+                characters[id] = { id, ...c, is_enabled: !!isEnabled, created_at: createdAt };
             }
             console.log("[DB] Migrated data from characters.json to Turso.");
         }

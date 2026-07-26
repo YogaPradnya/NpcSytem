@@ -209,6 +209,11 @@ function getAdminDashboardHTML(stats, user) {
                     <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
                         <span id="char-total" style="font-size:0.78rem; font-weight:800; color:var(--text-muted); background:#f8fafc; border:1px solid var(--border); border-radius:999px; padding:0.55rem 0.9rem; white-space:nowrap;">Total: 0 karakter</span>
                         <input type="text" id="char-search" placeholder="Search karakter..." oninput="debouncedRenderCharacters()" style="padding:0.65rem 1rem; border-radius:10px; border:1px solid var(--border); background:#ffffff; color:var(--text-main); width:240px; font-family:inherit; font-size:0.88rem; outline:none;">
+                        <select id="char-sort" onchange="renderCharacters(1)" style="padding:0.65rem 1rem; border-radius:10px; border:1px solid var(--border); background:#ffffff; color:var(--text-main); font-family:inherit; font-size:0.88rem; outline:none; cursor:pointer;">
+                            <option value="newest">Terbaru Dibuat</option>
+                            <option value="oldest">Terlama Dibuat</option>
+                            <option value="name">Nama (A-Z)</option>
+                        </select>
                         <button class="btn" onclick="openModal()">+ Add New NPC</button>
                     </div>
                 </header>

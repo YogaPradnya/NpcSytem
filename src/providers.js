@@ -408,6 +408,8 @@ async function tryClients({ clients, providerName, model, messages, cooldownMs, 
                     console.warn(`[NPC] DeepInfra #${clientObj.id} Limit! Cooldown 5m.`);
                 } else if (providerName === 'NOVITA') {
                     console.warn(`[NPC] Novita #${clientObj.id} Limit! Cooldown 30m.`);
+                } else if (providerName === 'GROQ') {
+                    console.warn(`[NPC] Groq #${clientObj.id} Limit! Cooldown 20m.`);
                 }
             } else if (providerName === 'DEEPINFRA') {
                 console.warn(`[NPC] DeepInfra #${clientObj.id} Error (${model}):`, error.message);
@@ -454,7 +456,7 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, ca
         if (providerHint === 'GROQ' || (!providerHint && (actualModel.includes('instant') || actualModel.includes('mixtral')))) {
             const clients = availableGroq.length > 0 ? availableGroq : groqClients.filter(c => c.isEnabled);
             if (clients.length > 0) {
-                const res = await tryClients({ clients, providerName: 'GROQ', model: actualModel, messages, cooldownMs: 60 * 60 * 1000 });
+                const res = await tryClients({ clients, providerName: 'GROQ', model: actualModel, messages, cooldownMs: 20 * 60 * 1000 });
                 if (res) return res;
             }
         }
@@ -496,7 +498,7 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, ca
             providerName: 'GROQ',
             model: aiConfig.groqFallbackModel,
             messages,
-            cooldownMs: 60 * 60 * 1000
+            cooldownMs: 20 * 60 * 1000
         });
         if (result) return result;
     }

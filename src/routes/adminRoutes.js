@@ -250,6 +250,38 @@ function createAdminRoutes({
         }
     });
 
+    router.get('/api/admin/top-users', apiAuth, adminOnly, async (req, res) => {
+        try {
+            const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 100));
+            const aiName = String(req.query.ai_name || '').trim().toLowerCase();
+
+            let where = "WHERE username IS NOT NULL AND TRIM(username) != ''";
+            let args = [];
+            if (aiName) {
+                where += " AND LOWER(ai_name) = ?";
+                args.push(aiName);
+            }
+
+            const result = await db.execute({
+                sql: `SELECT 
+                    username,
+                    MAX(user_level) as max_level,
+                    COUNT(*) as total_chats,
+                    MAX(timestamp) as last_active
+                FROM chat_logs
+                ${where}
+                GROUP BY username
+                ORDER BY max_level DESC, total_chats DESC
+                LIMIT ?`,
+                args: [...args, limit]
+            });
+            res.json({ success: true, users: result.rows });
+        } catch (e) {
+            console.error("[DB TOP USERS ERROR]:", e.message);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
     router.get('/api/admin/logs', apiAuth, adminOnly, async (req, res) => {
         try {
             const page = Math.max(1, parseInt(req.query.page, 10) || 1);

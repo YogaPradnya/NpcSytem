@@ -99,6 +99,7 @@ function getAdminDashboardHTML(stats, user) {
                 ${isAdmin ? `
                     <div class="nav-item" onclick="showPage('otak', this)"><i data-lucide="cpu"></i> <span>Manajemen Otak</span></div>
                     <div class="nav-item" onclick="showPage('users', this)"><i data-lucide="user-cog"></i> <span>Daftar User</span></div>
+                    <div class="nav-item" onclick="showPage('topusers', this)"><i data-lucide="trophy"></i> <span>Top Users</span></div>
                     <div class="nav-item" onclick="showPage('banlist', this)"><i data-lucide="ban"></i> <span>Daftar Ban</span></div>
                 ` : ''}
                 <div class="nav-item" onclick="showPage('simulator', this)"><i data-lucide="play-circle"></i> <span>Live Simulator</span></div>
@@ -287,6 +288,24 @@ function getAdminDashboardHTML(stats, user) {
                         <tbody id="user-body"></tbody>
                     </table></div>
                     <div id="user-pagination" style="margin-top:1.5rem; display:flex; justify-content:center; gap:0.5rem; align-items:center"></div>
+                </div>
+            </div>
+
+            <div id="page-topusers" class="hidden">
+                <header>
+                    <h1>Top 100 Users by Level</h1>
+                    <div style="display:flex; gap:1rem; align-items:center">
+                        <select id="topusers-char-select" onchange="loadTopUsers()" style="padding:0.65rem 1rem; border-radius:10px; border:1px solid var(--border); background:#ffffff; color:var(--text-main); font-family:inherit; font-size:0.88rem; outline:none; cursor:pointer; min-width:200px;">
+                            <option value="">Semua Karakter</option>
+                        </select>
+                        <button class="btn btn-outline" onclick="loadTopUsers()">Refresh</button>
+                    </div>
+                </header>
+                <div class="card-section">
+                    <div class="table-container"><table>
+                        <thead><tr><th style="width:60px; text-align:center">RANK</th><th>USERNAME</th><th style="text-align:center">LEVEL</th><th style="text-align:center">TOTAL CHAT</th><th>TERAKHIR AKTIF</th></tr></thead>
+                        <tbody id="topusers-body"></tbody>
+                    </table></div>
                 </div>
             </div>
 

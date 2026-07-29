@@ -200,6 +200,7 @@ function showPage(pageId, el) {
     }
     if (pageId === 'terminal') initTerminal();
     if (pageId === 'banlist') loadBanList(1);
+    if (pageId === 'topusers') loadTopUsers();
     refreshIcons();
 }
 
@@ -1225,3 +1226,66 @@ function startCooldownCountdown() {
         });
     }, 1000);
 }
+
+async function loadTopUsers() {
+    const select = document.getElementById('topusers-char-select');
+    const tbody = document.getElementById('topusers-body');
+    if (!tbody) return;
+
+    // Populate dropdown karakter (hanya sekali)
+    if (select && select.options.length <= 1) {
+        try {
+            const charRes = await fetch('/api/characters');
+            const charData = await charRes.json();
+            if (charData.success && charData.characters) {
+                charData.characters.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.npc_name || c.id;
+                    select.appendChild(opt);
+                });
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    const selectedChar = select ? select.value : '';
+    const queryParam = selectedChar ? '?ai_name=' + encodeURIComponent(selectedChar) : '';
+
+    tbody.innerHTML = '<tr><td colspan="5" class="table-state">Loading...</td></tr>';
+
+    try {
+        const res = await fetch('/api/admin/top-users' + queryParam);
+        const data = await res.json();
+        if (!data.success || !data.users || data.users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="table-state">Belum ada data user' + (selectedChar ? ' untuk karakter ini' : '') + '.</td></tr>';
+            return;
+        }
+
+        const heartColors = ['#94a3b8', '#60a5fa', '#34d399', '#fbbf24', '#f97316', '#ef4444'];
+
+        tbody.innerHTML = data.users.map((u, i) => {
+            const rank = i + 1;
+            const lv = Number(u.max_level) || 0;
+            const totalChats = Number(u.total_chats) || 0;
+            const lastActive = u.last_active ? new Date(u.last_active).toLocaleString(LOCALE_ID, TZ_CONFIG) : '-';
+            const heartColor = heartColors[Math.min(lv, 5)];
+
+            const rankStyle = rank <= 3
+                ? 'font-weight:900; color:' + (rank === 1 ? '#f59e0b' : rank === 2 ? '#94a3b8' : '#cd7f32')
+                : 'font-weight:700; color:var(--text-muted)';
+
+            return `<tr>
+                <td style="text-align:center; ${rankStyle}">${rank}</td>
+                <td style="font-weight:700">${escapeHTML(u.username)}</td>
+                <td style="text-align:center">
+                    <span style="display:inline-block; padding:3px 10px; border-radius:999px; font-size:0.78rem; font-weight:800; color:#fff; background:${heartColor};">Lv ${lv}</span>
+                </td>
+                <td style="text-align:center; font-weight:600">${totalChats.toLocaleString(LOCALE_ID)}</td>
+                <td style="font-size:0.78rem; color:var(--text-muted)">${escapeHTML(lastActive)}</td>
+            </tr>`;
+        }).join('');
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="5" class="table-state error">Gagal memuat data: ' + escapeHTML(e.message) + '</td></tr>';
+    }
+}
+

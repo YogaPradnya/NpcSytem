@@ -380,6 +380,7 @@ function syncModelForm(config) {
         'model-groq': config.groqFallbackModel,
         'model-cerebras': config.cerebrasFallbackModel,
         'model-novita': config.novitaFallbackModel,
+        'model-cloudflare': config.cloudflareFallbackModel,
         'model-max-tokens': config.maxTokens,
         'model-temperature': config.temperature
     };
@@ -394,8 +395,9 @@ function renderModelRows(d) {
     if (!list) return;
     list.innerHTML = providerGroup('INFRASTRUKTUR GROQ (UTAMA)', d.otak || [], 'GROQ', 'var(--success)') +
         providerGroup('INFRASTRUKTUR CEREBRAS (CADANGAN 1)', d.cerebras || [], 'CEREBRAS', 'var(--info)') +
-        providerGroup('INFRASTRUKTUR DEEPINFRA (CADANGAN 2)', d.deepinfra || [], 'DEEPINFRA', 'var(--primary)') +
-        providerGroup('INFRASTRUKTUR NOVITA AI (CADANGAN 3)', d.novita || [], 'NOVITA', '#8b5cf6');
+        providerGroup('INFRASTRUKTUR CLOUDFLARE (CADANGAN 2)', d.cloudflare || [], 'CLOUDFLARE', '#f59e0b') +
+        providerGroup('INFRASTRUKTUR DEEPINFRA (CADANGAN 3)', d.deepinfra || [], 'DEEPINFRA', 'var(--primary)') +
+        providerGroup('INFRASTRUKTUR NOVITA AI (CADANGAN 4)', d.novita || [], 'NOVITA', '#8b5cf6');
 }
 
 function providerGroup(title, rows, type, color) {
@@ -442,6 +444,7 @@ async function saveModelConfig() {
         groqFallbackModel: document.getElementById('model-groq').value,
         cerebrasFallbackModel: document.getElementById('model-cerebras').value,
         novitaFallbackModel: document.getElementById('model-novita').value,
+        cloudflareFallbackModel: document.getElementById('model-cloudflare').value,
         maxTokens: document.getElementById('model-max-tokens').value,
         temperature: document.getElementById('model-temperature').value
     };
@@ -928,6 +931,7 @@ function updateStats(d) {
     setText('s-groq', (d.deepinfra_stats?.active || 0) + '/' + (d.deepinfra_stats?.available || 0));
     setText('s-cerebras', (d.cerebras_stats?.active || 0) + '/' + (d.cerebras_stats?.available || 0));
     setText('s-novita', (d.novita_stats?.active || 0) + '/' + (d.novita_stats?.available || 0));
+    setText('s-cloudflare', (d.cloudflare_stats?.active || 0) + '/' + (d.cloudflare_stats?.available || 0));
     setText('s-uptime', d.uptime || '0s');
                                               
     if (usageChart) {

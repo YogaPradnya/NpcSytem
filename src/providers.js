@@ -5,6 +5,7 @@ const OpenAI = require('openai');
 const DEFAULT_DEEPINFRA_MODEL = 'meta-llama/Meta-Llama-3.1-8B-Instruct';
 const DEFAULT_DEEPINFRA_FALLBACK_MODEL = DEFAULT_DEEPINFRA_MODEL;
 const DEFAULT_NOVITA_MODEL = 'meta-llama/llama-3.1-8b-instruct';
+const DEFAULT_CLOUDFLARE_MODEL = '@cf/meta/llama-3.1-8b-instruct';
 
 const deepInfraModelProfiles = {
     'meta-llama/Meta-Llama-3.1-8B-Instruct': { provider: 'deepinfra' },
@@ -24,6 +25,7 @@ const aiConfig = {
     groqFallbackModel: process.env.GROQ_FALLBACK_MODEL || 'llama-3.1-8b-instant',
     cerebrasFallbackModel: process.env.CEREBRAS_FALLBACK_MODEL || 'gemma-4-31b',
     novitaFallbackModel: process.env.NOVITA_FALLBACK_MODEL || DEFAULT_NOVITA_MODEL,
+    cloudflareFallbackModel: process.env.CLOUDFLARE_FALLBACK_MODEL || DEFAULT_CLOUDFLARE_MODEL,
     maxTokens: Number(process.env.AI_MAX_TOKENS || 100),
     temperature: Number(process.env.AI_TEMPERATURE || 0.8)
 };      
@@ -63,6 +65,7 @@ function isRateLimit(error) {
 const GROQ_RPM_LIMIT = Number(process.env.GROQ_RPM_LIMIT || 30);
 const CEREBRAS_RPM_LIMIT = Number(process.env.CEREBRAS_RPM_LIMIT || 30);
 const NOVITA_RPM_LIMIT = Number(process.env.NOVITA_RPM_LIMIT || 30);
+const CLOUDFLARE_RPM_LIMIT = Number(process.env.CLOUDFLARE_RPM_LIMIT || 30);
 const FALLBACK_RPM_LIMIT = Number(process.env.FALLBACK_API_RPM_LIMIT || 30);
 const RPM_WINDOW_MS = 60 * 1000;
 
@@ -70,6 +73,7 @@ function getRpmLimitForType(type) {
     if (type === 'GROQ') return GROQ_RPM_LIMIT;
     if (type === 'CEREBRAS') return CEREBRAS_RPM_LIMIT;
     if (type === 'NOVITA') return NOVITA_RPM_LIMIT;
+    if (type === 'CLOUDFLARE') return CLOUDFLARE_RPM_LIMIT;
     return FALLBACK_RPM_LIMIT;
 }
 
@@ -145,6 +149,76 @@ if (novitaClients.length > 0) {
     console.log(`[NPC] Novita AI: ${novitaClients.length} key(s) loaded.`);
 }
 
+function createCloudflareClient({ accountId, apiKey }) {
+    return {
+        chat: {
+            completions: {
+                create: async (payload) => {
+                    const model = payload.model || '@cf/meta/llama-3.1-8b-instruct';
+                    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`;
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${apiKey}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            messages: payload.messages,
+                            max_tokens: payload.max_tokens,
+                            temperature: payload.temperature
+                        })
+                    });
+
+                    if (!res.ok) {
+                        const errText = await res.text().catch(() => '');
+                        const err = new Error(errText || `Cloudflare API status ${res.status}`);
+                        err.status = res.status;
+                        throw err;
+                    }
+
+                    const json = await res.json();
+                    if (!json.success || !json.result) {
+                        const errMsg = (json.errors && json.errors[0]?.message) || 'Cloudflare AI execution failed';
+                        throw new Error(errMsg);
+                    }
+
+                    const result = json.result;
+                    let content = '';
+                    if (result.choices && result.choices.length > 0 && result.choices[0].message) {
+                        content = result.choices[0].message.content || '';
+                    } else if (typeof result.response === 'string') {
+                        content = result.response;
+                    }
+
+                    return {
+                        model,
+                        choices: [
+                            {
+                                message: {
+                                    role: 'assistant',
+                                    content
+                                }
+                            }
+                        ],
+                        usage: result.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+                    };
+                }
+            }
+        }
+    };
+}
+
+const cloudflareAccountId = process.env.CLOUDFLARE_ACCOUNT_ID || '';
+const cloudflareClients = collectKeys('CLOUDFLARE_API_KEY', 5).map((key, index) => ({
+    id: index + 1,
+    client: createCloudflareClient({ accountId: cloudflareAccountId, apiKey: key }),
+    ...makeClientState()
+}));
+
+if (cloudflareClients.length > 0) {
+    console.log(`[NPC] Cloudflare Workers AI: ${cloudflareClients.length} key(s) loaded.`);
+}
+
 let deepinfraBillingData = null;
 let deepinfraAccountData = null;
 let deepinfraFetchError = null;
@@ -190,7 +264,7 @@ function startDailyStatsReset() {
         const now = new Date();
         if (now.getDate() !== lastResetDate) {
             console.log("[SYSTEM] Reset statistik harian untuk semua otak...");
-            [...deepInfraClients, ...groqClients, ...cerebrasClients, ...novitaClients].forEach(c => {
+            [...deepInfraClients, ...groqClients, ...cerebrasClients, ...novitaClients, ...cloudflareClients].forEach(c => {
                 c.stats = makeStats();
                 c.cooldownUntil = 0;
             });
@@ -219,6 +293,7 @@ function getProviderStats() {
         groq_stats: getStatsSummary(groqClients),
         cerebras_stats: getStatsSummary(cerebrasClients),
         novita_stats: getStatsSummary(novitaClients),
+        cloudflare_stats: getStatsSummary(cloudflareClients),
         deepinfra_billing: deepinfraBillingData,
         deepinfra_account: deepinfraAccountData,
         deepinfra_fetch_error: deepinfraFetchError
@@ -234,7 +309,7 @@ function serializeClient(clientObj, type) {
         isCoolingDown: now < clientObj.cooldownUntil,
         cooldownRemaining: Math.max(0, Math.floor((clientObj.cooldownUntil - now) / 1000)),
         rpmUsed: (clientObj.requestTimestamps || []).filter(ts => now - ts < RPM_WINDOW_MS).length,
-        rpmLimit: (type === 'GROQ' || type === 'CEREBRAS' || type === 'NOVITA') ? getRpmLimitForType(type) : null,
+        rpmLimit: (type === 'GROQ' || type === 'CEREBRAS' || type === 'NOVITA' || type === 'CLOUDFLARE') ? getRpmLimitForType(type) : null,
         stats: clientObj.stats,
         lastError: clientObj.lastError || null
     };
@@ -272,10 +347,15 @@ function getAvailableModels() {
         aiConfig.novitaFallbackModel
     ].map(m => ({ id: `novita:${m}`, model: m, provider: 'NOVITA', label: `Novita - ${m}` }));
 
+    const cloudflareModels = [
+        aiConfig.cloudflareFallbackModel
+    ].map(m => ({ id: `cloudflare:${m}`, model: m, provider: 'CLOUDFLARE', label: `Cloudflare - ${m}` }));
+
     return [
         { id: 'auto', model: 'auto', provider: 'AUTO', label: 'Auto (Queue Default)' },
         ...groqModels,
         ...cerebrasModels,
+        ...cloudflareModels,
         ...deepinfraModels,
         ...novitaModels
     ];
@@ -289,7 +369,8 @@ function getModelsStatus() {
         deepinfra: deepInfraClients.map(c => serializeClient(c, 'DEEPINFRA')),
         otak: groqClients.map(c => serializeClient(c, 'GROQ')),
         cerebras: cerebrasClients.map(c => serializeClient(c, 'CEREBRAS')),
-        novita: novitaClients.map(c => serializeClient(c, 'NOVITA'))
+        novita: novitaClients.map(c => serializeClient(c, 'NOVITA')),
+        cloudflare: cloudflareClients.map(c => serializeClient(c, 'CLOUDFLARE'))
     };
 }
 
@@ -310,6 +391,9 @@ function updateModelConfig(config = {}) {
     if (typeof config.novitaFallbackModel === 'string' && config.novitaFallbackModel.trim()) {
         aiConfig.novitaFallbackModel = config.novitaFallbackModel.trim();
     }
+    if (typeof config.cloudflareFallbackModel === 'string' && config.cloudflareFallbackModel.trim()) {
+        aiConfig.cloudflareFallbackModel = config.cloudflareFallbackModel.trim();
+    }
     if (config.maxTokens !== undefined) {
         const maxTokens = Number(config.maxTokens);
         if (Number.isFinite(maxTokens) && maxTokens >= 32 && maxTokens <= 2048) {
@@ -329,6 +413,7 @@ function findClient(type, id) {
     if (type === 'CEREBRAS') return cerebrasClients.find(c => c.id === id);
     if (type === 'DEEPINFRA') return deepInfraClients.find(c => c.id === id);
     if (type === 'NOVITA') return novitaClients.find(c => c.id === id);
+    if (type === 'CLOUDFLARE') return cloudflareClients.find(c => c.id === id);
     return groqClients.find(c => c.id === id);
 }
 
@@ -382,7 +467,7 @@ function isModelCompatibilityError(error) {
 async function tryClients({ clients, providerName, model, messages, cooldownMs, cacheKey }) {
     for (const clientObj of clients) {
         const rpmLimit = getRpmLimitForType(providerName);
-        const rpmLimited = providerName === 'GROQ' || providerName === 'CEREBRAS' || providerName === 'NOVITA' || providerName === 'FALLBACK';
+        const rpmLimited = providerName === 'GROQ' || providerName === 'CEREBRAS' || providerName === 'NOVITA' || providerName === 'CLOUDFLARE' || providerName === 'FALLBACK';
         if (rpmLimited && !canUseClientByRpm(clientObj, rpmLimit)) {
             clientObj.cooldownUntil = Date.now() + getRpmCooldownMs(clientObj, rpmLimit);
             continue;
@@ -418,10 +503,12 @@ async function tryClients({ clients, providerName, model, messages, cooldownMs, 
                     console.warn(`[NPC] Novita #${clientObj.id} Limit! Cooldown 30m.`);
                 } else if (providerName === 'GROQ') {
                     console.warn(`[NPC] Groq #${clientObj.id} Limit! Cooldown 10m.`);
+                } else if (providerName === 'CLOUDFLARE') {
+                    console.warn(`[NPC] Cloudflare #${clientObj.id} Limit! Cooldown 5m.`);
                 }
-            } else if (providerName === 'DEEPINFRA') {
-                console.warn(`[NPC] DeepInfra #${clientObj.id} Error (${model}):`, error.message);
-                if (isModelCompatibilityError(error)) break;
+            } else {
+                console.warn(`[NPC] ${providerName} #${clientObj.id} Error (${model}):`, error.message);
+                if (providerName === 'DEEPINFRA' && isModelCompatibilityError(error)) break;
             }
         }
     }
@@ -446,6 +533,7 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, ca
         return true;
     });
     const availableNovita = novitaClients.filter(c => c.isEnabled && now > c.cooldownUntil && canUseClientByRpm(c));
+    const availableCloudflare = cloudflareClients.filter(c => c.isEnabled && now > c.cooldownUntil && canUseClientByRpm(c));
     const fallbackClients = deepInfraClients.filter(c => c.isEnabled);
 
     // Pengujian model spesifik (Manual override dari Live Simulator)
@@ -482,6 +570,13 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, ca
                 if (res) return res;
             }
         }
+        if (providerHint === 'CLOUDFLARE') {
+            const clients = availableCloudflare.length > 0 ? availableCloudflare : cloudflareClients.filter(c => c.isEnabled);
+            if (clients.length > 0) {
+                const res = await tryClients({ clients, providerName: 'CLOUDFLARE', model: actualModel, messages, cooldownMs: 5 * 60 * 1000 });
+                if (res) return res;
+            }
+        }
         if (providerHint === 'DEEPINFRA' || !providerHint) {
             const clients = availableDeepInfra.length > 0 ? availableDeepInfra : fallbackClients;
             if (clients.length > 0) {
@@ -493,7 +588,7 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, ca
         throw new Error(`Model '${actualModel}' gagal dipanggil. Provider tidak merespon, limit, atau tidak aktif.`);
     }
 
-    if (availableDeepInfra.length === 0 && availableGroq.length === 0 && availableCerebras.length === 0 && availableNovita.length === 0 && fallbackClients.length === 0) {
+    if (availableDeepInfra.length === 0 && availableGroq.length === 0 && availableCerebras.length === 0 && availableCloudflare.length === 0 && availableNovita.length === 0 && fallbackClients.length === 0) {
         const error = new Error('Semua token/otak sedang sibuk. Silakan coba lagi nanti.');
         error.statusCode = 503;
         throw error;
@@ -523,8 +618,20 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, ca
         if (result) return result;
     }
 
+    if (availableCloudflare.length > 0) {
+        console.warn(`[NPC] Cerebras gagal, beralih ke Cloudflare Workers AI...`);
+        const result = await tryClients({
+            clients: availableCloudflare,
+            providerName: 'CLOUDFLARE',
+            model: aiConfig.cloudflareFallbackModel,
+            messages,
+            cooldownMs: 5 * 60 * 1000
+        });
+        if (result) return result;
+    }
+
     if (availableDeepInfra.length > 0) {
-        console.warn(`[NPC] Cerebras gagal, beralih ke DeepInfra...`);
+        console.warn(`[NPC] Cloudflare gagal, beralih ke DeepInfra...`);
         for (const model of getDeepInfraModelQueue()) {
             const result = await tryClients({
                 clients: availableDeepInfra,
@@ -564,7 +671,7 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, ca
         return fallbackResult;
     }
 
-    throw new Error("Semua provider (Groq, Cerebras, DeepInfra, Novita) gagal merespon.");
+    throw new Error("Semua provider (Groq, Cerebras, Cloudflare, DeepInfra, Novita) gagal merespon.");
 }
 
 module.exports = {
@@ -573,6 +680,7 @@ module.exports = {
     groqClients,
     cerebrasClients,
     novitaClients,
+    cloudflareClients,
     startDeepInfraBillingSync,
     startDailyStatsReset,
     getProviderStats,

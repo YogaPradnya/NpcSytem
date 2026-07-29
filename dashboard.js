@@ -140,6 +140,7 @@ function getAdminDashboardHTML(stats, user) {
                     <div class="stat-card green"><h3>Groq (Utama)</h3><p id="s-active">${(stats.groq_stats && stats.groq_stats.active) || 0}/${(stats.groq_stats && stats.groq_stats.available) || 0}</p></div>
                     <div class="stat-card purple"><h3>Node Cerebras</h3><p id="s-cerebras">${(stats.cerebras_stats && stats.cerebras_stats.active) || 0}/${(stats.cerebras_stats && stats.cerebras_stats.available) || 0}</p></div>
                     <div class="stat-card orange"><h3>Node DeepInfra</h3><p id="s-groq">${(stats.deepinfra_stats && stats.deepinfra_stats.active) || 0}/${(stats.deepinfra_stats && stats.deepinfra_stats.available) || 0}</p></div>
+                    <div class="stat-card purple"><h3>Node Cloudflare</h3><p id="s-cloudflare">${(stats.cloudflare_stats && stats.cloudflare_stats.active) || 0}/${(stats.cloudflare_stats && stats.cloudflare_stats.available) || 0}</p></div>
                     <div class="stat-card blue"><h3>Node Novita</h3><p id="s-novita">${(stats.novita_stats && stats.novita_stats.active) || 0}/${(stats.novita_stats && stats.novita_stats.available) || 0}</p></div>
                 </div>
 
@@ -260,6 +261,19 @@ function getAdminDashboardHTML(stats, user) {
                     <div class="form-group">
                         <label>Novita AI Fallback</label>
                         <input id="model-novita" placeholder="meta-llama/llama-3.1-8b-instruct">
+                    </div>
+                    <div class="form-group">
+                        <label>Cloudflare Fallback</label>
+                        <input id="model-cloudflare" list="cloudflare-models" placeholder="@cf/meta/llama-3.1-8b-instruct">
+                        <datalist id="cloudflare-models">
+                            <option value="@cf/meta/llama-3.1-8b-instruct"></option>
+                            <option value="@cf/meta/llama-3-8b-instruct"></option>
+                            <option value="@cf/meta/llama-3.2-3b-instruct"></option>
+                            <option value="@cf/meta/llama-3.2-1b-instruct"></option>
+                            <option value="@cf/mistral/mistral-7b-instruct-v0.1"></option>
+                            <option value="@cf/google/gemma-7b-it-lora"></option>
+                            <option value="@cf/qwen/qwen1.5-7b-chat-awq"></option>
+                        </datalist>
                     </div>
                     <div class="form-group compact">
                         <label>Max Token Output</label>

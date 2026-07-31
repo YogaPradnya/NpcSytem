@@ -59,8 +59,10 @@ async function initDB(characters) {
         await db.execute(`CREATE TABLE IF NOT EXISTS banned_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE,
+            reason TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
+        try { await db.execute("ALTER TABLE banned_users ADD COLUMN reason TEXT"); } catch (e) {}
 
         await db.execute(`CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,

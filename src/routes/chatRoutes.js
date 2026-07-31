@@ -6,6 +6,7 @@ const {
 const { parseJsonResponse } = require('../parser');
 const { validateChatInput } = require('../guards/input_guard');
 const { validatePrompt, logSuspiciousActivity } = require('../guards/prompt_guard');
+const { moderateTextAsync } = require('../services/moderationService');
 
 function normalizeAutoBanWords(value = '') {
     return String(value || '')
@@ -301,6 +302,23 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
 
             console.log(`[NPC] Name: ${char.npc_name} | Lv: ${currentHeartLv} | Sentences: ${sentences.length} | Tokens: ${tokens}${cachedTokens > 0 ? ' (cached: ' + cachedTokens + ')' : ''} | ${endTime - startTime}ms`);
             res.json(result);
+
+            // POST-PROCESSING MODERATION (ASYNC BACKGROUND WORKER)
+            // Eksekusi di background setelah respon utama dikirim ke user (0ms latency impact)
+            if (currentUsername && currentUsername !== 'Guest') {
+                moderateTextAsync(sanitizedMessage, async (violation) => {
+                    try {
+                        console.log(`[AUTO BAN ASYNC] Pelanggaran terdeteksi untuk @${currentUsername}: ${violation.reason}`);
+                        await db.execute({
+                            sql: "INSERT OR IGNORE INTO banned_users (username, reason) VALUES (?, ?)",
+                            args: [currentUsername, violation.reason]
+                        });
+                        console.log(`[AUTO BAN ASYNC] @${currentUsername} berhasil di-ban otomatis di database.`);
+                    } catch (banErr) {
+                        console.error('[AUTO BAN ASYNC ERROR]:', banErr.message);
+                    }
+                });
+            }
         } catch (e) {
             console.error("[NPC V1 API ERROR]:", e.message);
             if (e.statusCode === 503) {

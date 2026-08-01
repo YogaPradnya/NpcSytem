@@ -150,7 +150,7 @@ function validateUsername(username) {
     const lengthCheck = validateLength(normalized, MAX_USERNAME_LENGTH, 'Username');
     if (!lengthCheck.valid) return lengthCheck;
     
-    // Check for suspicious patterns in username
+    // Check for reserved pattern in username (returns validation error if reserved, but NEVER bans the user)
     if (/^(admin|system|root|bot|ai|assistant|operator)/i.test(normalized)) {
         return {
             valid: false,

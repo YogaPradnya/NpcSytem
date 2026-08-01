@@ -1005,7 +1005,12 @@ async function loadBanList(page = 1, options = {}) {
         setText('ban-count', (data.pagination?.total || banList.length).toLocaleString(LOCALE_ID));
         tbody.innerHTML = banList.length ? banList.map(b => `
             <tr>
-                <td style="font-weight:700;">${escapeHTML(b.username)}</td>
+                <td style="font-weight:700;">
+                    <div>${escapeHTML(b.username)}</div>
+                    <div style="font-size:0.75rem; color:#dc2626; font-weight:500; margin-top:2px;">
+                        ${escapeHTML(b.reason || 'Diban karena pelanggaran pesan')}
+                    </div>
+                </td>
                 <td style="color:var(--text-muted);">${escapeHTML(new Date(b.created_at).toLocaleString(LOCALE_ID, TZ_CONFIG))}</td>
                 <td style="text-align:right;"><button class="btn btn-danger" onclick="unbanUser(${jsArg(b.username)})">Unban</button></td>
             </tr>

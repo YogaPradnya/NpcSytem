@@ -109,6 +109,7 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
 
             if (!sanitizedMessage) return res.status(400).json({ success: false, error: 'Message is required' });
 
+            // ATURAN MODERASI: Auto-ban HANYA dipicu oleh pelanggaran pada isi pesan (sanitizedMessage), BUKAN username
             const autoBanSetting = await db.execute({
                 sql: "SELECT value FROM settings WHERE key = 'auto_ban_words'",
                 args: []
@@ -116,9 +117,10 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
             const autoBanWords = normalizeAutoBanWords(autoBanSetting.rows[0]?.value);
             const matchedAutoBanWord = findAutoBanWord(sanitizedMessage, autoBanWords);
             if (matchedAutoBanWord) {
+                const banReason = `Kata Terlarang: "${matchedAutoBanWord}" | Pesan: "${sanitizedMessage}"`;
                 await db.execute({
-                    sql: "INSERT OR IGNORE INTO banned_users (username) VALUES (?)",
-                    args: [currentUsername]
+                    sql: "INSERT INTO banned_users (username, reason) VALUES (?, ?) ON CONFLICT(username) DO UPDATE SET reason = excluded.reason",
+                    args: [currentUsername, banReason]
                 });
 
                 const banMsg = await getBanMessage(db);
@@ -309,9 +311,10 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 moderateTextAsync(sanitizedMessage, async (violation) => {
                     try {
                         console.log(`[AUTO BAN ASYNC] Pelanggaran terdeteksi untuk @${currentUsername}: ${violation.reason}`);
+                        const fullReason = `${violation.reason} | Pesan: "${sanitizedMessage}"`;
                         await db.execute({
-                            sql: "INSERT OR IGNORE INTO banned_users (username, reason) VALUES (?, ?)",
-                            args: [currentUsername, violation.reason]
+                            sql: "INSERT INTO banned_users (username, reason) VALUES (?, ?) ON CONFLICT(username) DO UPDATE SET reason = excluded.reason",
+                            args: [currentUsername, fullReason]
                         });
                         console.log(`[AUTO BAN ASYNC] @${currentUsername} berhasil di-ban otomatis di database.`);
                     } catch (banErr) {

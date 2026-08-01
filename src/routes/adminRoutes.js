@@ -576,10 +576,10 @@ function createAdminRoutes({
                 if (matchedWord) matchedUsers.set(username, matchedWord);
             }
 
-            for (const username of matchedUsers.keys()) {
+            for (const [username, matched_word] of matchedUsers.entries()) {
                 await db.execute({
-                    sql: "INSERT OR IGNORE INTO banned_users (username) VALUES (?)",
-                    args: [username]
+                    sql: "INSERT INTO banned_users (username, reason) VALUES (?, ?) ON CONFLICT(username) DO UPDATE SET reason = excluded.reason",
+                    args: [username, `Kata Terlarang: "${matched_word}"`]
                 });
             }
 

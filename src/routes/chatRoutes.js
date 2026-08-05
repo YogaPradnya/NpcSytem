@@ -6,26 +6,9 @@ const {
 const { parseJsonResponse } = require('../parser');
 const { validateChatInput } = require('../guards/input_guard');
 const { validatePrompt, logSuspiciousActivity } = require('../guards/prompt_guard');
-const { moderateTextAsync } = require('../services/moderationService');
 
-function normalizeAutoBanWords(value = '') {
-    return String(value || '')
-        .split(/[\n,]+/)
-        .map(word => word.trim().toLowerCase())
-        .filter(Boolean);
-}
 
-function escapeRegex(value) {
-    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
-function findAutoBanWord(message, words) {
-    const text = String(message || '').toLowerCase();
-    return words.find(word => {
-        const pattern = new RegExp(`(^|[^a-z0-9_])${escapeRegex(word)}(?=$|[^a-z0-9_])`, 'i');
-        return pattern.test(text);
-    }) || null;
-}
 
 async function getBanMessage(db) {
     const banMsgSetting = await db.execute({
@@ -109,38 +92,7 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
 
             if (!sanitizedMessage) return res.status(400).json({ success: false, error: 'Message is required' });
 
-            // ATURAN MODERASI: Auto-ban HANYA dipicu oleh pelanggaran pada isi pesan (sanitizedMessage), BUKAN username
-            const autoBanSetting = await db.execute({
-                sql: "SELECT value FROM settings WHERE key = 'auto_ban_words'",
-                args: []
-            });
-            const autoBanWords = normalizeAutoBanWords(autoBanSetting.rows[0]?.value);
-            const matchedAutoBanWord = findAutoBanWord(sanitizedMessage, autoBanWords);
-            if (matchedAutoBanWord) {
-                const banReason = `Kata Terlarang: "${matchedAutoBanWord}" | Pesan: "${sanitizedMessage}"`;
-                await db.execute({
-                    sql: "INSERT INTO banned_users (username, reason) VALUES (?, ?) ON CONFLICT(username) DO UPDATE SET reason = excluded.reason",
-                    args: [currentUsername, banReason]
-                });
 
-                const banMsg = await getBanMessage(db);
-                const autoBanDebug = {
-                    model: "BLOCKED",
-                    tokens: 0,
-                    otak_id: "AUTO-BAN",
-                    latency: Date.now() - startTime,
-                    matched_word: matchedAutoBanWord
-                };
-                if (isAdminCaller) autoBanDebug.system_prompt = "AUTO BAN WORD FILTER";
-
-                console.log(`[AUTO BAN] @${currentUsername} diblokir karena kata: ${matchedAutoBanWord}`);
-                return res.json({
-                    ai_name: system?.ai_name || "NPC",
-                    ai_pose: "sad",
-                    sentences: [banMsg],
-                    debug: autoBanDebug
-                });
-            }
 
             const aiKey = (system && system.ai_name) ? system.ai_name.toLowerCase() : 'alya';
             const char = characters[aiKey] || characters['alya'];
@@ -305,23 +257,7 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
             console.log(`[NPC] Name: ${char.npc_name} | Lv: ${currentHeartLv} | Sentences: ${sentences.length} | Tokens: ${tokens}${cachedTokens > 0 ? ' (cached: ' + cachedTokens + ')' : ''} | ${endTime - startTime}ms`);
             res.json(result);
 
-            // POST-PROCESSING MODERATION (ASYNC BACKGROUND WORKER)
-            // Eksekusi di background setelah respon utama dikirim ke user (0ms latency impact)
-            if (currentUsername && currentUsername !== 'Guest') {
-                moderateTextAsync(sanitizedMessage, async (violation) => {
-                    try {
-                        console.log(`[AUTO BAN ASYNC] Pelanggaran terdeteksi untuk @${currentUsername}: ${violation.reason}`);
-                        const fullReason = `${violation.reason} | Pesan: "${sanitizedMessage}"`;
-                        await db.execute({
-                            sql: "INSERT INTO banned_users (username, reason) VALUES (?, ?) ON CONFLICT(username) DO UPDATE SET reason = excluded.reason",
-                            args: [currentUsername, fullReason]
-                        });
-                        console.log(`[AUTO BAN ASYNC] @${currentUsername} berhasil di-ban otomatis di database.`);
-                    } catch (banErr) {
-                        console.error('[AUTO BAN ASYNC ERROR]:', banErr.message);
-                    }
-                });
-            }
+
         } catch (e) {
             console.error("[NPC V1 API ERROR]:", e.message);
             if (e.statusCode === 503) {

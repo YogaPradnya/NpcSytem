@@ -32,24 +32,7 @@ function createAdminRoutes({
         return String(model).trim().toLowerCase();
     }
 
-    function normalizeAutoBanWords(value = '') {
-        return String(value || '')
-            .split(/[\n,]+/)
-            .map(word => word.trim().toLowerCase())
-            .filter(Boolean);
-    }
 
-    function escapeRegex(value) {
-        return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    }
-
-    function findAutoBanWord(message, words) {
-        const text = String(message || '').toLowerCase();
-        return words.find(word => {
-            const pattern = new RegExp(`(^|[^a-z0-9_])${escapeRegex(word)}(?=$|[^a-z0-9_])`, 'i');
-            return pattern.test(text);
-        }) || null;
-    }
 
     function getDeepInfraRates(model = '') {
         const normalized = normalizeModelName(model);
@@ -458,7 +441,6 @@ function createAdminRoutes({
             const total = Number(countRes.rows[0]?.total || 0);
 
             const settings = await db.execute("SELECT value FROM settings WHERE key = 'ban_message'");
-            const autoBanSetting = await db.execute("SELECT value FROM settings WHERE key = 'auto_ban_words'");
             res.json({
                 success: true,
                 list: bans.rows,
@@ -469,7 +451,7 @@ function createAdminRoutes({
                     totalPages: Math.max(1, Math.ceil(total / limit))
                 },
                 ban_message: settings.rows[0]?.value,
-                auto_ban_words: autoBanSetting.rows[0]?.value || ''
+                auto_ban_words: ''
             });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
@@ -529,69 +511,7 @@ function createAdminRoutes({
         }
     });
 
-    router.get('/api/admin/auto-ban-words', apiAuth, adminOnly, async (req, res) => {
-        try {
-            const result = await db.execute("SELECT value FROM settings WHERE key = 'auto_ban_words'");
-            res.json({ success: true, words: result.rows[0]?.value || '' });
-        } catch (err) {
-            res.status(500).json({ success: false, error: err.message });
-        }
-    });
 
-    router.post('/api/admin/auto-ban-words', apiAuth, adminOnly, async (req, res) => {
-        const words = normalizeAutoBanWords(req.body?.words).join('\n');
-        try {
-            await db.execute({
-                sql: "INSERT INTO settings (key, value) VALUES ('auto_ban_words', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                args: [words]
-            });
-            res.json({ success: true, message: "Daftar kata auto-ban berhasil diperbarui.", words });
-        } catch (err) {
-            res.status(500).json({ success: false, error: err.message });
-        }
-    });
-
-    router.post('/api/admin/ban-by-auto-ban-words', apiAuth, adminOnly, async (req, res) => {
-        try {
-            const setting = await db.execute("SELECT value FROM settings WHERE key = 'auto_ban_words'");
-            const words = normalizeAutoBanWords(setting.rows[0]?.value);
-            if (!words.length) {
-                return res.status(400).json({ success: false, error: 'Daftar kata auto-ban masih kosong.' });
-            }
-
-            const logs = await db.execute(`
-                SELECT username, user_message
-                FROM chat_logs
-                WHERE username IS NOT NULL
-                    AND TRIM(username) != ''
-                ORDER BY id DESC
-                LIMIT 5000
-            `);
-
-            const matchedUsers = new Map();
-            for (const row of logs.rows) {
-                const username = String(row.username || '').trim().replace(/^@/, '').toLowerCase();
-                if (!username || matchedUsers.has(username)) continue;
-                const matchedWord = findAutoBanWord(row.user_message, words);
-                if (matchedWord) matchedUsers.set(username, matchedWord);
-            }
-
-            for (const [username, matched_word] of matchedUsers.entries()) {
-                await db.execute({
-                    sql: "INSERT INTO banned_users (username, reason) VALUES (?, ?) ON CONFLICT(username) DO UPDATE SET reason = excluded.reason",
-                    args: [username, `Kata Terlarang: "${matched_word}"`]
-                });
-            }
-
-            res.json({
-                success: true,
-                message: `${matchedUsers.size} user berhasil diproses sesuai kata auto-ban.`,
-                banned: Array.from(matchedUsers, ([username, matched_word]) => ({ username, matched_word }))
-            });
-        } catch (err) {
-            res.status(500).json({ success: false, error: err.message });
-        }
-    });
 
     return router;
 }

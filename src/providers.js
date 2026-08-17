@@ -27,7 +27,8 @@ const aiConfig = {
     novitaFallbackModel: process.env.NOVITA_FALLBACK_MODEL || DEFAULT_NOVITA_MODEL,
     cloudflareFallbackModel: process.env.CLOUDFLARE_FALLBACK_MODEL || DEFAULT_CLOUDFLARE_MODEL,
     maxTokens: Number(process.env.AI_MAX_TOKENS || 100),
-    temperature: Number(process.env.AI_TEMPERATURE || 0.8)
+    temperature: Number(process.env.AI_TEMPERATURE || 0.8),
+    requestTimeoutMs: Number(process.env.AI_REQUEST_TIMEOUT_MS || 8000)
 };      
 
 function makeStats() {
@@ -109,7 +110,7 @@ function getRpmCooldownMs(clientObj, limit = FALLBACK_RPM_LIMIT) {
 
 const groqClients = collectKeys('GROQ_API_KEY', 20).map((key, index) => ({
     id: index + 1,
-    client: new Groq({ apiKey: key }),
+    client: new Groq({ apiKey: key, timeout: aiConfig.requestTimeoutMs }),
     ...makeClientState()
 }));
 
@@ -119,7 +120,7 @@ if (groqClients.length === 0) {
 
 const cerebrasClients = collectKeys('CEREBRAS_API_KEY', 20).map((key, index) => ({
     id: index + 1,
-    client: new Cerebras({ apiKey: key }),
+    client: new Cerebras({ apiKey: key, timeout: aiConfig.requestTimeoutMs }),
     ...makeClientState()
 }));
 
@@ -128,6 +129,7 @@ const deepInfraClients = collectKeys('DEEPINFRA_API_KEY', 5).map((key, index) =>
     client: new OpenAI({
         apiKey: key,
         baseURL: 'https://api.deepinfra.com/v1/openai',
+        timeout: aiConfig.requestTimeoutMs,
     }),
     ...makeClientState()
 }));
@@ -141,6 +143,7 @@ const novitaClients = collectKeys('NOVITA_API_KEY', 5).map((key, index) => ({
     client: new OpenAI({
         apiKey: key,
         baseURL: 'https://api.novita.ai/v3/openai',
+        timeout: aiConfig.requestTimeoutMs,
     }),
     ...makeClientState()
 }));
@@ -153,55 +156,63 @@ function createCloudflareClient({ accountId, apiKey }) {
     return {
         chat: {
             completions: {
-                create: async (payload) => {
+                create: async (payload, requestOptions = {}) => {
                     const model = payload.model || '@cf/meta/llama-3.1-8b-instruct';
                     const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`;
-                    const res = await fetch(url, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${apiKey}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            messages: payload.messages,
-                            max_tokens: payload.max_tokens,
-                            temperature: payload.temperature
-                        })
-                    });
+                    const timeoutMs = requestOptions.timeout || aiConfig.requestTimeoutMs || 8000;
+                    const controller = new AbortController();
+                    const timeoutTimer = setTimeout(() => controller.abort(), timeoutMs);
+                    try {
+                        const res = await fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${apiKey}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                messages: payload.messages,
+                                max_tokens: payload.max_tokens,
+                                temperature: payload.temperature
+                            }),
+                            signal: controller.signal
+                        });
 
-                    if (!res.ok) {
-                        const errText = await res.text().catch(() => '');
-                        const err = new Error(errText || `Cloudflare API status ${res.status}`);
-                        err.status = res.status;
-                        throw err;
-                    }
+                        if (!res.ok) {
+                            const errText = await res.text().catch(() => '');
+                            const err = new Error(errText || `Cloudflare API status ${res.status}`);
+                            err.status = res.status;
+                            throw err;
+                        }
 
-                    const json = await res.json();
-                    if (!json.success || !json.result) {
-                        const errMsg = (json.errors && json.errors[0]?.message) || 'Cloudflare AI execution failed';
-                        throw new Error(errMsg);
-                    }
+                        const json = await res.json();
+                        if (!json.success || !json.result) {
+                            const errMsg = (json.errors && json.errors[0]?.message) || 'Cloudflare AI execution failed';
+                            throw new Error(errMsg);
+                        }
 
-                    const result = json.result;
-                    let content = '';
-                    if (result.choices && result.choices.length > 0 && result.choices[0].message) {
-                        content = result.choices[0].message.content || '';
-                    } else if (typeof result.response === 'string') {
-                        content = result.response;
-                    }
+                        const result = json.result;
+                        let content = '';
+                        if (result.choices && result.choices.length > 0 && result.choices[0].message) {
+                            content = result.choices[0].message.content || '';
+                        } else if (typeof result.response === 'string') {
+                            content = result.response;
+                        }
 
-                    return {
-                        model,
-                        choices: [
-                            {
-                                message: {
-                                    role: 'assistant',
-                                    content
+                        return {
+                            model,
+                            choices: [
+                                {
+                                    message: {
+                                        role: 'assistant',
+                                        content
+                                    }
                                 }
-                            }
-                        ],
-                        usage: result.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
-                    };
+                            ],
+                            usage: result.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+                        };
+                    } finally {
+                        clearTimeout(timeoutTimer);
+                    }
                 }
             }
         }
@@ -406,6 +417,12 @@ function updateModelConfig(config = {}) {
             aiConfig.temperature = Number(temperature.toFixed(2));
         }
     }
+    if (config.requestTimeoutMs !== undefined) {
+        const timeout = Number(config.requestTimeoutMs);
+        if (Number.isFinite(timeout) && timeout >= 1000 && timeout <= 60000) {
+            aiConfig.requestTimeoutMs = Math.floor(timeout);
+        }
+    }
     return { ...aiConfig };
 }
 
@@ -477,7 +494,8 @@ async function tryClients({ clients, providerName, model, messages, cooldownMs, 
         if (rpmLimited) markClientRequest(clientObj);
         try {
             const completion = await clientObj.client.chat.completions.create(
-                buildChatCompletionPayload({ providerName, model, messages, cacheKey })
+                buildChatCompletionPayload({ providerName, model, messages, cacheKey }),
+                { timeout: aiConfig.requestTimeoutMs }
             );
             clientObj.stats.success++;
             addUsageStats(clientObj, completion);

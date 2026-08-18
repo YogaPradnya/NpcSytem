@@ -361,7 +361,6 @@ function syncModelForm(config) {
         'model-primary': config.primaryModel,
         'model-deepinfra-fallback': config.deepinfraFallbackModel || config.primaryModel,
         'model-groq': config.groqFallbackModel,
-        'model-cerebras': config.cerebrasFallbackModel,
         'model-novita': config.novitaFallbackModel,
         'model-cloudflare': config.cloudflareFallbackModel,
         'model-max-tokens': config.maxTokens,
@@ -377,10 +376,9 @@ function renderModelRows(d) {
     const list = document.getElementById('otak-list');
     if (!list) return;
     list.innerHTML = providerGroup('INFRASTRUKTUR GROQ (UTAMA)', d.otak || [], 'GROQ', 'var(--success)') +
-        providerGroup('INFRASTRUKTUR CEREBRAS (CADANGAN 1)', d.cerebras || [], 'CEREBRAS', 'var(--info)') +
-        providerGroup('INFRASTRUKTUR CLOUDFLARE (CADANGAN 2)', d.cloudflare || [], 'CLOUDFLARE', '#f59e0b') +
-        providerGroup('INFRASTRUKTUR DEEPINFRA (CADANGAN 3)', d.deepinfra || [], 'DEEPINFRA', 'var(--primary)') +
-        providerGroup('INFRASTRUKTUR NOVITA AI (CADANGAN 4)', d.novita || [], 'NOVITA', '#8b5cf6');
+        providerGroup('INFRASTRUKTUR CLOUDFLARE (CADANGAN 1)', d.cloudflare || [], 'CLOUDFLARE', '#f59e0b') +
+        providerGroup('INFRASTRUKTUR DEEPINFRA (CADANGAN 2)', d.deepinfra || [], 'DEEPINFRA', 'var(--primary)') +
+        providerGroup('INFRASTRUKTUR NOVITA AI (CADANGAN 3)', d.novita || [], 'NOVITA', '#8b5cf6');
 }
 
 function providerGroup(title, rows, type, color) {
@@ -425,7 +423,6 @@ async function saveModelConfig() {
         primaryModel: document.getElementById('model-primary').value,
         deepinfraFallbackModel: document.getElementById('model-deepinfra-fallback').value,
         groqFallbackModel: document.getElementById('model-groq').value,
-        cerebrasFallbackModel: document.getElementById('model-cerebras').value,
         novitaFallbackModel: document.getElementById('model-novita').value,
         cloudflareFallbackModel: document.getElementById('model-cloudflare').value,
         maxTokens: document.getElementById('model-max-tokens').value,
@@ -864,12 +861,12 @@ function initUsageChart(data) {
     usageChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['Groq (Utama)', 'Cerebras', 'DeepInfra', 'Novita AI'],
+            labels: ['Groq (Utama)', 'Cloudflare', 'DeepInfra', 'Novita AI'],
             datasets: [{
                 label: 'Tokens Consumed',
                 data: providerTokenData(data),
-                backgroundColor: ['rgba(34, 197, 94, 0.6)', 'rgba(59, 130, 246, 0.6)', 'rgba(249, 115, 22, 0.6)', 'rgba(139, 92, 246, 0.6)'],
-                borderColor: ['rgb(34, 197, 94)', 'rgb(59, 130, 246)', 'rgb(249, 115, 22)', 'rgb(139, 92, 246)'],
+                backgroundColor: ['rgba(34, 197, 94, 0.6)', 'rgba(245, 158, 11, 0.6)', 'rgba(249, 115, 22, 0.6)', 'rgba(139, 92, 246, 0.6)'],
+                borderColor: ['rgb(34, 197, 94)', 'rgb(245, 158, 11)', 'rgb(249, 115, 22)', 'rgb(139, 92, 246)'],
                 borderWidth: 2
             }]
         },
@@ -888,7 +885,7 @@ function initUsageChart(data) {
 function providerTokenData(d) {
     return [
         d.groq_stats ? d.groq_stats.total_tokens : 0,
-        d.cerebras_stats ? d.cerebras_stats.total_tokens : 0,
+        d.cloudflare_stats ? d.cloudflare_stats.total_tokens : 0,
         d.deepinfra_stats ? d.deepinfra_stats.total_tokens : 0,
         d.novita_stats ? d.novita_stats.total_tokens : 0
     ];
@@ -901,7 +898,6 @@ function updateStats(d) {
     setText('s-cached-tok', nFormatter(d.totalCachedTokens || 0));
     setText('s-active', (d.groq_stats?.active || 0) + '/' + (d.groq_stats?.available || 0));
     setText('s-groq', (d.deepinfra_stats?.active || 0) + '/' + (d.deepinfra_stats?.available || 0));
-    setText('s-cerebras', (d.cerebras_stats?.active || 0) + '/' + (d.cerebras_stats?.available || 0));
     setText('s-novita', (d.novita_stats?.active || 0) + '/' + (d.novita_stats?.available || 0));
     setText('s-cloudflare', (d.cloudflare_stats?.active || 0) + '/' + (d.cloudflare_stats?.available || 0));
     setText('s-uptime', d.uptime || '0s');

@@ -138,7 +138,6 @@ function getAdminDashboardHTML(stats, user) {
                     <div class="stat-card blue"><h3>Output Tokens</h3><p id="s-completion-tok">${nFormatter(stats.totalCompletionTokens || 0)}</p></div>
                     <div class="stat-card green"><h3>Cached Tokens</h3><p id="s-cached-tok">${nFormatter(stats.totalCachedTokens || 0)}</p></div>
                     <div class="stat-card green"><h3>Groq (Utama)</h3><p id="s-active">${(stats.groq_stats && stats.groq_stats.active) || 0}/${(stats.groq_stats && stats.groq_stats.available) || 0}</p></div>
-                    <div class="stat-card purple"><h3>Node Cerebras</h3><p id="s-cerebras">${(stats.cerebras_stats && stats.cerebras_stats.active) || 0}/${(stats.cerebras_stats && stats.cerebras_stats.available) || 0}</p></div>
                     <div class="stat-card orange"><h3>Node DeepInfra</h3><p id="s-groq">${(stats.deepinfra_stats && stats.deepinfra_stats.active) || 0}/${(stats.deepinfra_stats && stats.deepinfra_stats.available) || 0}</p></div>
                     <div class="stat-card purple"><h3>Node Cloudflare</h3><p id="s-cloudflare">${(stats.cloudflare_stats && stats.cloudflare_stats.active) || 0}/${(stats.cloudflare_stats && stats.cloudflare_stats.available) || 0}</p></div>
                     <div class="stat-card blue"><h3>Node Novita</h3><p id="s-novita">${(stats.novita_stats && stats.novita_stats.active) || 0}/${(stats.novita_stats && stats.novita_stats.available) || 0}</p></div>
@@ -233,7 +232,7 @@ function getAdminDashboardHTML(stats, user) {
                 <div class="model-config-panel">
                     <div class="form-group">
                         <label>Groq Primary</label>
-                        <input id="model-groq" placeholder="llama-3.1-8b-instant">
+                        <input id="model-groq" placeholder="groq/compound-mini">
                     </div>
                     <div class="form-group">
                         <label>DeepInfra Primary</label>
@@ -253,10 +252,6 @@ function getAdminDashboardHTML(stats, user) {
                     <div class="form-group">
                         <label>DeepInfra Fallback</label>
                         <input id="model-deepinfra-fallback" list="deepinfra-models" placeholder="meta-llama/Meta-Llama-3.1-8B-Instruct">
-                    </div>
-                    <div class="form-group">
-                        <label>Cerebras Fallback</label>
-                        <input id="model-cerebras" placeholder="gemma-4-31b">
                     </div>
                     <div class="form-group">
                         <label>Novita AI Fallback</label>

@@ -30,8 +30,8 @@ function renderBalanceBadge(account) {
         available = limit - recent;
     }
     
-    const color = available > 0 ? '#22c55e' : '#ef4444';
-    const bg = available > 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+    const color = available > 0 ? '#16a34a' : '#dc2626';
+    const bg = available > 0 ? 'rgba(22, 163, 74, 0.08)' : 'rgba(220, 38, 38, 0.06)';
     const label = available > 0 ? 'AVAILABLE' : 'OVER LIMIT';
     return `<div style="display:flex; align-items:center; gap:8px; background:${bg}; padding:4px 12px; border-radius:8px; border:1px solid ${color}">
         <div style="width:6px; height:6px; border-radius:50%; background:${color}"></div>
@@ -40,9 +40,9 @@ function renderBalanceBadge(account) {
 }
 
 function renderBillingTable(billingData) {
-    if (!billingData || !billingData.months || !billingData.months.length) return '<tr><td colspan="4" style="text-align:center; color:#64748b; padding:2rem">No billing data available.</td></tr>';
+    if (!billingData || !billingData.months || !billingData.months.length) return '<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:2rem">No billing data available.</td></tr>';
     const latestMonth = billingData.months[0];
-    if (!latestMonth || !latestMonth.items) return '<tr><td colspan="4" style="text-align:center; color:#64748b; padding:2rem">No items found for current period.</td></tr>';
+    if (!latestMonth || !latestMonth.items) return '<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:2rem">No items found for current period.</td></tr>';
     
     const totalTokens = latestMonth.items.reduce((sum, item) => sum + (item.units || 0), 0);
     
@@ -73,25 +73,29 @@ function getAdminDashboardHTML(stats, user) {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>NPC SYSTEM - Control Panel</title>
         <link rel="icon" type="image/png" href="/favicon.png?v=2">
-        <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
         <link rel="stylesheet" href="/admin.css?v=3">
+        <script>try{document.documentElement.dataset.theme=localStorage.getItem('npc-theme')||'light';}catch(e){document.documentElement.dataset.theme='light';}</script>
     </head>
     <body>
         <div id="toast-container"></div>
 
         <div class="mobile-header">
             <div class="brand" style="display:flex; align-items:center; gap:8px"><img src="/logo.png" style="width:30px; height:30px; border-radius:6px"><span>NPC</span>SYSTEM</div>
-            <button class="menu-toggle" onclick="toggleMobileMenu()" style="color:#fff">☰</button>
+            <div style="display:flex; align-items:center; gap:4px">
+                <button class="btn-theme-icon" onclick="toggleTheme()" title="Ganti tema"><i data-lucide="moon"></i></button>
+                <button class="menu-toggle" onclick="toggleMobileMenu()" style="color:var(--text-main)">☰</button>
+            </div>
         </div>
 
         <aside id="sidebar">
             <button class="toggle-sidebar" onclick="toggleSidebar()"><i data-lucide="chevron-left"></i></button>
             <div class="brand">
-                <img src="/logo.png" style="width:70px; height:70px; border-radius:18px; box-shadow: 0 8px 25px rgba(0,0,0,0.5)">
-                <h1>ANIMEIN.AI</h1>
-                <p>SYSTEM ENGINE V1</p>
+                <img src="/logo.png" style="width:70px; height:70px; border-radius:12px; border:1px solid var(--border)">
+                <!--<h1>ANIMEIN.AI</h1>
+                <p>SYSTEM ENGINE</p> -->
             </div>
             <nav>
                 ${isAdmin ? `<div class="nav-item active" onclick="showPage('dashboard', this)"><i data-lucide="layout-dashboard"></i> <span>Dashboard</span></div>` : ''}
@@ -108,23 +112,27 @@ function getAdminDashboardHTML(stats, user) {
                     <div class="nav-item" onclick="showPage('terminal', this)"><i data-lucide="terminal"></i> <span>Logs</span></div>
                 ` : ''}
             </nav>
-            
+             
             <div class="sidebar-footer">
                 <div class="user-info-card">
-                    <div style="font-size: 9px; color: #64748b; font-weight: 800; margin-bottom: 8px; text-transform: uppercase;">Logged in as ${currentRole}</div>
+                    <div style="font-size: 11px; color: var(--text-muted); font-weight: 600; letter-spacing: 0.88px; margin-bottom: 8px; text-transform: uppercase;">Logged in as ${currentRole}</div>
                     <div class="status-badge">
                         <span class="status-dot"></span>
                         ONLINE
                     </div>
                 </div>
+                <button class="btn-theme" id="theme-toggle" onclick="toggleTheme()" title="Ganti tema gelap / terang">
+                    <i data-lucide="moon"></i> <span>Dark Mode</span>
+                </button>
                 <button class="btn-logout" onclick="window.location.href='/logout'">
                     <i data-lucide="log-out"></i> <span>LOGOUT</span>
                 </button>
                 <div style="text-align: center; margin-top: 1.5rem;">
-                    <span style="color: rgba(255,255,255,0.2); font-size: 10px; font-weight: 700;">VERSI 1.1.0</span>
+                    <span style="color: var(--muted); font-size: 11px; font-weight: 600;">VERSI 1.1.0</span>
                 </div>
             </div>
         </aside>
+        <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="toggleMobileMenu()"></div>
 
         <main>
             ${isAdmin ? `
@@ -156,7 +164,7 @@ function getAdminDashboardHTML(stats, user) {
                             <h3 style="margin-bottom:0">DeepInfra Billing & Usage</h3>
                             <div style="display:flex; gap:0.75rem; align-items:center" id="billing-header-tools">
                                 ${renderBalanceBadge(stats.deepinfra_account)}
-                                <span style="font-size:11px; font-weight:800; color:#64748b; background:#f1f5f9; padding:4px 10px; border-radius:6px; text-transform:uppercase">REALTIME DATA</span>
+                                <span style="font-size:11px; font-weight:800; color:var(--text-muted); background:var(--surface-strong); padding:4px 10px; border-radius:6px; text-transform:uppercase">REALTIME DATA</span>
                             </div>
                         </div>
                         <div class="table-container">
@@ -180,8 +188,8 @@ function getAdminDashboardHTML(stats, user) {
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem">
                             <h3 style="margin-bottom:0">Prompt Cache Usage</h3>
                             <div style="display:flex; gap:0.75rem; align-items:center">
-                                <span id="cache-total-saved" style="font-size:13px; font-weight:800; color:var(--primary); background:rgba(249,115,22,0.1); padding:4px 12px; border-radius:8px; border:1px solid var(--primary)">CACHE COST: $0.00</span>
-                                <span style="font-size:11px; font-weight:800; color:#64748b; background:#f1f5f9; padding:4px 10px; border-radius:6px; text-transform:uppercase">SESSION DATA</span>
+                                <span id="cache-total-saved" style="font-size:11px; font-weight:600; letter-spacing: 0.88px; color:var(--text-main); background:var(--surface-strong); padding:4px 12px; border-radius:8px; border:1px solid var(--border-strong)">CACHE COST: $0.00</span>
+                                <span style="font-size:11px; font-weight:800; color:var(--text-muted); background:var(--surface-strong); padding:4px 10px; border-radius:6px; text-transform:uppercase">SESSION DATA</span>
                             </div>
                         </div>
                         <div class="table-container">
@@ -195,7 +203,7 @@ function getAdminDashboardHTML(stats, user) {
                                     </tr>
                                 </thead>
                                 <tbody id="cache-body">
-                                    <tr><td colspan="4" style="text-align:center; color:#64748b; padding:2rem">Belum ada data cache. Menunggu request masuk...</td></tr>
+                                    <tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:2rem">Belum ada data cache. Menunggu request masuk...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -208,12 +216,18 @@ function getAdminDashboardHTML(stats, user) {
                 <header>
                     <h1>Management Karakter</h1>
                     <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
-                        <span id="char-total" style="font-size:0.78rem; font-weight:800; color:var(--text-muted); background:#f8fafc; border:1px solid var(--border); border-radius:999px; padding:0.55rem 0.9rem; white-space:nowrap;">Total: 0 karakter</span>
-                        <input type="text" id="char-search" placeholder="Search karakter..." oninput="debouncedRenderCharacters()" style="padding:0.65rem 1rem; border-radius:10px; border:1px solid var(--border); background:#ffffff; color:var(--text-main); width:240px; font-family:inherit; font-size:0.88rem; outline:none;">
-                        <select id="char-sort" onchange="renderCharacters(1)" style="padding:0.65rem 1rem; border-radius:10px; border:1px solid var(--border); background:#ffffff; color:var(--text-main); font-family:inherit; font-size:0.88rem; outline:none; cursor:pointer;">
+                        <span id="char-total" style="font-size:0.78rem; font-weight:600; color:var(--text-muted); background:var(--canvas-soft); border:1px solid var(--border); border-radius:999px; padding:0.55rem 0.9rem; white-space:nowrap;">Total: 0 karakter</span>
+                        <input type="text" id="char-search" placeholder="Search karakter..." oninput="debouncedRenderCharacters()" style="padding:0.65rem 1rem; border-radius:10px; border:1px solid var(--border); background:var(--card); color:var(--text-main); width:240px; font-family:inherit; font-size:0.88rem; outline:none;">
+                        <select id="char-sort" onchange="renderCharacters(1)" style="padding:0.65rem 1rem; border-radius:10px; border:1px solid var(--border); background:var(--card); color:var(--text-main); font-family:inherit; font-size:0.88rem; outline:none; cursor:pointer;">
                             <option value="newest">Terbaru Dibuat</option>
                             <option value="oldest">Terlama Dibuat</option>
                             <option value="name">Nama (A-Z)</option>
+                        </select>
+                        <select id="char-limit" onchange="renderCharacters(1)" title="Baris per halaman" style="padding:0.65rem 1rem; border-radius:10px; border:1px solid var(--border); background:var(--card); color:var(--text-main); font-family:inherit; font-size:0.88rem; outline:none; cursor:pointer;">
+                            <option value="10" selected>10 / halaman</option>
+                            <option value="20">20 / halaman</option>
+                            <option value="50">50 / halaman</option>
+                            <option value="100">100 / halaman</option>
                         </select>
                         <button class="btn" onclick="openModal()">+ Add New NPC</button>
                     </div>
@@ -232,7 +246,7 @@ function getAdminDashboardHTML(stats, user) {
                 <div class="model-config-panel">
                     <div class="form-group">
                         <label>Groq Primary</label>
-                        <input id="model-groq" placeholder="groq/compound-mini">
+                        <input id="model-groq" placeholder="qwen/qwen3.8-27b">
                     </div>
                     <div class="form-group">
                         <label>DeepInfra Primary</label>
@@ -288,6 +302,12 @@ function getAdminDashboardHTML(stats, user) {
                     <h1>User Directory</h1>
                     <div style="display:flex; gap:1rem; align-items:center">
                         <input type="text" id="user-search" placeholder="Search username..." onkeyup="debouncedLoadUsers()" style="padding:0.6rem 1rem; border-radius:10px; border:1px solid var(--border); width:250px; font-size:0.9rem">
+                        <select id="user-limit" onchange="loadUsers(1)" title="Baris per halaman" style="padding:0.6rem 1rem; border-radius:10px; border:1px solid var(--border); background:var(--card); color:var(--text-main); font-family:inherit; font-size:0.9rem; outline:none; cursor:pointer;">
+                            <option value="10" selected>10 / halaman</option>
+                            <option value="20">20 / halaman</option>
+                            <option value="50">50 / halaman</option>
+                            <option value="100">100 / halaman</option>
+                        </select>
                         <button class="btn btn-outline" onclick="loadUsers(1)">Refresh</button>
                     </div>
                 </header>
@@ -302,10 +322,16 @@ function getAdminDashboardHTML(stats, user) {
 
             <div id="page-topusers" class="hidden">
                 <header>
-                    <h1>Top 100 Users by Level</h1>
+                    <h1>Top Users by Level</h1>
                     <div style="display:flex; gap:1rem; align-items:center">
-                        <select id="topusers-char-select" onchange="loadTopUsers()" style="padding:0.65rem 1rem; border-radius:10px; border:1px solid var(--border); background:#ffffff; color:var(--text-main); font-family:inherit; font-size:0.88rem; outline:none; cursor:pointer; min-width:200px;">
+                        <select id="topusers-char-select" onchange="loadTopUsers()" style="padding:0.65rem 1rem; border-radius:10px; border:1px solid var(--border); background:var(--card); color:var(--text-main); font-family:inherit; font-size:0.88rem; outline:none; cursor:pointer; min-width:200px;">
                             <option value="">Semua Karakter</option>
+                        </select>
+                        <select id="topusers-limit-select" onchange="loadTopUsers()" title="Jumlah ditampilkan" style="padding:0.65rem 1rem; border-radius:10px; border:1px solid var(--border); background:var(--card); color:var(--text-main); font-family:inherit; font-size:0.88rem; outline:none; cursor:pointer;">
+                            <option value="10" selected>Top 10</option>
+                            <option value="20">Top 20</option>
+                            <option value="50">Top 50</option>
+                            <option value="100">Top 100</option>
                         </select>
                         <button class="btn btn-outline" onclick="loadTopUsers()">Refresh</button>
                     </div>
@@ -322,7 +348,13 @@ function getAdminDashboardHTML(stats, user) {
                 <header>
                     <h1>Daftar Ban User</h1>
                     <div style="display:flex; gap:1rem; align-items:center">
-                        <input type="text" id="ban-search" placeholder="Search username..." onkeyup="debouncedLoadBanList()" style="padding: 0.65rem 1rem; border-radius: 10px; border: 1px solid var(--border); background: #ffffff; color: var(--text-main); width: 250px; font-family: inherit; font-size: 0.88rem; outline: none;">
+                        <input type="text" id="ban-search" placeholder="Search username..." onkeyup="debouncedLoadBanList()" style="padding: 0.65rem 1rem; border-radius: 10px; border: 1px solid var(--border); background:var(--card); color: var(--text-main); width: 250px; font-family: inherit; font-size: 0.88rem; outline: none;">
+                        <select id="ban-limit" onchange="loadBanList(1)" title="Baris per halaman" style="padding: 0.65rem 1rem; border-radius: 10px; border: 1px solid var(--border); background:var(--card); color: var(--text-main); font-family: inherit; font-size: 0.88rem; outline: none; cursor: pointer;">
+                            <option value="10" selected>10 / halaman</option>
+                            <option value="20">20 / halaman</option>
+                            <option value="50">50 / halaman</option>
+                            <option value="100">100 / halaman</option>
+                        </select>
                         <button class="btn btn-outline" onclick="loadBanList()" style="border-radius: 10px; padding: 0.65rem 1.2rem;">Refresh</button>
                     </div>
                 </header>
@@ -332,8 +364,8 @@ function getAdminDashboardHTML(stats, user) {
                         <div class="card-section" style="padding: 1.5rem;">
                             <h2 style="font-size: 0.9rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1.25rem; color: var(--text-main);">Ban User Baru</h2>
                             <div style="display: flex; gap: 0.5rem;">
-                                <input type="text" id="ban-username-input" placeholder="Username..." style="flex: 1; padding: 0.75rem 1rem; border-radius: 10px; border: 1px solid var(--border); background: #ffffff; color: var(--text-main); font-family: inherit; font-size: 0.88rem; outline: none; transition: border-color .2s, box-shadow .2s;">
-                                <button class="btn btn-danger" onclick="banUser()" style="border-radius: 10px; padding: 0.75rem 1.2rem; font-size: 0.85rem; background: #fee2e2; border-color: #fee2e2;">Ban</button>
+                                <input type="text" id="ban-username-input" placeholder="Username..." style="flex: 1; padding: 0.75rem 1rem; border-radius: 10px; border: 1px solid var(--border); background:var(--card); color: var(--text-main); font-family: inherit; font-size: 0.88rem; outline: none; transition: border-color .2s, box-shadow .2s;">
+                                <button class="btn btn-danger" onclick="banUser()" style="border-radius: 8px; padding: 0.75rem 1.2rem;">Ban</button>
                             </div>
                         </div>
 
@@ -351,8 +383,15 @@ function getAdminDashboardHTML(stats, user) {
                         
                         <div class="card-section" style="padding: 1.5rem;">
                             <h2 style="font-size: 0.9rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1.25rem; color: var(--text-main);">Pengaturan Pesan Ban</h2>
-                            <textarea id="ban-message-input" rows="3" style="width: 100%; padding: 0.85rem 1rem; border-radius: 10px; border: 1px solid var(--border); background: #ffffff; color: var(--text-main); font-family: inherit; font-size: 0.88rem; outline: none; margin-bottom: 0.9rem; resize: vertical; transition: border-color .2s, box-shadow .2s;"></textarea>
+                            <textarea id="ban-message-input" rows="3" style="width: 100%; padding: 0.85rem 1rem; border-radius: 10px; border: 1px solid var(--border); background:var(--card); color: var(--text-main); font-family: inherit; font-size: 0.88rem; outline: none; margin-bottom: 0.9rem; resize: vertical; transition: border-color .2s, box-shadow .2s;"></textarea>
                             <button class="btn" style="width: 100%; padding: 0.75rem 1.2rem; border-radius: 10px;" onclick="updateBanMessage()">Simpan Pesan</button>
+                        </div>
+
+                        <div class="card-section" style="padding: 1.5rem;">
+                            <h2 style="font-size: 0.9rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem; color: var(--text-main);">Kata Kasar Auto-Ban</h2>
+                            <p style="margin: 0 0 1rem; font-size: .75rem; color: var(--text-muted); font-weight: 600; line-height: 1.45;">Satu kata per baris (atau pisah koma). User yang mengirim pesan mengandung kata ini langsung di-ban. Kosongkan untuk memakai daftar default.</p>
+                            <textarea id="badwords-input" rows="5" placeholder="contoh:\nanjing\nbangsat\ntolol" style="width: 100%; padding: 0.85rem 1rem; border-radius: 10px; border: 1px solid var(--border); background:var(--card); color: var(--text-main); font-family: inherit; font-size: 0.88rem; outline: none; margin-bottom: 0.9rem; resize: vertical; transition: border-color .2s, box-shadow .2s;"></textarea>
+                            <button class="btn" style="width: 100%; padding: 0.75rem 1.2rem; border-radius: 10px;" onclick="updateBadwords()">Simpan Kata Kasar</button>
                         </div>
 
 
@@ -411,26 +450,26 @@ function getAdminDashboardHTML(stats, user) {
             <div id="page-simulator" class="hidden" style="max-width: 1200px; margin: 0 auto;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.5rem; padding: 0 0.5rem;">
                     <div>
-                        <h1 style="font-size: 20px; font-weight: 800; color: #0f172a; margin-bottom: 4px;">Live Simulator</h1>
+                        <h1 style="font-size: 22px; font-weight: 600; letter-spacing: -0.5px; color: var(--text-main); margin-bottom: 4px;">Live Simulator</h1>
                     </div>
                     <div style="display: flex; gap: 0.75rem;">
-                        <div style="background: #fff; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 10px;">
+                        <div style="background:var(--card); padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 10px;">
                             <label style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Karakter</label>
                             <select id="sim-select" style="border: none; font-weight: 700; outline: none; cursor: pointer; color: var(--primary); background: transparent; padding-right: 5px; font-size: 14px; -webkit-appearance: none; -moz-appearance: none; appearance: none;"></select>
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none; margin-left: -5px;"><path d="m6 9 6 6 6-6"/></svg>
                         </div>
-                        <div style="background: #fff; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 10px;">
+                        <div style="background:var(--card); padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 10px;">
                             <label style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Model</label>
                             <select id="sim-model-select" style="border: none; font-weight: 700; outline: none; cursor: pointer; color: var(--primary); background: transparent; padding-right: 5px; font-size: 14px; -webkit-appearance: none; -moz-appearance: none; appearance: none;">
                                 <option value="auto">Auto (Queue Default)</option>
                             </select>
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none; margin-left: -5px;"><path d="m6 9 6 6 6-6"/></svg>
                         </div>
-                        <div style="background: #fff; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 10px;">
+                        <div style="background:var(--card); padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 10px;">
                             <label style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Heart</label>
                             <input type="number" id="sim-heart" value="0" min="0" max="5" style="border: none; width: 35px; font-weight: 800; outline: none; text-align: center;">
                         </div>
-                        <div style="background: #fff; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 10px;">
+                        <div style="background:var(--card); padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 10px;">
                             <label style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Lv5 Owner</label>
                             <input type="text" id="sim-lv5-owner" placeholder="Username..." style="border: none; width: 100px; font-weight: 700; outline: none; color: var(--info);">
                         </div>
@@ -443,9 +482,9 @@ function getAdminDashboardHTML(stats, user) {
                         <div id="sim-messages">
                             <div class="msg msg-bot">Halo! Silakan pilih karakter dan ketik pesan untuk mulai simulasi.</div>
                         </div>
-                        <div style="padding: 1.25rem; background: #fff; border-top: 1px solid #f1f5f9; display: flex; gap: 0.75rem; align-items: center;">
+                        <div style="padding: 1.25rem; background:var(--card); border-top: 1px solid var(--border); display: flex; gap: 0.75rem; align-items: center;">
                             <input type="text" id="sim-input" placeholder="Tulis sesuatu untuk NPC..." style="flex:1; padding: 0.85rem 1.25rem; border-radius: 15px; border: 1.5px solid var(--border); font-weight: 600; outline: none; transition: all 0.2s;" onkeypress="if(event.key==='Enter') sendMessage()">
-                            <button id="sim-send-btn" onclick="sendMessage()" style="height: 45px; width: 45px; background: var(--primary); color: #fff; border: none; border-radius: 15px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; font-weight: 800;">
+                            <button id="sim-send-btn" onclick="sendMessage()" style="height: 45px; width: 45px; background: var(--primary); color: var(--on-primary); border: none; border-radius: 15px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; font-weight: 800;">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                             </button>
                         </div>
@@ -459,7 +498,7 @@ function getAdminDashboardHTML(stats, user) {
                         
                         <div style="margin-top: 1.25rem; flex-shrink: 0;">
                             <div class="debug-header"><span>Active System Prompt</span></div>
-                            <div id="sim-prompt-content" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #64748b; background: #f8fafc; padding: 1rem; border-radius: 12px; border: 1px solid #f1f5f9; max-height: 250px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5;">-</div>
+                            <div id="sim-prompt-content" style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text-muted); background: var(--canvas-soft); padding: 1rem; border-radius: 12px; border: 1px solid var(--border); max-height: 250px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5;">-</div>
                         </div>
                     </div>
                 </div>
@@ -540,28 +579,47 @@ function getLoginPageHTML(error = '') {
         <meta charset="UTF-8">
         <title>Login - NPC System</title>
         <link rel="icon" type="image/png" href="/favicon.png?v=2">
-        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
         <style>
-            body { font-family: 'Outfit', sans-serif; background: #0f172a; height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; }
-            .login-card { background: #1e293b; padding: 2.5rem; border-radius: 1.5rem; width: 400px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); text-align: center; border: 1px solid rgba(255,255,255,0.05); }
-            h1 { color: #f97316; font-weight: 800; font-size: 1.8rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 1px; }
-            p { color: #64748b; font-size: 0.75rem; font-weight: 600; margin-bottom: 2rem; text-transform: uppercase; letter-spacing: 1px; }
+            :root { --bg:#ffffff; --card:#ffffff; --ink:#171717; --muted:#60646c; --border:#f0f0f3; --border-strong:#dcdee0; --primary:#000000; --primary-hover:#1a1a1a; --on-primary:#ffffff; --danger:#dc2626; --danger-soft:#eb8e90; }
+            [data-theme="dark"] { --bg:#0a0a0a; --card:#171717; --ink:#fafafa; --muted:#b0b4ba; --border:rgba(255,255,255,0.08); --border-strong:rgba(255,255,255,0.16); --primary:#ffffff; --primary-hover:#d4d4d4; --on-primary:#000000; --danger:#ff8a8a; }
+            body { font-family: 'Inter', -apple-system, system-ui, sans-serif; background: var(--bg); background-image: radial-gradient(ellipse 80% 50% at 50% -10%, #cfe7ff 0%, transparent 70%); background-repeat: no-repeat; min-height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; }
+            [data-theme="dark"] body { background-image: none; }
+            .login-card { background: var(--card); padding: 2.5rem; border-radius: 12px; width: 400px; max-width: calc(100vw - 2rem); border: 1px solid var(--border); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04); text-align: center; }
+            h1 { color: var(--ink); font-weight: 600; font-size: 28px; letter-spacing: -0.84px; margin-bottom: 0.5rem; }
+            p { color: var(--muted); font-size: 11px; font-weight: 600; margin-bottom: 2rem; text-transform: uppercase; letter-spacing: 0.88px; }
             .form-group { text-align: left; margin-bottom: 1.25rem; }
-            label { display: block; color: #94a3b8; font-size: 0.75rem; font-weight: 700; margin-bottom: 0.5rem; text-transform: uppercase; }
-            input { width: 100%; padding: 0.85rem 1.2rem; background: #f8fafc; border: 2px solid transparent; border-radius: 0.75rem; font-size: 0.95rem; font-weight: 600; transition: all 0.2s; outline: none; }
-            input:focus { border-color: #f97316; box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1); }
-            button { width: 100%; padding: 1rem; background: #f97316; color: #fff; border: none; border-radius: 0.75rem; font-weight: 800; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; margin-top: 1rem; }
-            button:hover { background: #ea580c; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(249, 115, 22, 0.3); }
-            .error { background: rgba(239, 68, 68, 0.1); color: #ef4444; padding: 0.75rem; border-radius: 0.5rem; font-size: 0.85rem; font-weight: 700; margin-bottom: 1.5rem; border: 1px solid rgba(239, 68, 68, 0.2); }
+            label { display: block; color: var(--muted); font-size: 11px; font-weight: 600; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.88px; }
+            input { width: 100%; padding: 12px 16px; background: var(--card); color: var(--ink); border: 1px solid var(--border-strong); border-radius: 8px; font-size: 16px; font-family: inherit; transition: border 0.2s; outline: none; height: 44px; box-sizing: border-box; }
+            input:focus { border: 2px solid var(--ink); padding: 11px 15px; }
+            button { width: 100%; height: 40px; padding: 10px 18px; background: var(--primary); color: var(--on-primary); border: none; border-radius: 8px; font-weight: 500; font-size: 14px; font-family: inherit; cursor: pointer; transition: background 0.2s; margin-top: 1rem; }
+            button:hover { background: var(--primary-hover); }
+            .error { background: var(--card); color: var(--danger); padding: 0.75rem; border-radius: 8px; font-size: 14px; font-weight: 500; margin-bottom: 1.5rem; border: 1px solid var(--danger-soft); }
+            .login-theme { position: fixed; top: 20px; right: 20px; width: 40px; height: 40px; margin: 0; padding: 0; background: var(--card); color: var(--ink); border: 1px solid var(--border-strong); border-radius: 8px; font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; }
         </style>
+        <script>
+            try { document.documentElement.dataset.theme = localStorage.getItem('npc-theme') || 'light'; } catch (e) { document.documentElement.dataset.theme = 'light'; }
+            function toggleLoginTheme() {
+                const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+                document.documentElement.dataset.theme = next;
+                try { localStorage.setItem('npc-theme', next); } catch (e) {}
+                const b = document.getElementById('login-theme-btn');
+                if (b) b.textContent = next === 'dark' ? '☀' : '☾';
+            }
+            document.addEventListener('DOMContentLoaded', () => {
+                const b = document.getElementById('login-theme-btn');
+                if (b) b.textContent = document.documentElement.dataset.theme === 'dark' ? '☀' : '☾';
+            });
+        </script>
     </head>
     <body>
+        <button class="login-theme" id="login-theme-btn" onclick="toggleLoginTheme()" title="Ganti tema">☾</button>
         <div class="login-card">
-            <img src="/logo.png" style="width:80px; height:80px; border-radius:16px; margin-bottom:1.5rem; box-shadow: 0 8px 16px rgba(0,0,0,0.4)">
+            <img src="/logo.png" style="width:80px; height:80px; border-radius:12px; border:1px solid var(--border); margin-bottom:1.5rem;">
             <h1>NPC SYSTEM</h1>
             <p>Role Authentication</p>
             
-            ${error ? `<div class="error">${error}</div>` : ''}
+            ${error ? `<div class="error">${escapeHTML(error)}</div>` : ''}
 
             <form action="/login" method="POST">
                 <div class="form-group">

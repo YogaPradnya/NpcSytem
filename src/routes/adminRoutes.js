@@ -2,8 +2,33 @@ const express = require('express');
 const { formatUptime } = require('../stats');
 const { parseHeartProfiles, stringifyHeartProfiles } = require('../heart_profiles');
 
-function createAdminRoutes({
-    db,
+function parseBadwordsSetting(raw) {
+    if (!raw) return [];
+    const text = String(raw).trim();
+    if (!text) return [];
+    // Dukung format JSON array (["a","b"]) atau teks pisah koma/baris.
+    if (text.startsWith('[')) {
+        try {
+            const arr = JSON.parse(text);
+            if (Array.isArray(arr)) return normalizeBadwordsInput(arr);
+        } catch (e) { /* fallback ke split manual */ }
+    }
+    return normalizeBadwordsInput(text.split(/[\n,;]+/));
+}
+
+function normalizeBadwordsInput(input) {
+    const arr = Array.isArray(input) ? input : [input];
+    const flat = [];
+    for (const item of arr) {
+        if (typeof item === 'string' && item.includes('\n')) flat.push(...item.split('\n'));
+        else flat.push(item);
+    }
+    return [...new Set(
+        flat.map(w => String(w || '').trim().toLowerCase()).filter(w => w.length > 0 && w.length <= 50)
+    )].slice(0, 500);
+}
+
+function createAdminRoutes({    db,
     characters,
     providers,
     globalStats,
@@ -235,7 +260,9 @@ function createAdminRoutes({
 
     router.get('/api/admin/top-users', apiAuth, adminOnly, async (req, res) => {
         try {
-            const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 100));
+            const allowedLimits = [10, 20, 50, 100];
+            const reqLimit = parseInt(req.query.limit, 10);
+            const limit = allowedLimits.includes(reqLimit) ? reqLimit : 10;
             const aiName = String(req.query.ai_name || '').trim().toLowerCase();
 
             let where = "WHERE username IS NOT NULL AND TRIM(username) != ''";
@@ -308,7 +335,9 @@ function createAdminRoutes({
     router.get('/api/admin/users', apiAuth, adminOnly, async (req, res) => {
         try {
             const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-            const limit = Math.min(100, Math.max(10, parseInt(req.query.limit, 10) || 30));
+            const allowedLimits = [10, 20, 50, 100];
+            const reqLimit = parseInt(req.query.limit, 10);
+            const limit = allowedLimits.includes(reqLimit) ? reqLimit : 10;
             const offset = (page - 1) * limit;
             const q = String(req.query.q || '').trim();
             const where = q ? "WHERE LOWER(username) LIKE LOWER(?)" : "";
@@ -356,7 +385,32 @@ function createAdminRoutes({
         if (!id || !data) return res.status(400).json({ error: "Missing data" });
 
         try {
-            const createdAt = data.created_at || (characters[id] && characters[id].created_at) || new Date().toISOString();
+            const rawId = String(id).trim();
+            if (!rawId) return res.status(400).json({ error: "ID tidak boleh kosong" });
+
+            // ID lama TIDAK diubah apa pun (pelestarian data existing).
+            // Normalisasi hanya untuk karakter BARU agar konsisten lowercase.
+            let finalId = rawId;
+            const existsExact = await db.execute({
+                sql: "SELECT id FROM characters WHERE id = ?",
+                args: [rawId]
+            });
+            if (existsExact.rows.length === 0) {
+                const normalized = rawId.toLowerCase();
+                if (!/^[a-z0-9_-]{1,50}$/.test(normalized)) {
+                    return res.status(400).json({ error: "ID baru hanya boleh huruf kecil, angka, tanda - dan _ (maks 50 karakter). Contoh: alya" });
+                }
+                const existsNormalized = await db.execute({
+                    sql: "SELECT id FROM characters WHERE LOWER(id) = ?",
+                    args: [normalized]
+                });
+                if (existsNormalized.rows.length > 0) {
+                    return res.status(409).json({ error: `ID '${normalized}' sudah ada (tidak sensitif huruf-besar). Gunakan edit pada karakter tersebut.` });
+                }
+                finalId = normalized;
+            }
+
+            const createdAt = data.created_at || (characters[finalId] && characters[finalId].created_at) || new Date().toISOString();
             await db.execute({
                 sql: `INSERT INTO characters (id, npc_name, npc_description, npc_personality, npc_speaking_style, character_background, language, heart_profiles, signature_style, is_enabled, created_at) 
                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -371,11 +425,11 @@ function createAdminRoutes({
                       signature_style=excluded.signature_style,
                       is_enabled=excluded.is_enabled,
                       created_at=COALESCE(characters.created_at, excluded.created_at)`,
-                args: [id, data.npc_name, data.npc_description, data.npc_personality, data.npc_speaking_style, data.character_background || '', data.language || 'id', stringifyHeartProfiles(data.heart_profiles), data.signature_style || '', data.is_enabled ? 1 : 0, createdAt]
+                args: [finalId, data.npc_name, data.npc_description, data.npc_personality, data.npc_speaking_style, data.character_background || '', data.language || 'id', stringifyHeartProfiles(data.heart_profiles), data.signature_style || '', data.is_enabled ? 1 : 0, createdAt]
             });
 
-            characters[id] = { id, ...data, heart_profiles: stringifyHeartProfiles(data.heart_profiles), signature_style: data.signature_style || '', character_background: data.character_background || '', created_at: createdAt };
-            res.json({ success: true, message: `Character ${id} saved to Turso.` });
+            characters[finalId] = { id: finalId, ...data, heart_profiles: parseHeartProfiles(data.heart_profiles), signature_style: data.signature_style || '', character_background: data.character_background || '', created_at: createdAt };
+            res.json({ success: true, message: `Character ${finalId} saved to Turso.`, id: finalId });
         } catch (e) {
             res.status(500).json({ error: e.message });
         }
@@ -419,7 +473,9 @@ function createAdminRoutes({
     router.get('/api/admin/ban-list', apiAuth, adminOnly, async (req, res) => {
         try {
             const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-            const limit = 35; // Per page 35 as requested
+            const allowedLimits = [10, 20, 50, 100];
+            const reqLimit = parseInt(req.query.limit, 10);
+            const limit = allowedLimits.includes(reqLimit) ? reqLimit : 10;
             const offset = (page - 1) * limit;
             const q = String(req.query.q || '').trim();
 
@@ -441,6 +497,7 @@ function createAdminRoutes({
             const total = Number(countRes.rows[0]?.total || 0);
 
             const settings = await db.execute("SELECT value FROM settings WHERE key = 'ban_message'");
+            const badwordsSetting = await db.execute("SELECT value FROM settings WHERE key = 'badwords'");
             res.json({
                 success: true,
                 list: bans.rows,
@@ -451,7 +508,7 @@ function createAdminRoutes({
                     totalPages: Math.max(1, Math.ceil(total / limit))
                 },
                 ban_message: settings.rows[0]?.value,
-                auto_ban_words: ''
+                auto_ban_words: badwordsSetting.rows[0]?.value || ''
             });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
@@ -506,6 +563,34 @@ function createAdminRoutes({
                 args: [message]
             });
             res.json({ success: true, message: "Pesan ban berhasil diperbarui." });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    // Daftar kata kasar untuk auto-ban (diisi manual oleh admin).
+    // Kosong = pakai daftar default di src/utils/badwordFilter.js.
+    router.get('/api/admin/badwords', apiAuth, adminOnly, async (req, res) => {
+        try {
+            const { getBadWords } = require('../utils/badwordFilter');
+            const settings = await db.execute("SELECT value FROM settings WHERE key = 'badwords'");
+            const raw = settings.rows[0]?.value || '';
+            res.json({ success: true, words: parseBadwordsSetting(raw), active_words: getBadWords() });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    router.post('/api/admin/badwords/update', apiAuth, adminOnly, async (req, res) => {
+        try {
+            const { setBadWords } = require('../utils/badwordFilter');
+            const words = normalizeBadwordsInput(req.body?.words ?? req.body?.text ?? '');
+            await db.execute({
+                sql: "INSERT INTO settings (key, value) VALUES ('badwords', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                args: [words.join('\n')]
+            });
+            setBadWords(words.length > 0 ? words : null);
+            res.json({ success: true, message: `Daftar kata kasar diperbarui (${words.length} kata).`, words });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
         }

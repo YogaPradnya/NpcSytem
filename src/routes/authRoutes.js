@@ -24,7 +24,9 @@ function createAuthRoutes({ getLoginPageHTML }) {
             res.cookie('user', JSON.stringify({ username, role }), {
                 signed: true,
                 httpOnly: true,
-                maxAge: 86400000 * 7
+                sameSite: 'lax',
+                secure: process.env.NODE_ENV === 'production',
+                maxAge: 86400000 // 24 jam
             });
             res.redirect('/admin');
         } else {

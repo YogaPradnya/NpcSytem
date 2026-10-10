@@ -21,7 +21,7 @@ const deepInfraModelProfiles = {
 const aiConfig = {
     primaryModel: process.env.DEEPINFRA_MODEL || DEFAULT_DEEPINFRA_MODEL,
     deepinfraFallbackModel: process.env.DEEPINFRA_FALLBACK_MODEL || DEFAULT_DEEPINFRA_FALLBACK_MODEL,
-    groqFallbackModel: process.env.GROQ_FALLBACK_MODEL || 'groq/compound-mini',
+    groqFallbackModel: process.env.GROQ_FALLBACK_MODEL || 'qwen/qwen3.8-27b',
     novitaFallbackModel: process.env.NOVITA_FALLBACK_MODEL || DEFAULT_NOVITA_MODEL,
     cloudflareFallbackModel: process.env.CLOUDFLARE_FALLBACK_MODEL || DEFAULT_CLOUDFLARE_MODEL,
     maxTokens: Number(process.env.AI_MAX_TOKENS || 100),
@@ -77,7 +77,7 @@ function getRpmLimitForType(type) {
 function makeClientState(extra = {}) {
     return {
         cooldownUntil: 0,
-        isEnabled: true,
+        isEnabled: false,
         requestTimestamps: [],
         stats: makeStats(),
         ...extra
@@ -324,6 +324,7 @@ function getSupportedDeepInfraModels() {
 
 function getAvailableModels() {
     const groqModels = [
+        'qwen/qwen3.8-27b',
         'groq/compound-mini',
         'qwen/qwen3.6-27b',
         'openai/gpt-oss-20b',
@@ -506,6 +507,10 @@ async function tryClients({ clients, providerName, model, messages, cooldownMs, 
                 } else if (providerName === 'CLOUDFLARE') {
                     console.warn(`[NPC] Cloudflare #${clientObj.id} Limit! Cooldown 5m.`);
                 }
+            } else if (errStatus === 403 || errStatus === 401 || (error?.message && error.message.includes('blocked'))) {
+                // Key diblokir atau invalid -> Cooldown 1 jam agar otomatis di-skip dan tidak mengganggu node lain
+                clientObj.cooldownUntil = Date.now() + (60 * 60 * 1000);
+                console.warn(`[NPC] ${providerName} #${clientObj.id} Blocked/Forbidden (Status ${errStatus}). Auto-cooldown 1 jam.`);
             } else {
                 console.warn(`[NPC] ${providerName} #${clientObj.id} Error (${model}):`, error.message);
                 if (providerName === 'DEEPINFRA' && isModelCompatibilityError(error)) break;
@@ -541,7 +546,25 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, ca
 
         console.log(`[NPC] Manual Model Selection: '${actualModel}' (Provider: ${providerHint || 'Auto'})`);
 
-        if (providerHint === 'GROQ' || (!providerHint && (actualModel.includes('compound') || actualModel.includes('qwen') || actualModel.includes('gpt-oss')))) {
+        // Tanpa prefix provider, resolve dari daftar model yang dikenal.
+        // Tidak ada lagi tebakan substring (misal 'qwen'/'compound' → GROQ).
+        if (!providerHint) {
+            const candidates = getAvailableModels().filter(m => m.provider !== 'AUTO' && m.model === actualModel);
+            const found = [...new Set(candidates.map(c => c.provider))];
+            if (found.length === 1) {
+                providerHint = found[0];
+            } else if (found.length === 0) {
+                throw new Error(`Model '${actualModel}' tidak dikenal. Gunakan format 'PROVIDER:model', misal 'GROQ:groq/compound-mini' atau 'DEEPINFRA:meta-llama/Meta-Llama-3.1-8B-Instruct'.`);
+            } else {
+                throw new Error(`Model '${actualModel}' ada di beberapa provider (${found.join(', ')}). Sebutkan providernya, misal '${found[0]}:${actualModel}'.`);
+            }
+        }
+
+        if (!['GROQ', 'NOVITA', 'CLOUDFLARE', 'DEEPINFRA'].includes(providerHint)) {
+            throw new Error(`Provider '${providerHint}' tidak dikenal. Pilihan: GROQ, CLOUDFLARE, DEEPINFRA, NOVITA.`);
+        }
+
+        if (providerHint === 'GROQ') {
             const clients = availableGroq.length > 0 ? availableGroq : groqClients.filter(c => c.isEnabled);
             if (clients.length > 0) {
                 const res = await tryClients({ clients, providerName: 'GROQ', model: actualModel, messages, cooldownMs: 10 * 60 * 1000 });
@@ -562,7 +585,7 @@ async function createChatCompletion({ staticSystemPrompt, dynamicUserContent, ca
                 if (res) return res;
             }
         }
-        if (providerHint === 'DEEPINFRA' || !providerHint) {
+        if (providerHint === 'DEEPINFRA') {
             const clients = availableDeepInfra.length > 0 ? availableDeepInfra : fallbackClients;
             if (clients.length > 0) {
                 const res = await tryClients({ clients, providerName: 'DEEPINFRA', model: actualModel, messages, cooldownMs: 5 * 60 * 1000, cacheKey });

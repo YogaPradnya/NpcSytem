@@ -18,7 +18,17 @@ let latestBanList = [];
 let charPage = 1;
 let charSearchTimer = null;
 
-const CHAR_PAGE_SIZE = 30;
+const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
+function readPageSize(selectId) {
+    const v = parseInt(document.getElementById(selectId)?.value, 10);
+    return PAGE_SIZE_OPTIONS.includes(v) ? v : DEFAULT_PAGE_SIZE;
+}
+
+function charPageSize() {
+    return readPageSize('char-limit');
+}
 
 const HEART_LEVELS = [
     { key: 'heart_0', title: 'Heart 0', label: 'Baru pertama kali ketemu' },
@@ -69,7 +79,7 @@ function renderHeartProfileFields() {
     return HEART_LEVELS.map((item, index) => `
         <article class="heart-profile-card">
             <div class="heart-card-top">
-                <div class="heart-orb">${index}</div>
+                <div class="heart-orb h${index}">${index}</div>
                 <div>
                     <strong>${item.title}</strong>
                     <small>${item.label}</small>
@@ -143,9 +153,57 @@ function toggleSidebar() {
     document.getElementById('sidebar').classList.toggle('collapsed');
 }
 
+function updateThemeUI() {
+    const dark = document.documentElement.dataset.theme === 'dark';
+    document.querySelectorAll('.btn-theme').forEach(b => {
+        b.innerHTML = `<i data-lucide="${dark ? 'sun' : 'moon'}"></i> <span>${dark ? 'Light Mode' : 'Dark Mode'}</span>`;
+    });
+    document.querySelectorAll('.btn-theme-icon').forEach(b => {
+        b.innerHTML = `<i data-lucide="${dark ? 'sun' : 'moon'}"></i>`;
+    });
+    refreshIcons();
+}
+
+function initTheme() {
+    let t = 'light';
+    try { t = localStorage.getItem('npc-theme') || 'light'; } catch (e) {}
+    if (t !== 'dark' && t !== 'light') t = 'light';
+    document.documentElement.dataset.theme = t;
+    updateThemeUI();
+}
+
+function toggleTheme() {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('npc-theme', next); } catch (e) {}
+    updateThemeUI();
+    applyChartTheme();
+}
+
+function chartPalette() {
+    const dark = document.documentElement.dataset.theme === 'dark';
+    return dark
+        ? { bg: ['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.6)', 'rgba(255,255,255,0.38)', 'rgba(255,255,255,0.2)'], border: ['#ffffff', '#bbbbbb', '#888888', '#555555'], tick: '#b0b4ba' }
+        : { bg: ['rgba(0,0,0,0.85)', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.18)'], border: ['#000000', '#3c3c3c', '#787878', '#b4b4b4'], tick: '#60646c' };
+}
+
+function applyChartTheme() {
+    if (!usageChart) return;
+    const p = chartPalette();
+    usageChart.data.datasets[0].backgroundColor = p.bg;
+    usageChart.data.datasets[0].borderColor = p.border;
+    if (usageChart.options.scales) {
+        if (usageChart.options.scales.y && usageChart.options.scales.y.ticks) usageChart.options.scales.y.ticks.color = p.tick;
+        if (usageChart.options.scales.x && usageChart.options.scales.x.ticks) usageChart.options.scales.x.ticks.color = p.tick;
+    }
+    usageChart.update();
+}
+
 function formatBotMsg(msg) {
     if (!msg) return '';
-    const cleanMsg = String(msg).replace(/\((.*?)\)|\s*\[(.*?)\]|\*(.*?)\*/g, '').replace(/\s{2,}/g, ' ').trim();
+    // Tampilkan apa adanya (hanya escape HTML). Jangan strip (...) / [...] / *...*
+    // agar terjemahan Rusia Alya dkk tidak hilang di halaman log.
+    const cleanMsg = String(msg).replace(/\s{2,}/g, ' ').trim();
     if (!cleanMsg) return '...';
     return cleanMsg.split(String.fromCharCode(10)).map((s, idx) => (
         '<div style="line-height:1.4">' + (idx === 0 ? '<small style="font-weight:700">A:</small> ' : '') + escapeHTML(s) + '</div>'
@@ -312,10 +370,11 @@ function renderCharacters(page = charPage) {
             : `Total: ${filtered.length.toLocaleString(LOCALE_ID)} dari ${characters.length.toLocaleString(LOCALE_ID)} karakter`;
     }
 
-    const totalPages = Math.max(1, Math.ceil(filtered.length / CHAR_PAGE_SIZE));
+    const pageSize = charPageSize();
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
     charPage = Math.min(Math.max(1, Number(page) || 1), totalPages);
-    const start = (charPage - 1) * CHAR_PAGE_SIZE;
-    const visible = filtered.slice(start, start + CHAR_PAGE_SIZE);
+    const start = (charPage - 1) * pageSize;
+    const visible = filtered.slice(start, start + pageSize);
 
     if (!visible.length) {
         b.innerHTML = '<tr><td colspan="4" class="table-state">Tidak ada karakter yang cocok.</td></tr>';
@@ -326,7 +385,7 @@ function renderCharacters(page = charPage) {
         const id = jsArg(c.id);
         return '<tr>' +
             '<td><b>' + escapeHTML(c.npc_name) + '</b><br><small>' + escapeHTML(c.id) + '</small></td>' +
-            '<td>' + (c.is_enabled ? '<span style="color:var(--success); font-weight:600">ON</span>' : 'OFF') + '</td>' +
+            '<td>' + (c.is_enabled ? '<span class="status-pill on">ON</span>' : '<span class="status-pill off">OFF</span>') + '</td>' +
             '<td><label class="switch"><input type="checkbox" ' + (c.is_enabled ? 'checked' : '') + ' onchange="toggleChar(' + id + ', this.checked)"><span class="slider"></span></label></td>' +
             '<td style="text-align:right">' +
                 '<button class="btn btn-outline" style="padding:0.3rem 0.8rem; margin-right:0.5rem" onclick="editChar(' + id + ')">Settings</button>' +
@@ -375,10 +434,10 @@ function syncModelForm(config) {
 function renderModelRows(d) {
     const list = document.getElementById('otak-list');
     if (!list) return;
-    list.innerHTML = providerGroup('INFRASTRUKTUR GROQ (UTAMA)', d.otak || [], 'GROQ', 'var(--success)') +
-        providerGroup('INFRASTRUKTUR CLOUDFLARE (CADANGAN 1)', d.cloudflare || [], 'CLOUDFLARE', '#f59e0b') +
-        providerGroup('INFRASTRUKTUR DEEPINFRA (CADANGAN 2)', d.deepinfra || [], 'DEEPINFRA', 'var(--primary)') +
-        providerGroup('INFRASTRUKTUR NOVITA AI (CADANGAN 3)', d.novita || [], 'NOVITA', '#8b5cf6');
+    list.innerHTML = providerGroup('INFRASTRUKTUR GROQ (UTAMA)', d.otak || [], 'GROQ', 'var(--accent-green)') +
+        providerGroup('INFRASTRUKTUR CLOUDFLARE (CADANGAN 1)', d.cloudflare || [], 'CLOUDFLARE', 'var(--accent-blue)') +
+        providerGroup('INFRASTRUKTUR DEEPINFRA (CADANGAN 2)', d.deepinfra || [], 'DEEPINFRA', 'var(--accent-orange)') +
+        providerGroup('INFRASTRUKTUR NOVITA AI (CADANGAN 3)', d.novita || [], 'NOVITA', 'var(--accent-violet)');
 }
 
 function providerGroup(title, rows, type, color) {
@@ -489,9 +548,9 @@ function renderLogs(logs) {
         <td style="font-size:0.7rem; color:var(--text-muted)">${escapeHTML(new Date(l.timestamp).toLocaleString(LOCALE_ID, TZ_CONFIG))}</td>
         <td>
             <strong>${escapeHTML(String(l.ai_name || '').toUpperCase())}</strong>
-            <span style="background:var(--primary); color:#fff; padding:2px 6px; border-radius:4px; font-size:0.6rem; margin-left:4px">${escapeHTML(l.ai_pose || 'idle')}</span>
+            <span style="background:var(--surface-strong); color:var(--text-main); padding:2px 6px; border-radius:4px; font-size:0.6rem; margin-left:4px">${escapeHTML(l.ai_pose || 'idle')}</span>
             <br>
-            <span style="color:var(--primary); font-size:0.75rem; font-weight:600">@${escapeHTML(username)}</span>
+            <span style="color:var(--username); font-size:0.75rem; font-weight:600">@${escapeHTML(username)}</span>
             <span style="color:var(--text-muted); font-size:0.65rem; font-weight:700">LV.${escapeHTML(l.user_level || 0)}</span>
             <br>
         </td>
@@ -520,9 +579,10 @@ function filterLogs() {
 async function loadUsers(page = 1) {
     userPage = page;
     const q = document.getElementById('user-search')?.value || '';
+    const limit = readPageSize('user-limit');
     setTableLoading('user-body', 3, 'Memuat user...');
     try {
-        const r = await fetch('/api/admin/users?page=' + page + '&q=' + encodeURIComponent(q));
+        const r = await fetch('/api/admin/users?page=' + page + '&limit=' + limit + '&q=' + encodeURIComponent(q));
         const d = await r.json();
         if (!r.ok) throw new Error(apiError(d, 'Gagal memuat user'));
         allUsers = d.users || [];
@@ -679,7 +739,7 @@ async function sendMessage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                user: { username: 'Yogaa', level: parseInt(heartLv, 10) },
+                user: { username: 'simulator', level: parseInt(heartLv, 10) },
                 message: text,
                 context: {
                     relationship: {
@@ -688,7 +748,8 @@ async function sendMessage() {
                 },
                 system: {
                     ai_name: document.getElementById('sim-select').value,
-                    model: selectedModel
+                    model: selectedModel,
+                    simulator: true
                 }
             })
         });
@@ -715,7 +776,7 @@ function renderSimDebug(d) {
         <div class="debug-item"><span class="debug-label">Otak Terpilih</span><span class="debug-value">${escapeHTML(d.debug.otak_id)} (${escapeHTML(d.debug.model)})</span></div>
         <div class="debug-item"><span class="debug-label">Total Token</span><span class="debug-value">${escapeHTML(d.debug.tokens)} toks</span></div>
         <div class="debug-item"><span class="debug-label">Kecepatan (Latency)</span><span class="debug-value">${escapeHTML(d.debug.latency)}ms</span></div>
-        <div class="debug-item"><span class="debug-label">Ekspresi / Pose</span><span class="debug-value" style="color:var(--primary)">${escapeHTML(d.ai_pose || 'idle')}</span></div>
+        <div class="debug-item"><span class="debug-label">Ekspresi / Pose</span><span class="debug-value">${escapeHTML(d.ai_pose || 'idle')}</span></div>
     `;
     document.getElementById('sim-prompt-content').textContent = d.debug.system_prompt || '-';
 }
@@ -830,8 +891,8 @@ function renderBalanceBadge(account) {
         available = limit - recent;
     }
     
-    const color = available > 0 ? '#22c55e' : '#ef4444';
-    const bg = available > 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+    const color = available > 0 ? '#16a34a' : '#dc2626';
+    const bg = available > 0 ? 'rgba(22, 163, 74, 0.08)' : 'rgba(220, 38, 38, 0.06)';
     const label = available > 0 ? 'AVAILABLE' : 'OVER LIMIT';
     return '<div style="display:flex; align-items:center; gap:8px; background:' + bg + '; padding:4px 12px; border-radius:8px; border:1px solid ' + color + '">' +
         '<div style="width:6px; height:6px; border-radius:50%; background:' + color + '"></div>' +
@@ -851,13 +912,14 @@ function renderBillingTable(billingData) {
         const rateValue = Number(item.rate || 0) * 10000;
         const rate = '$' + rateValue.toFixed(4).replace(/0+$/, '').replace(/\.$/, '') + '/1M';
         const cost = '$' + (Number(item.cost || 0) / 100).toFixed(2);
-        return '<tr><td style="font-weight:700; color:var(--text-main)">' + modelName + ' <span style="font-size:9px; color:var(--text-muted); margin-left:5px">' + type + '</span></td><td>' + usage + ' tokens</td><td style="color:var(--text-muted)">' + rate + '</td><td style="font-weight:800; color:var(--primary); text-align:right">' + cost + '</td></tr>';
-    }).join('') + '<tr style="border-top:2px solid var(--border)"><td style="background:var(--bg);font-weight:800;color:var(--text-main);padding:12px 1rem;line-height:1">TOTAL USAGE</td><td style="background:var(--bg);font-weight:800;color:var(--text-main);padding:12px 1rem;line-height:1">' + totalTokens.toLocaleString(LOCALE_ID) + ' tokens</td><td style="background:var(--bg);font-weight:800;text-align:right;color:var(--text-main);padding:12px 1rem;line-height:1">ESTIMATED TOTAL SPEND</td><td style="background:var(--bg);font-weight:800;color:var(--primary);font-size:1.2rem;text-align:right;padding:12px 1rem;line-height:1">$' + (Number(latestMonth.total_cost || 0) / 100).toFixed(2) + '</td></tr>';
+        return '<tr><td style="font-weight:600; color:var(--text-main)">' + modelName + ' <span style="font-size:9px; color:var(--text-muted); margin-left:5px">' + type + '</span></td><td>' + usage + ' tokens</td><td style="color:var(--text-muted)">' + rate + '</td><td style="font-weight:600; color:var(--text-main); text-align:right">' + cost + '</td></tr>';
+    }).join('') + '<tr style="border-top:2px solid var(--border)"><td style="background:var(--canvas-soft);font-weight:600;color:var(--text-main);padding:12px 1rem;line-height:1">TOTAL USAGE</td><td style="background:var(--canvas-soft);font-weight:600;color:var(--text-main);padding:12px 1rem;line-height:1">' + totalTokens.toLocaleString(LOCALE_ID) + ' tokens</td><td style="background:var(--canvas-soft);font-weight:600;text-align:right;color:var(--text-main);padding:12px 1rem;line-height:1">ESTIMATED TOTAL SPEND</td><td style="background:var(--canvas-soft);font-weight:600;color:var(--text-main);font-size:1.2rem;text-align:right;padding:12px 1rem;line-height:1">$' + (Number(latestMonth.total_cost || 0) / 100).toFixed(2) + '</td></tr>';
 }
 
 function initUsageChart(data) {
     const ctx = document.getElementById('usageChart');
     if (!ctx || typeof Chart === 'undefined') return;
+    const p = chartPalette();
     usageChart = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -865,8 +927,8 @@ function initUsageChart(data) {
             datasets: [{
                 label: 'Tokens Consumed',
                 data: providerTokenData(data),
-                backgroundColor: ['rgba(34, 197, 94, 0.6)', 'rgba(245, 158, 11, 0.6)', 'rgba(249, 115, 22, 0.6)', 'rgba(139, 92, 246, 0.6)'],
-                borderColor: ['rgb(34, 197, 94)', 'rgb(245, 158, 11)', 'rgb(249, 115, 22)', 'rgb(139, 92, 246)'],
+                backgroundColor: p.bg,
+                borderColor: p.border,
                 borderWidth: 2
             }]
         },
@@ -874,8 +936,8 @@ function initUsageChart(data) {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                y: { beginAtZero: true, grid: { display: false } },
-                x: { grid: { display: false } }
+                y: { beginAtZero: true, grid: { display: false }, ticks: { color: p.tick } },
+                x: { grid: { display: false }, ticks: { color: p.tick } }
             },
             plugins: { legend: { display: false } }
         }
@@ -904,7 +966,7 @@ function updateStats(d) {
                                               
     if (usageChart) {
         usageChart.data.datasets[0].data = providerTokenData(d);
-        usageChart.update();
+        applyChartTheme();
     } else if (document.getElementById('usageChart')) {
         initUsageChart(d);
     }
@@ -929,7 +991,7 @@ function updateStats(d) {
                 var cachedToks = Number(item.cached_tokens || 0).toLocaleString();
                 var rate = '$' + Number(item.rate || 0).toFixed(2) + '/1M';
                 var cost = '$' + Number(item.saved || 0).toFixed(2);
-                return '<tr><td style="font-weight:700; color:var(--text-main)">' + modelName + ' <span style="font-size:9px; color:var(--text-muted); margin-left:5px">CACHED</span></td><td>' + cachedToks + ' tokens</td><td style="color:var(--text-muted)">' + rate + ' (50%)</td><td style="font-weight:800; color:var(--primary); text-align:right">' + cost + '</td></tr>';
+                return '<tr><td style="font-weight:600; color:var(--text-main)">' + modelName + ' <span style="font-size:9px; color:var(--text-muted); margin-left:5px">CACHED</span></td><td>' + cachedToks + ' tokens</td><td style="color:var(--text-muted)">' + rate + ' (50%)</td><td style="font-weight:600; color:var(--text-main); text-align:right">' + cost + '</td></tr>';
             }).join('');
         }
     }
@@ -962,9 +1024,10 @@ async function loadBanList(page = 1, options = {}) {
     const tbody = document.getElementById('banlist-body');
     if (!tbody) return;
     const q = document.getElementById('ban-search')?.value || '';
+    const banLimit = readPageSize('ban-limit');
     if (!options.silent) setTableLoading('banlist-body', 3, 'Memuat daftar ban...');
     try {
-        const res = await fetch('/api/admin/ban-list?page=' + page + '&q=' + encodeURIComponent(q));
+        const res = await fetch('/api/admin/ban-list?page=' + page + '&limit=' + banLimit + '&q=' + encodeURIComponent(q));
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memuat daftar ban'));
         const banList = data.list || [];
@@ -984,6 +1047,8 @@ async function loadBanList(page = 1, options = {}) {
             </tr>
         `).join('') : '<tr><td colspan="3" class="table-state">Belum ada user yang diban.</td></tr>';
         document.getElementById('ban-message-input').value = data.ban_message || 'Aku malas berbicara dengan kamu.';
+        const badwordsEl = document.getElementById('badwords-input');
+        if (badwordsEl) badwordsEl.value = data.auto_ban_words || '';
 
     } catch (e) {
         setTableError('banlist-body', 3, e.message);
@@ -1040,37 +1105,55 @@ async function unbanUser(username) {
 }
 
 async function exportBanListTxt() {
-    // Note: Export still uses all-at-once approach for now by fetching without limit on a separate endpoint if needed,
-    // but here we just use whatever is currently loaded in 'latestBanList' (which is now only 35).
-    // Better to fetch all for export.
-    if (!latestBanList.length || latestBanList.length < 35) {
-        await loadBanList(1);
+    const q = document.getElementById('ban-search')?.value || '';
+    showToast('Mengambil semua data ban untuk export...', 'success');
+
+    try {
+        let page = 1;
+        let total = Infinity;
+        const all = [];
+        // Ambil semua halaman (bukan cuma halaman aktif) agar file TXT lengkap.
+        while (all.length < total) {
+            const res = await fetch('/api/admin/ban-list?page=' + page + '&q=' + encodeURIComponent(q));
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memuat daftar ban'));
+            const list = data.list || [];
+            total = Number(data.pagination?.total || 0);
+            if (list.length === 0) break;
+            all.push(...list);
+            if (all.length >= total) break;
+            page += 1;
+            if (page > 1000) break; // pengaman loop
+        }
+
+        if (!all.length) return showToast('Daftar ban masih kosong, tidak ada yang diexport.', 'error');
+
+        const exportedAt = new Date().toLocaleString(LOCALE_ID, TZ_CONFIG);
+        const lines = [
+            'DAFTAR BAN USER - NPC SYSTEM',
+            `Export: ${exportedAt}`,
+            `Total: ${all.length} orang`,
+            '',
+            ...all.map((b, idx) => {
+                const date = b.created_at ? new Date(b.created_at).toLocaleString(LOCALE_ID, TZ_CONFIG) : '-';
+                return `${idx + 1}. ${b.username} | ${date}`;
+            })
+        ];
+
+        const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const stamp = new Date().toISOString().slice(0, 10);
+        a.href = url;
+        a.download = `daftar-ban-${stamp}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        showToast(`Daftar ban berhasil diexport ke TXT (${all.length} user).`, 'success');
+    } catch (e) {
+        showToast(e.message, 'error');
     }
-    if (!latestBanList.length) return showToast('Daftar ban masih kosong, tidak ada yang diexport.', 'error');
-
-    const exportedAt = new Date().toLocaleString(LOCALE_ID, TZ_CONFIG);
-    const lines = [
-        'DAFTAR BAN USER - NPC SYSTEM',
-        `Export: ${exportedAt}`,
-        `Total: ${latestBanList.length} orang`,
-        '',
-        ...latestBanList.map((b, idx) => {
-            const date = b.created_at ? new Date(b.created_at).toLocaleString(LOCALE_ID, TZ_CONFIG) : '-';
-            return `${idx + 1}. ${b.username} | ${date}`;
-        })
-    ];
-
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const stamp = new Date().toISOString().slice(0, 10);
-    a.href = url;
-    a.download = `daftar-ban-${stamp}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    showToast('Daftar ban berhasil diexport ke TXT.', 'success');
 }
 
 async function updateBanMessage() {
@@ -1090,15 +1173,36 @@ async function updateBanMessage() {
     }
 }
 
+async function updateBadwords() {
+    const el = document.getElementById('badwords-input');
+    const text = el ? el.value : '';
+    try {
+        const res = await fetch('/api/admin/badwords/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memperbarui kata kasar'));
+        if (el && Array.isArray(data.words)) el.value = data.words.join('\n');
+        showToast(data.message, 'success');
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+}
+
 
 
 document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
     const form = document.getElementById('char-form');
     if (form) {
         form.onsubmit = async (e) => {
             e.preventDefault();
-            const id = document.getElementById('f-id').value;
-            const c = characters.find(x => x.id === id);
+            const rawId = document.getElementById('f-id').value.trim();
+            const c = characters.find(x => x.id === rawId);
+            // Edit: ID lama dipakai apa adanya. Baru: normalisasi lowercase.
+            const id = c ? c.id : rawId.toLowerCase();
             const data = {
                 npc_name: document.getElementById('f-name').value,
                 npc_description: document.getElementById('f-desc').value,
@@ -1110,14 +1214,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 is_enabled: c ? c.is_enabled : true,
                 language: 'id'
             };
-            await fetch('/api/characters/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id, data })
-            });
-            showToast('Character saved successfully', 'success');
-            closeModal();
-            load();
+            try {
+                const r = await fetch('/api/characters/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, data })
+                });
+                const d = await r.json().catch(() => ({}));
+                if (!r.ok || !d.success) throw new Error(apiError(d, 'Gagal menyimpan karakter'));
+                showToast(d.id && d.id !== id ? `Tersimpan sebagai ID '${d.id}' (dinormalisasi).` : 'Character saved successfully', 'success');
+                closeModal();
+                load();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
         };
     }
 
@@ -1179,7 +1289,11 @@ async function loadTopUsers() {
     }
 
     const selectedChar = select ? select.value : '';
-    const queryParam = selectedChar ? '?ai_name=' + encodeURIComponent(selectedChar) : '';
+    const topLimit = readPageSize('topusers-limit-select');
+    const params = new URLSearchParams();
+    if (selectedChar) params.set('ai_name', selectedChar);
+    params.set('limit', topLimit);
+    const queryParam = '?' + params.toString();
 
     tbody.innerHTML = '<tr><td colspan="5" class="table-state">Loading...</td></tr>';
 
@@ -1191,7 +1305,7 @@ async function loadTopUsers() {
             return;
         }
 
-        const heartColors = ['#94a3b8', '#60a5fa', '#34d399', '#fbbf24', '#f97316', '#ef4444'];
+        const heartColors = ['#d4d4d8', '#a1a1aa', '#0d74ce', '#7c3aed', '#d97706', '#dc2626'];
 
         tbody.innerHTML = data.users.map((u, i) => {
             const rank = i + 1;
@@ -1199,16 +1313,17 @@ async function loadTopUsers() {
             const totalChats = Number(u.total_chats) || 0;
             const lastActive = u.last_active ? new Date(u.last_active).toLocaleString(LOCALE_ID, TZ_CONFIG) : '-';
             const heartColor = heartColors[Math.min(lv, 5)];
+            const heartFg = lv >= 2 ? '#ffffff' : '#171717';
 
             const rankStyle = rank <= 3
-                ? 'font-weight:900; color:' + (rank === 1 ? '#f59e0b' : rank === 2 ? '#94a3b8' : '#cd7f32')
-                : 'font-weight:700; color:var(--text-muted)';
+                ? 'font-weight:600; color:var(--text-main)'
+                : 'font-weight:500; color:var(--text-muted)';
 
             return `<tr>
                 <td style="text-align:center; ${rankStyle}">${rank}</td>
                 <td style="font-weight:700">${escapeHTML(u.username)}</td>
                 <td style="text-align:center">
-                    <span style="display:inline-block; padding:3px 10px; border-radius:999px; font-size:0.78rem; font-weight:800; color:#fff; background:${heartColor};">Lv ${lv}</span>
+                    <span style="display:inline-block; padding:3px 10px; border-radius:999px; font-size:0.78rem; font-weight:800; color:${heartFg}; background:${heartColor};">Lv ${lv}</span>
                 </td>
                 <td style="text-align:center; font-weight:600">${totalChats.toLocaleString(LOCALE_ID)}</td>
                 <td style="font-size:0.78rem; color:var(--text-muted)">${escapeHTML(lastActive)}</td>

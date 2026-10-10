@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { createClient } = require('@libsql/client');
-const { stringifyHeartProfiles } = require('./heart_profiles');
+const { stringifyHeartProfiles, parseHeartProfiles } = require('./heart_profiles');
 
 const db = createClient({
     url: process.env.TURSO_URL,
@@ -81,13 +81,14 @@ async function initDB(characters) {
         await db.execute("CREATE INDEX IF NOT EXISTS idx_banned_lower_username ON banned_users(username COLLATE NOCASE)");
 
         await db.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('ban_message', 'Aku malas berbicara dengan kamu.')");
+        await db.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('badwords', '')");
 
         console.log("[DB] Tables 'characters', 'chat_logs', 'users', 'banned_users', & 'settings' ready.");
 
         const result = await db.execute("SELECT * FROM characters");
         if (result.rows.length > 0) {
             result.rows.forEach(row => {
-                characters[row.id] = { ...row };
+                characters[row.id] = { ...row, heart_profiles: parseHeartProfiles(row.heart_profiles) };
             });
             console.log(`[DB] Loaded ${result.rows.length} characters from Turso.`);
             return;

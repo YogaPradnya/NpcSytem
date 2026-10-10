@@ -6,6 +6,46 @@ const {
 const { parseJsonResponse } = require('../parser');
 const { validateChatInput } = require('../guards/input_guard');
 const { validatePrompt, logSuspiciousActivity } = require('../guards/prompt_guard');
+const { checkLocalBadwords, setBadWords } = require('../utils/badwordFilter');
+const { clampHeartLevel } = require('../heart_profiles');
+
+
+
+
+// Cache daftar kata kasar custom dari settings DB (TTL singkat agar edit admin cepat berlaku).
+let badwordsCacheExpiresAt = 0;
+const BADWORDS_CACHE_TTL_MS = 60 * 1000;
+
+function parseBadwordsRaw(raw) {
+    if (!raw) return [];
+    const text = String(raw).trim();
+    if (!text) return [];
+    if (text.startsWith('[')) {
+        try {
+            const arr = JSON.parse(text);
+            if (Array.isArray(arr)) return arr.map(w => String(w || '').trim().toLowerCase()).filter(w => w.length > 0 && w.length <= 50).slice(0, 500);
+        } catch (e) { /* fallback ke split manual */ }
+    }
+    return [...new Set(
+        text.split(/[\n,;]+/).map(w => String(w || '').trim().toLowerCase()).filter(w => w.length > 0 && w.length <= 50)
+    )].slice(0, 500);
+}
+
+async function refreshBadwordsCache(db) {
+    if (Date.now() < badwordsCacheExpiresAt) return;
+    badwordsCacheExpiresAt = Date.now() + BADWORDS_CACHE_TTL_MS;
+    try {
+        const setting = await db.execute({
+            sql: "SELECT value FROM settings WHERE key = 'badwords'",
+            args: []
+        });
+        const words = parseBadwordsRaw(setting.rows[0]?.value || '');
+        // Kosong = pakai daftar default bawaan file badwordFilter.js
+        setBadWords(words.length > 0 ? words : null);
+    } catch (e) {
+        // Gagal baca DB: tetap pakai daftar terakhir/default
+    }
+}
 
 
 
@@ -92,20 +132,65 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
 
             if (!sanitizedMessage) return res.status(400).json({ success: false, error: 'Message is required' });
 
+            // AUTO-BAN kata kasar: daftar diatur manual oleh admin (settings `badwords`).
+            await refreshBadwordsCache(db);
+            const toxicCheck = checkLocalBadwords(sanitizedMessage || '');
+            if (toxicCheck.isToxic) {
+                console.warn(`[AUTO-BAN] @${currentUsername} berkata kasar ('${toxicCheck.word}').`);
+                // Admin yang tes via simulator tidak ikut ke-ban, hanya diblokir pesannya.
+                if (!isAdminCaller) {
+                    try {
+                        await db.execute({
+                            sql: "INSERT OR IGNORE INTO banned_users (username, reason) VALUES (?, ?)",
+                            args: [currentUsername, `auto-ban: kata kasar ('${toxicCheck.word}')`]
+                        });
+                    } catch (banErr) {
+                        console.error("[AUTO-BAN DB ERROR]:", banErr.message);
+                    }
+                }
+
+                const banMsg = await getBanMessage(db);
+                const autoBanDebug = {
+                    model: "BLOCKED",
+                    tokens: 0,
+                    otak_id: "AUTO-BAN",
+                    latency: Date.now() - startTime
+                };
+                if (isAdminCaller) autoBanDebug.system_prompt = "AUTO-BAN: BADWORD";
+
+                return res.json({
+                    ai_name: system?.ai_name || "NPC",
+                    ai_pose: "sad",
+                    sentences: [banMsg],
+                    debug: autoBanDebug
+                });
+            }
 
 
-            const aiKey = (system && system.ai_name) ? system.ai_name.toLowerCase() : 'alya';
-            const char = characters[aiKey] || characters['alya'];
+
+            const aiKey = (system && system.ai_name) ? String(system.ai_name).trim().toLowerCase() : 'alya';
+            // Lookup toleran huruf-besar agar ID lama yang tercampur case tetap ketemu.
+            // ID yang tersimpan TIDAK diubah; hanya cara pencariannya yang case-insensitive.
+            const char = characters[aiKey]
+                || Object.values(characters).find(c => String(c.id || '').toLowerCase() === aiKey)
+                || characters['alya'];
 
             if (!char || char.is_enabled === false) {
                 return res.status(404).json({ success: false, error: `Character '${aiKey}' not found or disabled.` });
             }
 
+            // Satu sumber level: selalu dari sanitizedUser + clamp 0-5.
+            // Dipakai untuk prompt, cacheKey, log DB, dan response.
+            const effectiveHeartLv = clampHeartLevel(sanitizedUser?.level);
+            // Simulator admin (dashboard) tidak boleh mengotori users/chat_logs produksi.
+            // Flag hanya berlaku untuk pemanggil admin bertanda tangan, request luar diabaikan.
+            const isSimulator = isAdminCaller && system?.simulator === true;
+
             const allowedPoses = normalizeAllowedPoses(system, sanitizedContext);
             const { staticSystemPrompt, dynamicUserContent, lv5Owner, isOwner } = buildSystemPrompt({
                 char,
                 currentUsername,
-                user: sanitizedUser,
+                user: { ...sanitizedUser, level: effectiveHeartLv },
                 context: sanitizedContext,
                 system,
                 allowedPoses,
@@ -133,8 +218,26 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 });
             }
 
-            const cacheKey = `npc-${aiKey}-lv${Number(sanitizedUser?.level) || 0}`;
+            const cacheKey = `npc-${aiKey}-lv${effectiveHeartLv}`;
             const requestedModel = system?.model || req.body?.model || null;
+
+            // Allowlist model untuk pemanggil publik (non-admin): cegah pemakaian
+            // model mahal di luar daftar resmi. Admin/simulator tetap bebas.
+            if (requestedModel && typeof requestedModel === 'string'
+                && requestedModel.trim() && requestedModel.trim() !== 'auto' && !isAdminCaller) {
+                const allowedModels = new Set();
+                for (const m of providers.getAvailableModels()) {
+                    if (m.id) allowedModels.add(m.id);
+                    if (m.model) allowedModels.add(m.model);
+                }
+                if (!allowedModels.has(requestedModel.trim())) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Model tidak diizinkan.',
+                        code: 'MODEL_NOT_ALLOWED'
+                    });
+                }
+            }
 
             const { completion, usedProvider, usedClientId } = await providers.createChatCompletion({
                 staticSystemPrompt,
@@ -148,7 +251,9 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
             const usageCheck = completion.usage || {};
             const cachedCheck = usageCheck.prompt_tokens_details?.cached_tokens || 0;
             if (cachedCheck > 0) {
-                console.log(`[CACHE HIT] ${cachedCheck}/${usageCheck.prompt_tokens} prompt tokens cached (${Math.round(cachedCheck / usageCheck.prompt_tokens * 100)}%) | key: ${cacheKey}`);
+                const promptTotal = usageCheck.prompt_tokens || 0;
+                const pct = promptTotal > 0 ? Math.round(cachedCheck / promptTotal * 100) : 0;
+                console.log(`[CACHE HIT] ${cachedCheck}/${promptTotal} prompt tokens cached (${pct}%) | key: ${cacheKey}`);
             } else {
                 console.log(`[CACHE MISS] 0/${usageCheck.prompt_tokens || 0} cached | key: ${cacheKey}`);
             }
@@ -172,14 +277,17 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
             }
 
             // Attempt 2: retry ke AI jika sentences kosong
+            let retryCompletion = null;
             if (!firstParseOk) {
                 console.warn('[RETRY] Sentences kosong atau parse gagal, mencoba ulang ke AI...');
                 try {
-                    const { completion: retryCompletion } = await providers.createChatCompletion({
+                    const { completion: retryRes } = await providers.createChatCompletion({
                         staticSystemPrompt,
                         dynamicUserContent,
+                        cacheKey,
                         requestedModel
                     });
+                    retryCompletion = retryRes;
                     const retryRaw = retryCompletion.choices[0].message.content;
                     const r = parseJsonResponse(retryRaw, allowedPoses);
                     sentences = r.sentences;
@@ -197,46 +305,63 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
             }
 
             const endTime = Date.now();
-            const usage = completion.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+            // Samakan atribusi: konten balasan berasal dari retry jika retry dipakai,
+            // token dihitung dari SEMUA pemanggilan (awal + retry).
+            const activeCompletion = retryCompletion || completion;
+            const allUsages = [completion.usage || {}, retryCompletion?.usage || {}];
+            const sumUsage = (key) => allUsages.reduce((a, u) => a + (u[key] || 0), 0);
+            const usage = {
+                prompt_tokens: sumUsage('prompt_tokens'),
+                completion_tokens: sumUsage('completion_tokens'),
+                total_tokens: sumUsage('total_tokens')
+            };
             const tokens = usage.total_tokens || 0;
-            const cachedTokens = usage.prompt_tokens_details?.cached_tokens || 0;
+            const cachedTokens = allUsages.reduce((a, u) => a + (u.prompt_tokens_details?.cached_tokens || 0), 0);
             globalStats.totalRequests++;
             globalStats.totalTokens += tokens;
             globalStats.totalPromptTokens += usage.prompt_tokens || 0;
             globalStats.totalCompletionTokens += usage.completion_tokens || 0;
             globalStats.totalCachedTokens += cachedTokens;
-            if (cachedTokens > 0) {
-                const modelKey = completion.model || 'unknown';
-                if (!globalStats.cachedByModel[modelKey]) globalStats.cachedByModel[modelKey] = 0;
-                globalStats.cachedByModel[modelKey] += cachedTokens;
+            for (const comp of [completion, retryCompletion].filter(Boolean)) {
+                const c = comp.usage?.prompt_tokens_details?.cached_tokens || 0;
+                if (c > 0) {
+                    const modelKey = comp.model || 'unknown';
+                    if (!globalStats.cachedByModel[modelKey]) globalStats.cachedByModel[modelKey] = 0;
+                    globalStats.cachedByModel[modelKey] += c;
+                }
             }
             if (!globalStats.charUsage[aiKey]) globalStats.charUsage[aiKey] = 0;
             globalStats.charUsage[aiKey] += tokens;
 
-            const currentHeartLv = Number(user?.level) || 0;
+            const currentHeartLv = effectiveHeartLv;
 
-            try {
-                await db.execute({
-                    sql: "INSERT INTO users (username, last_seen) VALUES (?, CURRENT_TIMESTAMP) ON CONFLICT(username) DO UPDATE SET last_seen=CURRENT_TIMESTAMP",
-                    args: [currentUsername]
-                });
-            } catch (uErr) {
-                console.error("[DB USER SYNC ERROR]:", uErr.message);
-            }
+            // Simulator admin tidak ditulis ke users/chat_logs (token tetap dihitung di globalStats).
+            if (!isSimulator) {
+                try {
+                    await db.execute({
+                        sql: "INSERT INTO users (username, last_seen) VALUES (?, CURRENT_TIMESTAMP) ON CONFLICT(username) DO UPDATE SET last_seen=CURRENT_TIMESTAMP",
+                        args: [currentUsername]
+                    });
+                } catch (uErr) {
+                    console.error("[DB USER SYNC ERROR]:", uErr.message);
+                }
 
-            try {
-                const botResponse = (sentences.join('\n') || fullResponse).trim();
-                await db.execute({
-                    sql: "INSERT INTO chat_logs (ai_name, username, user_message, bot_response, tokens, prompt_tokens, completion_tokens, model, provider, latency, ai_pose, user_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    args: [aiKey, currentUsername, sanitizedMessage, botResponse, tokens, usage.prompt_tokens || 0, usage.completion_tokens || 0, completion.model, usedProvider, endTime - startTime, aiPose, currentHeartLv]
-                });
-                console.log(`[DB] Log saved for @${currentUsername} | Pose: ${aiPose} | Lv: ${currentHeartLv}`);
-            } catch (logErr) {
-                console.error("[DB LOG ERROR]: Gagal menyimpan percakapan!", logErr.message);
+                try {
+                    const botResponse = (sentences.join('\n') || fullResponse).trim();
+                    await db.execute({
+                        sql: "INSERT INTO chat_logs (ai_name, username, user_message, bot_response, tokens, prompt_tokens, completion_tokens, model, provider, latency, ai_pose, user_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        args: [aiKey, currentUsername, sanitizedMessage, botResponse, tokens, usage.prompt_tokens || 0, usage.completion_tokens || 0, activeCompletion.model, usedProvider, endTime - startTime, aiPose, currentHeartLv]
+                    });
+                    console.log(`[DB] Log saved for @${currentUsername} | Pose: ${aiPose} | Lv: ${currentHeartLv}`);
+                } catch (logErr) {
+                    console.error("[DB LOG ERROR]: Gagal menyimpan percakapan!", logErr.message);
+                }
+            } else {
+                console.log(`[SIM] Skip DB log for simulator @${currentUsername} | Pose: ${aiPose} | Lv: ${currentHeartLv}`);
             }
 
             const debugPayload = {
-                model: completion.model,
+                model: activeCompletion.model,
                 tokens,
                 otak_id: usedProvider === 'FALLBACK' ? 'FALLBACK' : `${usedProvider} #${usedClientId}`,
                 latency: endTime - startTime

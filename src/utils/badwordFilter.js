@@ -33,10 +33,43 @@ function normalizeText(text) {
 }
 
 // Regex generator dengan word boundary / partial match
-const badwordsPatterns = BAD_WORDS_LIST.map(word => {
-  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`\\b${escaped}\\b`, 'i');
-});
+function buildPatterns(words) {
+  return words.map(word => {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${escaped}\\b`, 'i');
+  });
+}
+
+const badwordsPatterns = buildPatterns(BAD_WORDS_LIST);
+
+// Override runtime (diisi dari settings DB `badwords` oleh admin).
+// null = pakai daftar default bawaan file ini.
+let customBadWords = null;
+let customPatterns = null;
+
+/**
+ * Set daftar kata kasar custom (menggantikan daftar default).
+ * @param {string[]} words
+ */
+function setBadWords(words) {
+  if (!Array.isArray(words)) {
+    customBadWords = null;
+    customPatterns = null;
+    return;
+  }
+  const cleaned = [...new Set(
+    words.map(w => String(w || '').trim().toLowerCase()).filter(w => w.length > 0 && w.length <= 50)
+  )].slice(0, 500);
+  customBadWords = cleaned;
+  customPatterns = buildPatterns(cleaned);
+}
+
+/**
+ * Daftar kata kasar yang sedang aktif (custom atau default).
+ */
+function getBadWords() {
+  return customBadWords || BAD_WORDS_LIST;
+}
 
 /**
  * Memeriksa apakah teks mengandung kata kasar lokal
@@ -49,10 +82,12 @@ function checkLocalBadwords(text) {
   }
 
   const normalized = normalizeText(text);
+  const words = customBadWords || BAD_WORDS_LIST;
+  const patterns = customPatterns || badwordsPatterns;
 
-  for (let i = 0; i < BAD_WORDS_LIST.length; i++) {
-    const word = BAD_WORDS_LIST[i];
-    const pattern = badwordsPatterns[i];
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    const pattern = patterns[i];
     
     if (pattern.test(normalized) || pattern.test(text.toLowerCase())) {
       return {
@@ -67,5 +102,7 @@ function checkLocalBadwords(text) {
 
 module.exports = {
   checkLocalBadwords,
+  setBadWords,
+  getBadWords,
   BAD_WORDS_LIST
 };

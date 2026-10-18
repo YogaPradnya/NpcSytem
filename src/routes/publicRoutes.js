@@ -4,7 +4,7 @@
 
 const express = require('express');
 const crypto = require('crypto');
-const { getTopChatUsers, getTopChatHours, normalizeLimit, normalizeAiName } = require('../services/leaderboardService');
+const { getTopChatUsers, getTopChatHours, getTopWordUsers, getUserWordStats, getTopWaifus, normalizeLimit, normalizeAiName } = require('../services/leaderboardService');
 
 const PUBLIC_CACHE_TTL_MS = 2 * 60 * 1000; // 2 menit
 const AI_NAME_PATTERN = /^[a-z0-9._-]{1,50}$/;
@@ -71,6 +71,20 @@ function createPublicRoutes({ db }) {
         return { aiName, error: null };
     }
 
+    const USERNAME_MAX_LENGTH = 50;
+
+    function readUsername(query) {
+        const raw = query?.username;
+        if (raw === undefined) return { username: null, error: null };
+
+        const username = String(raw).trim();
+        if (!username) return { username: null, error: null };
+        if (username.length > USERNAME_MAX_LENGTH) {
+            return { username: null, error: 'Parameter username tidak valid (maks 50 karakter).' };
+        }
+        return { username, error: null };
+    }
+
     router.get('/api/public/top-chat', requireApiKey, async (req, res) => {
         try {
             const limit = normalizeLimit(req.query.limit, 10);
@@ -127,6 +141,86 @@ function createPublicRoutes({ db }) {
         } catch (e) {
             console.error('[PUBLIC API] top-hours error:', e.message);
             res.status(500).json({ success: false, error: 'Gagal memuat data peringkat jam.' });
+        }
+    });
+
+    router.get('/api/public/top-words', requireApiKey, async (req, res) => {
+        try {
+            const limit = normalizeLimit(req.query.limit, 10);
+            const { aiName, error } = readAiName(req.query);
+            if (error) return res.status(400).json({ success: false, error });
+
+            const { username, error: usernameError } = readUsername(req.query);
+            if (usernameError) return res.status(400).json({ success: false, error: usernameError });
+
+            const cacheKey = `top-words:${limit}:${aiName || ''}:${username || ''}`;
+            await respondWithCache(res, cacheKey, async () => {
+                if (username) {
+                    const stats = await getUserWordStats(db, { username, aiName });
+                    return {
+                        success: true,
+                        generated_at: new Date().toISOString(),
+                        limit,
+                        ai_name: aiName,
+                        username,
+                        users: stats ? [{
+                            rank: stats.rank,
+                            username: stats.username,
+                            total_words: stats.total_words,
+                            total_chars: stats.total_chars,
+                            total_chat: stats.total_chats,
+                            last_active: stats.last_active
+                        }] : []
+                    };
+                }
+
+                const rows = await getTopWordUsers(db, { limit, aiName });
+                return {
+                    success: true,
+                    generated_at: new Date().toISOString(),
+                    limit,
+                    ai_name: aiName,
+                    username: null,
+                    users: rows.map((row, i) => ({
+                        rank: i + 1,
+                        username: row.username,
+                        total_words: Number(row.total_words) || 0,
+                        total_chars: Number(row.total_chars) || 0,
+                        total_chat: Number(row.total_chats) || 0,
+                        last_active: row.last_active || null
+                    }))
+                };
+            });
+        } catch (e) {
+            console.error('[PUBLIC API] top-words error:', e.message);
+            res.status(500).json({ success: false, error: 'Gagal memuat data peringkat kata.' });
+        }
+    });
+
+    router.get('/api/public/top-waifu', requireApiKey, async (req, res) => {
+        try {
+            const limit = normalizeLimit(req.query.limit, 10);
+
+            const cacheKey = `top-waifu:${limit}`;
+            await respondWithCache(res, cacheKey, async () => {
+                const rows = await getTopWaifus(db, { limit });
+                return {
+                    success: true,
+                    generated_at: new Date().toISOString(),
+                    limit,
+                    waifus: rows.map((row, i) => ({
+                        rank: i + 1,
+                        ai_name: row.ai_name,
+                        name: row.npc_name || row.ai_name,
+                        total_chat: Number(row.total_chats) || 0,
+                        total_users: Number(row.total_users) || 0,
+                        last_active: row.last_active || null
+                    }))
+                };
+            });
+        } catch (e) {
+            console.error('[PUBLIC API] top-waifu error:', e.message);
+            res.status(500).json({ success: false, error: 'Gagal memuat data peringkat waifu.' });
         }
     });
 

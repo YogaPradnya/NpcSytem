@@ -54,6 +54,112 @@ async function getTopChatHours(db, { limit = 25 } = {}) {
     return result.rows;
 }
 
+// ── Peringkat kata (total kata/karakter ketikan user) ───────────────────────
+// Kata dihitung perkiraan dengan pemisah spasi (spasi ganda bisa terhitung
+// ganda); karakter = panjang pesan apa adanya (termasuk spasi). Semua dihitung
+// live dari chat_logs, tanpa tabel tambahan.
+const WORD_COUNT_SQL = `(CASE WHEN user_message IS NULL OR TRIM(user_message) = '' THEN 0
+    ELSE (LENGTH(TRIM(user_message)) - LENGTH(REPLACE(TRIM(user_message), ' ', '')) + 1) END)`;
+const CHAR_COUNT_SQL = `COALESCE(LENGTH(user_message), 0)`;
+
+async function getTopWordUsers(db, { limit = 10, aiName = null } = {}) {
+    const safeLimit = normalizeLimit(limit, 10);
+    let where = "WHERE username IS NOT NULL AND TRIM(username) != ''";
+    const args = [];
+    if (aiName) {
+        where += " AND LOWER(ai_name) = ?";
+        args.push(aiName);
+    }
+
+    const result = await db.execute({
+        sql: `SELECT
+                username,
+                COUNT(*) as total_chats,
+                SUM(${WORD_COUNT_SQL}) as total_words,
+                SUM(${CHAR_COUNT_SQL}) as total_chars,
+                MAX(timestamp) as last_active
+              FROM chat_logs
+              ${where}
+              GROUP BY username
+              ORDER BY total_words DESC, total_chats DESC
+              LIMIT ?`,
+        args: [...args, safeLimit]
+    });
+    return result.rows;
+}
+
+// Statistik total kata SATU user + peringkatnya di antara semua user
+// (peringkat dihitung pada kelompok filter yang sama). Null kalau user tidak
+// punya chat sama sekali.
+async function getUserWordStats(db, { username, aiName = null } = {}) {
+    let where = "WHERE username = ?";
+    const args = [username];
+    if (aiName) {
+        where += " AND LOWER(ai_name) = ?";
+        args.push(aiName);
+    }
+
+    const stats = await db.execute({
+        sql: `SELECT
+                COUNT(*) as total_chats,
+                SUM(${WORD_COUNT_SQL}) as total_words,
+                SUM(${CHAR_COUNT_SQL}) as total_chars,
+                MAX(timestamp) as last_active
+              FROM chat_logs
+              ${where}`,
+        args
+    });
+
+    const row = stats.rows[0];
+    if (!row || Number(row.total_chats) === 0) return null;
+
+    let rankWhere = "WHERE username IS NOT NULL AND TRIM(username) != ''";
+    const rankArgs = [];
+    if (aiName) {
+        rankWhere += " AND LOWER(ai_name) = ?";
+        rankArgs.push(aiName);
+    }
+    const rank = await db.execute({
+        sql: `SELECT COUNT(*) + 1 as rank FROM (
+                SELECT username, SUM(${WORD_COUNT_SQL}) as words
+                FROM chat_logs
+                ${rankWhere}
+                GROUP BY username
+              ) WHERE words > ?`,
+        args: [...rankArgs, Number(row.total_words) || 0]
+    });
+
+    return {
+        username: String(username),
+        total_chats: Number(row.total_chats) || 0,
+        total_words: Number(row.total_words) || 0,
+        total_chars: Number(row.total_chars) || 0,
+        last_active: row.last_active || null,
+        rank: rank.rows[0] ? Number(rank.rows[0].rank) : null
+    };
+}
+
+// ── Peringkat waifu (karakter AI paling sering dichat) ───────────────────────
+async function getTopWaifus(db, { limit = 10 } = {}) {
+    const safeLimit = normalizeLimit(limit, 10);
+    const result = await db.execute({
+        sql: `SELECT
+                cl.ai_name,
+                COUNT(*) as total_chats,
+                COUNT(DISTINCT cl.username) as total_users,
+                MAX(cl.timestamp) as last_active,
+                (SELECT c.npc_name FROM characters c
+                  WHERE LOWER(c.id) = LOWER(cl.ai_name) LIMIT 1) as npc_name
+              FROM chat_logs cl
+              WHERE cl.ai_name IS NOT NULL AND TRIM(cl.ai_name) != ''
+              GROUP BY cl.ai_name
+              ORDER BY total_chats DESC, cl.ai_name ASC
+              LIMIT ?`,
+        args: [safeLimit]
+    });
+    return result.rows;
+}
+
 // Dipanggil setiap chat tersimpan: tambahkan selisih detik dari pesan sebelumnya
 // bila jedanya < 10 menit. Satu query UPSERT; perhitungan gap dilakukan di SQLite
 // memakai nilai baris lama (user_chat_time.last_message_at) vs nilai baru (excluded).
@@ -131,6 +237,9 @@ module.exports = {
     normalizeAiName,
     getTopChatUsers,
     getTopChatHours,
+    getTopWordUsers,
+    getUserWordStats,
+    getTopWaifus,
     recordChatActivity,
     backfillChatTime,
     ensureChatTimeBackfill

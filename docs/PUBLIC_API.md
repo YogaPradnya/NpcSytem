@@ -1,6 +1,6 @@
 # Public API — NPC System
 
-Endpoint publik **read-only** untuk web/app Animein: peringkat chat & peringkat jam.
+Endpoint publik **read-only** untuk web/app Animein: peringkat chat, jam obrolan, total kata, & waifu paling sering dichat.
 Tanpa login admin — cukup API key statis lewat header `X-API-Key`.
 
 - **Base URL produksi:** `https://npc.yogaa.web.id`
@@ -39,7 +39,7 @@ PUBLIC_STATS_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ## 2. Rate limit & cache
 
 - **Rate limit:** 60 request / menit / IP untuk seluruh `/api/public/*`. Lewat batas → `429 {"success":false,"error":"Terlalu banyak request, coba lagi nanti."}`
-- **Cache server:** hasil disimpan in-memory maksimal **2 menit** per kombinasi parameter (`limit` + `ai_name`). Hit pertama lambat (kueri DB), hit berikutnya instan.
+- **Cache server:** hasil disimpan in-memory maksimal **2 menit** per kombinasi parameter (`limit`, `ai_name`, `username`, dst.). Hit pertama lambat (kueri DB), hit berikutnya instan.
 - **Header tambahan di response:**
   - `X-Cache: HIT | MISS` — menandakan data dari cache server atau hasil kueri baru.
   - `Cache-Control: public, max-age=120` — boleh di-cache juga oleh browser/CDN selama 2 menit.
@@ -153,9 +153,147 @@ curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
 
 ---
 
-## 5. Cara pemanggilan & penggunaan
+## 5. `GET /api/public/top-words`
 
-### 5.1 Quick test (curl)
+Peringkat user berdasarkan **total kata** yang mereka ketik (seluruh periode, sumber `chat_logs`).
+
+**Cara hitung (perkiraan):**
+- `total_words` = jumlah kata pada pesan user, dipisah spasi. Pesan kosong dihitung 0 kata.
+  (Spasi ganda bisa terhitung ganda dan baris baru tidak memisah kata — jadi ini estimasi.)
+- `total_chars` = jumlah karakter pesan apa adanya (termasuk spasi).
+- Angka dihitung saat kueri (bukan disimpan), jadi selalu mengikuti data terbaru.
+
+Bisa juga untuk **satu user tertentu**: tambahkan `username=...` → hasilnya satu baris lengkap dengan
+`rank` user tersebut di antara semua user.
+
+### Query parameters
+
+| Param | Wajib | Nilai | Default | Keterangan |
+|---|---|---|---|---|
+| `limit` | tidak | `10`, `20`, `25`, `50`, `100` | `10` | Jumlah baris (diabaikan kalau `username` diisi). |
+| `ai_name` | tidak | ID karakter, mis. `alya` | — | Filter per karakter (case-insensitive). |
+| `username` | tidak | nama user, mis. `seialenz` | — | Ambil statistik satu user saja. Maks 50 karakter. |
+
+### Contoh request
+
+```bash
+# Top 10 berdasarkan total kata
+curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
+  "https://npc.yogaa.web.id/api/public/top-words?limit=10"
+
+# Statistik satu user
+curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
+  "https://npc.yogaa.web.id/api/public/top-words?username=seialenz"
+```
+
+### Contoh response (daftar)
+
+```json
+{
+  "success": true,
+  "generated_at": "2026-10-18T07:30:00.000Z",
+  "limit": 10,
+  "ai_name": null,
+  "username": null,
+  "users": [
+    {
+      "rank": 1,
+      "username": "sakiko",
+      "total_words": 73704,
+      "total_chars": 464864,
+      "total_chat": 5865,
+      "last_active": "2026-10-11 19:15:43"
+    }
+  ]
+}
+```
+
+### Contoh response (satu user)
+
+```json
+{
+  "success": true,
+  "generated_at": "2026-10-18T07:30:00.000Z",
+  "limit": 10,
+  "ai_name": null,
+  "username": "seialenz",
+  "users": [
+    {
+      "rank": 5,
+      "username": "seialenz",
+      "total_words": 41317,
+      "total_chars": 237238,
+      "total_chat": 8334,
+      "last_active": "2026-10-18 03:09:58"
+    }
+  ]
+}
+```
+
+| Field | Tipe | Keterangan |
+|---|---|---|
+| `rank` | number | Peringkat berdasarkan `total_words` (1 = teratas). Kalau filter `ai_name` dipakai, peringkat dihitung di kelompok filter itu. |
+| `username` | string | Nama user. |
+| `total_words` | number | Perkiraan jumlah kata yang diketik user. |
+| `total_chars` | number | Jumlah karakter yang diketik user. |
+| `total_chat` | number | Jumlah pesan user (sama seperti `top-chat`). |
+| `last_active` | string \| null | Terakhir aktif, format `YYYY-MM-DD HH:MM:SS` **UTC**. |
+
+> Kalau `username` tidak ditemukan: `users` berisi array kosong (`[]`) dengan `success: true`.
+
+---
+
+## 6. `GET /api/public/top-waifu`
+
+Peringkat karakter AI (waifu) yang **paling sering diajak chat**, diurutkan dari total chat terbanyak.
+
+### Query parameters
+
+| Param | Wajib | Nilai | Default | Keterangan |
+|---|---|---|---|---|
+| `limit` | tidak | `10`, `20`, `25`, `50`, `100` | `10` | Jumlah baris. Nilai lain otomatis jatuh ke default. |
+
+### Contoh request
+
+```bash
+curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
+  "https://npc.yogaa.web.id/api/public/top-waifu?limit=10"
+```
+
+### Contoh response
+
+```json
+{
+  "success": true,
+  "generated_at": "2026-10-18T07:30:00.000Z",
+  "limit": 10,
+  "waifus": [
+    {
+      "rank": 1,
+      "ai_name": "alya",
+      "name": "Alya",
+      "total_chat": 27423,
+      "total_users": 3356,
+      "last_active": "2026-09-07 02:18:55"
+    }
+  ]
+}
+```
+
+| Field | Tipe | Keterangan |
+|---|---|---|
+| `rank` | number | Peringkat (1 = paling sering dichat). |
+| `ai_name` | string | ID karakter — pakai nilai ini untuk filter `ai_name` di endpoint lain. |
+| `name` | string | Nama tampilan karakter (dari tabel `characters`); fallback ke `ai_name` kalau tidak ketemu. |
+| `total_chat` | number | Jumlah pesan user yang dikirim ke karakter tersebut. |
+| `total_users` | number | Jumlah user unik yang pernah chat karakter tersebut. |
+| `last_active` | string \| null | Waktu chat terakhir ke karakter tersebut, format `YYYY-MM-DD HH:MM:SS` **UTC**. |
+
+---
+
+## 7. Cara pemanggilan & penggunaan
+
+### 7.1 Quick test (curl)
 
 ```bash
 # Ganti ISI_KEY dengan nilai PUBLIC_STATS_KEY
@@ -163,7 +301,7 @@ curl -H "X-API-Key: ISI_KEY" \
   "https://npc.yogaa.web.id/api/public/top-hours?limit=25"
 ```
 
-### 5.2 Web / JavaScript (browser atau Node)
+### 7.2 Web / JavaScript (browser atau Node)
 
 ```js
 const NPC_API = 'https://npc.yogaa.web.id';
@@ -187,11 +325,23 @@ console.log(hours.users); // [{ rank, username, total_seconds, total_hours, last
 // Peringkat chat — filter karakter (opsional)
 const chats = await getLeaderboard('/api/public/top-chat', { limit: 10, ai_name: 'alya' });
 console.log(chats.users);
+
+// Peringkat total kata
+const words = await getLeaderboard('/api/public/top-words', { limit: 10 });
+console.log(words.users); // [{ rank, username, total_words, total_chars, total_chat, last_active }, ...]
+
+// Statistik satu user
+const one = await getLeaderboard('/api/public/top-words', { username: 'seialenz' });
+console.log(one.users[0]);
+
+// Waifu paling sering dichat
+const waifus = await getLeaderboard('/api/public/top-waifu', { limit: 10 });
+console.log(waifus.waifus); // [{ rank, ai_name, name, total_chat, total_users, last_active }, ...]
 ```
 
 > Catatan: `await` di top-level hanya bisa di ES module. Kalau dipakai di `<script>` biasa, bungkus dalam `async function` lalu panggil dengan `getLeaderboard(...).then(...)`.
 
-### 5.3 Android / APK (Kotlin — OkHttp)
+### 7.3 Android / APK (Kotlin — OkHttp)
 
 ```kotlin
 val client = OkHttpClient()
@@ -219,7 +369,7 @@ client.newCall(request).enqueue(object : Callback {
 
 > Di HP fisik, pastikan punya izin `INTERNET` di `AndroidManifest.xml`. URL harus HTTPS (sudah, di Render) — tidak perlu setting cleartext.
 
-### 5.4 Flutter (Dart — package http)
+### 7.4 Flutter (Dart — package http)
 
 ```dart
 import 'dart:convert';
@@ -238,9 +388,9 @@ Future<List<dynamic>> fetchTopHours() async {
 }
 ```
 
-### 5.5 Tips penggunaan
+### 7.5 Tips penggunaan
 
-- Batas `limit` yang diterima hanya `10`, `20`, `25`, `50`, `100` — nilai lain (mis. `limit=3`) otomatis jatuh ke default (`10` untuk top-chat, `25` untuk top-hours).
+- Batas `limit` yang diterima hanya `10`, `20`, `25`, `50`, `100` — nilai lain (mis. `limit=3`) otomatis jatuh ke default (`10` untuk top-chat/top-words/top-waifu, `25` untuk top-hours).
 - Data di-cache 2 menit di server, jadi cukup polling tiap 2–5 menit; jangan tiap detik.
 - `total_hours` sudah angka siap tampil (2 desimal). Untuk format cantik di UI: `total_hours.toFixed(1) + ' jam'`.
 - `last_active` format UTC — untuk WIB tambah 7 jam, atau tampilkan "terakhir aktif" relatif (mis. "2 hari lalu").
@@ -248,11 +398,11 @@ Future<List<dynamic>> fetchTopHours() async {
 
 ---
 
-## 6. Ringkasan error
+## 8. Ringkasan error
 
 | Status | Arti | Contoh penyebab |
 |---|---|---|
-| `400` | Parameter tidak valid | `ai_name` mengandung karakter aneh / lebih dari 50 huruf. |
+| `400` | Parameter tidak valid | `ai_name` mengandung karakter aneh / lebih dari 50 huruf; `username` lebih dari 50 karakter. |
 | `401` | API key salah/tidak ada | Header `X-API-Key` lupa dikirim. |
 | `429` | Kena rate limit | Lebih dari 60 request/menit dari IP yang sama. |
 | `500` | Error server/DB | Kueri DB gagal — coba beberapa saat lagi. |
@@ -260,11 +410,12 @@ Future<List<dynamic>> fetchTopHours() async {
 
 ---
 
-## 7. Catatan internal (untuk admin/dev)
+## 9. Catatan internal (untuk admin/dev)
 
 - Endpoint admin yang setara (butuh login dashboard, tanpa API key):
   - `GET /api/admin/top-users?limit=&ai_name=` — sama dengan `top-chat`.
   - `GET /api/admin/top-hours?limit=` — sama dengan `top-hours`, plus `rule.gap_minutes`.
+- `top-words` & `top-waifu` dihitung **live dari `chat_logs`** (tanpa tabel tambahan). `total_words` = estimasi dipisah spasi; `total_chars` = panjang pesan.
 - Tabel `user_chat_time` (username, total_seconds, last_message_at) dipelihara **incremental** setiap chat tersimpan di `src/routes/chatRoutes.js` (via `recordChatActivity`). Backfill histori otomatis saat boot (`ensureChatTimeBackfill` di `src/services/leaderboardService.js`):
   - `NODE_ENV=production` → backfill sekali lalu ditandai di `settings.chat_time_backfill_v1`.
   - selain production → backfill selalu dijalankan dan marker tidak ditulis (agar deploy pertama di production pasti memuat seluruh histori).

@@ -3,7 +3,7 @@
 Endpoint publik **read-only** untuk web/app Animein: peringkat chat & peringkat jam.
 Tanpa login admin — cukup API key statis lewat header `X-API-Key`.
 
-- **Base URL produksi:** `https://npcsytem.onrender.com`
+- **Base URL produksi:** `https://npcsytem-z0u1.onrender.com`
 - **Base URL lokal:** `http://localhost:4000`
 
 ---
@@ -63,7 +63,7 @@ Peringkat user berdasarkan **jumlah chat**, urut: level hati tertinggi → total
 
 ```bash
 curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
-  "https://npcsytem.onrender.com/api/public/top-chat?limit=10&ai_name=alya"
+  "https://npcsytem-z0u1.onrender.com/api/public/top-chat?limit=10&ai_name=alya"
 ```
 
 ### Contoh response
@@ -119,7 +119,7 @@ Peringkat user berdasarkan **total jam obrolan aktif**.
 
 ```bash
 curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
-  "https://npcsytem.onrender.com/api/public/top-hours?limit=25"
+  "https://npcsytem-z0u1.onrender.com/api/public/top-hours?limit=25"
 ```
 
 ### Contoh response
@@ -153,20 +153,98 @@ curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
 
 ---
 
-## 5. Contoh pemakaian (JavaScript)
+## 5. Cara pemanggilan & penggunaan
+
+### 5.1 Quick test (curl)
+
+```bash
+# Ganti ISI_KEY dengan nilai PUBLIC_STATS_KEY
+curl -H "X-API-Key: ISI_KEY" \
+  "https://npcsytem-z0u1.onrender.com/api/public/top-hours?limit=25"
+```
+
+### 5.2 Web / JavaScript (browser atau Node)
 
 ```js
-const NPC_API = 'https://npcsytem.onrender.com';
-const NPC_KEY = process.env.NPC_PUBLIC_KEY; // simpan di server web/app, jangan di frontend publik
+const NPC_API = 'https://npcsytem-z0u1.onrender.com';
+const NPC_KEY = 'ISI_PUBLIC_STATS_KEY';
 
-async function getTopHours(limit = 25) {
-  const res = await fetch(`${NPC_API}/api/public/top-hours?limit=${limit}`, {
-    headers: { 'X-API-Key': NPC_KEY }
-  });
-  if (!res.ok) throw new Error(`NPC API ${res.status}`);
-  return res.json(); // { success, generated_at, limit, rule, users }
+async function getLeaderboard(path, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const url = `${NPC_API}${path}${query ? '?' + query : ''}`;
+  const res = await fetch(url, { headers: { 'X-API-Key': NPC_KEY } });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`NPC API ${res.status}: ${err.error || 'unknown'}`);
+  }
+  return res.json();
+}
+
+// Peringkat jam — top 25
+const hours = await getLeaderboard('/api/public/top-hours', { limit: 25 });
+console.log(hours.users); // [{ rank, username, total_seconds, total_hours, last_active }, ...]
+
+// Peringkat chat — filter karakter (opsional)
+const chats = await getLeaderboard('/api/public/top-chat', { limit: 10, ai_name: 'alya' });
+console.log(chats.users);
+```
+
+> Catatan: `await` di top-level hanya bisa di ES module. Kalau dipakai di `<script>` biasa, bungkus dalam `async function` lalu panggil dengan `getLeaderboard(...).then(...)`.
+
+### 5.3 Android / APK (Kotlin — OkHttp)
+
+```kotlin
+val client = OkHttpClient()
+val request = Request.Builder()
+    .url("https://npcsytem-z0u1.onrender.com/api/public/top-hours?limit=25")
+    .addHeader("X-API-Key", "ISI_PUBLIC_STATS_KEY")
+    .build()
+
+client.newCall(request).enqueue(object : Callback {
+    override fun onFailure(call: Call, e: IOException) {
+        // error jaringan
+    }
+
+    override fun onResponse(call: Call, response: Response) {
+        val body = response.body?.string() ?: return
+        if (!response.isSuccessful) return // 401 = key salah, 429 = rate limit, dll
+        val users = JSONObject(body).getJSONArray("users")
+        for (i in 0 until users.length()) {
+            val u = users.getJSONObject(i)
+            // u.getInt("rank"), u.getString("username"), u.getDouble("total_hours") ...
+        }
+    }
+})
+```
+
+> Di HP fisik, pastikan punya izin `INTERNET` di `AndroidManifest.xml`. URL harus HTTPS (sudah, di Render) — tidak perlu setting cleartext.
+
+### 5.4 Flutter (Dart — package http)
+
+```dart
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
+Future<List<dynamic>> fetchTopHours() async {
+  final res = await http.get(
+    Uri.parse('https://npcsytem-z0u1.onrender.com/api/public/top-hours?limit=25'),
+    headers: {'X-API-Key': 'ISI_PUBLIC_STATS_KEY'},
+  );
+  if (res.statusCode != 200) {
+    throw Exception('NPC API ${res.statusCode}');
+  }
+  final data = jsonDecode(res.body);
+  return data['users'] as List<dynamic>;
 }
 ```
+
+### 5.5 Tips penggunaan
+
+- Batas `limit` yang diterima hanya `10`, `20`, `25`, `50`, `100` — nilai lain (mis. `limit=3`) otomatis jatuh ke default (`10` untuk top-chat, `25` untuk top-hours).
+- Data di-cache 2 menit di server, jadi cukup polling tiap 2–5 menit; jangan tiap detik.
+- `total_hours` sudah angka siap tampil (2 desimal). Untuk format cantik di UI: `total_hours.toFixed(1) + ' jam'`.
+- `last_active` format UTC — untuk WIB tambah 7 jam, atau tampilkan "terakhir aktif" relatif (mis. "2 hari lalu").
+- Simpan key di satu tempat (mis. konstanta/config), jangan tulis ulang di banyak file.
 
 ---
 

@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { createClient } = require('@libsql/client');
 const { stringifyHeartProfiles, parseHeartProfiles } = require('./heart_profiles');
+const { ensureUserIdentitySchema } = require('./services/userIdentity');
 
 const db = createClient({
     url: process.env.TURSO_URL,
@@ -32,6 +33,7 @@ async function initDB(characters) {
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                 ai_name TEXT,
                 username TEXT,
+                user_id TEXT,
                 user_message TEXT,
                 bot_response TEXT,
                 tokens INTEGER,
@@ -69,9 +71,13 @@ async function initDB(characters) {
             value TEXT
         )`);
 
+        // users: satu baris per IDENTITAS (user_id) — username = nama terbaru,
+        // last_seen = terakhir terlihat. ID akun dari client atau 'legacy:<nama>'
+        // untuk data lama (lihat src/services/userIdentity.js).
         await db.execute(`
             CREATE TABLE IF NOT EXISTS users (
-                username TEXT PRIMARY KEY,
+                user_id TEXT PRIMARY KEY,
+                username TEXT,
                 last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         `);
@@ -80,16 +86,23 @@ async function initDB(characters) {
         // oleh chatRoutes; histori lama di-backfill sekali saat boot dari chat_logs).
         await db.execute(`
             CREATE TABLE IF NOT EXISTS user_chat_time (
-                username TEXT PRIMARY KEY,
+                user_id TEXT PRIMARY KEY,
+                username TEXT,
                 total_seconds REAL DEFAULT 0,
                 last_message_at DATETIME
             )
         `);
 
+        // Skema identitas user_id (idempoten): tambah kolom chat_logs.user_id dan
+        // bangun ulang tabel users / user_chat_time kuno (PK username) menjadi
+        // PK user_id — nama yang beda huruf besar/kecil otomatis digabung.
+        await ensureUserIdentitySchema(db, (m) => console.log(m));
+
         await db.execute("CREATE INDEX IF NOT EXISTS idx_chat_logs_username ON chat_logs(username)");
         await db.execute("CREATE INDEX IF NOT EXISTS idx_chat_logs_ai_name ON chat_logs(ai_name)");
         await db.execute("CREATE INDEX IF NOT EXISTS idx_banned_lower_username ON banned_users(username COLLATE NOCASE)");
-        await db.execute("CREATE INDEX IF NOT EXISTS idx_user_chat_time_leaderboard ON user_chat_time(total_seconds DESC, username ASC)");
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_chat_logs_user_id ON chat_logs(user_id)");
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_user_chat_time_leaderboard ON user_chat_time(total_seconds DESC, user_id ASC)");
 
         await db.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('ban_message', 'Aku malas berbicara dengan kamu.')");
         await db.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('badwords', '')");

@@ -77,6 +77,7 @@ curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
   "users": [
     {
       "rank": 1,
+      "user_id": "8123456789",
       "username": "dapaaPRODIGY",
       "level": 5,
       "total_chat": 314,
@@ -89,10 +90,13 @@ curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
 | Field | Tipe | Keterangan |
 |---|---|---|
 | `rank` | number | Peringkat (1 = teratas). |
-| `username` | string | Nama user di log chat. |
+| `user_id` | string \| null | Identitas user stabil (ID akun dari app; data lama = `legacy:<nama>`). Pakai ini untuk mencocokkan "aku" — bukan `username` yang bisa berubah. |
+| `username` | string | Nama tampilan terbaru user (dari tabel `users`). |
 | `level` | number | Level hati tertinggi yang pernah dicapai (0–5). |
 | `total_chat` | number | Jumlah pesan user tersebut (yang tersimpan di `chat_logs`). |
 | `last_active` | string \| null | Terakhir aktif, format `YYYY-MM-DD HH:MM:SS` **UTC** (tambah +7 jam untuk WIB). |
+
+> **Identitas:** baris digabung per `user_id`, jadi user yang ganti nama tampilan tetap satu baris. Data lama yang belum punya ID akun memakai `legacy:<username>` (nama yang dulu terpecah karena beda huruf besar/kecil otomatis tergabung). Detail: `docs/USER_ID.md`.
 
 ---
 
@@ -133,6 +137,7 @@ curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
   "users": [
     {
       "rank": 1,
+      "user_id": "8123456789",
       "username": "sakiko",
       "total_seconds": 697809,
       "total_hours": 193.84,
@@ -145,7 +150,8 @@ curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
 | Field | Tipe | Keterangan |
 |---|---|---|
 | `rank` | number | Peringkat (1 = teratas). |
-| `username` | string | Nama user di log chat. |
+| `user_id` | string \| null | Identitas user stabil (ID akun; data lama = `legacy:<nama>`). |
+| `username` | string | Nama tampilan terbaru user (dari tabel `users`). |
 | `total_seconds` | number | Total detik obrolan aktif (dibulatkan). |
 | `total_hours` | number | `total_seconds / 3600`, dibulatkan 2 desimal. |
 | `last_active` | string \| null | Terakhir aktif, format `YYYY-MM-DD HH:MM:SS` **UTC**. |
@@ -163,16 +169,18 @@ Peringkat user berdasarkan **total kata** yang mereka ketik (seluruh periode, su
 - `total_chars` = jumlah karakter pesan apa adanya (termasuk spasi).
 - Angka dihitung saat kueri (bukan disimpan), jadi selalu mengikuti data terbaru.
 
-Bisa juga untuk **satu user tertentu**: tambahkan `username=...` → hasilnya satu baris lengkap dengan
-`rank` user tersebut di antara semua user.
+Bisa juga untuk **satu user tertentu**: tambahkan `user_id=...` (disarankan — identitas stabil) atau
+`username=...` → hasilnya satu baris lengkap dengan `rank` user tersebut di antara semua user.
+Kalau keduanya diisi, `user_id` yang dipakai.
 
 ### Query parameters
 
 | Param | Wajib | Nilai | Default | Keterangan |
 |---|---|---|---|---|
-| `limit` | tidak | `10`, `20`, `25`, `50`, `100` | `10` | Jumlah baris (diabaikan kalau `username` diisi). |
+| `limit` | tidak | `10`, `20`, `25`, `50`, `100` | `10` | Jumlah baris (diabaikan kalau `user_id`/`username` diisi). |
 | `ai_name` | tidak | ID karakter, mis. `alya` | — | Filter per karakter (case-insensitive). |
-| `username` | tidak | nama user, mis. `seialenz` | — | Ambil statistik satu user saja. Maks 50 karakter. |
+| `user_id` | tidak | ID akun user, mis. `8123456789` | — | Statistik satu user berdasarkan identitas stabil. Maks 64 karakter. |
+| `username` | tidak | nama user, mis. `seialenz` | — | Statistik satu user berdasarkan nama (case-insensitive). Maks 50 karakter. |
 
 ### Contoh request
 
@@ -181,7 +189,11 @@ Bisa juga untuk **satu user tertentu**: tambahkan `username=...` → hasilnya sa
 curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
   "https://npc.yogaa.web.id/api/public/top-words?limit=10"
 
-# Statistik satu user
+# Statistik satu user (identitas stabil)
+curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
+  "https://npc.yogaa.web.id/api/public/top-words?user_id=8123456789"
+
+# Statistik satu user (berdasarkan nama)
 curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
   "https://npc.yogaa.web.id/api/public/top-words?username=seialenz"
 ```
@@ -194,10 +206,12 @@ curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
   "generated_at": "2026-10-18T07:30:00.000Z",
   "limit": 10,
   "ai_name": null,
+  "user_id": null,
   "username": null,
   "users": [
     {
       "rank": 1,
+      "user_id": "8123456789",
       "username": "sakiko",
       "total_words": 73704,
       "total_chars": 464864,
@@ -216,10 +230,12 @@ curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
   "generated_at": "2026-10-18T07:30:00.000Z",
   "limit": 10,
   "ai_name": null,
+  "user_id": "8123456789",
   "username": "seialenz",
   "users": [
     {
       "rank": 5,
+      "user_id": "8123456789",
       "username": "seialenz",
       "total_words": 41317,
       "total_chars": 237238,
@@ -233,13 +249,14 @@ curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
 | Field | Tipe | Keterangan |
 |---|---|---|
 | `rank` | number | Peringkat berdasarkan `total_words` (1 = teratas). Kalau filter `ai_name` dipakai, peringkat dihitung di kelompok filter itu. |
-| `username` | string | Nama user. |
+| `user_id` | string \| null | Identitas stabil user (ID akun; data lama = `legacy:<nama>`). Terisi kalau dicari lewat `user_id`. |
+| `username` | string | Nama tampilan terbaru user. |
 | `total_words` | number | Perkiraan jumlah kata yang diketik user. |
 | `total_chars` | number | Jumlah karakter yang diketik user. |
 | `total_chat` | number | Jumlah pesan user (sama seperti `top-chat`). |
 | `last_active` | string \| null | Terakhir aktif, format `YYYY-MM-DD HH:MM:SS` **UTC**. |
 
-> Kalau `username` tidak ditemukan: `users` berisi array kosong (`[]`) dengan `success: true`.
+> Kalau `user_id`/`username` tidak ditemukan: `users` berisi array kosong (`[]`) dengan `success: true`.
 
 ---
 
@@ -402,7 +419,7 @@ Future<List<dynamic>> fetchTopHours() async {
 
 | Status | Arti | Contoh penyebab |
 |---|---|---|
-| `400` | Parameter tidak valid | `ai_name` mengandung karakter aneh / lebih dari 50 huruf; `username` lebih dari 50 karakter. |
+| `400` | Parameter tidak valid | `ai_name` mengandung karakter aneh / lebih dari 50 huruf; `username` lebih dari 50 karakter; `user_id` lebih dari 64 karakter / karakter aneh. |
 | `401` | API key salah/tidak ada | Header `X-API-Key` lupa dikirim. |
 | `429` | Kena rate limit | Lebih dari 60 request/menit dari IP yang sama. |
 | `500` | Error server/DB | Kueri DB gagal — coba beberapa saat lagi. |
@@ -415,9 +432,10 @@ Future<List<dynamic>> fetchTopHours() async {
 - Endpoint admin yang setara (butuh login dashboard, tanpa API key):
   - `GET /api/admin/top-users?limit=&ai_name=` — sama dengan `top-chat`.
   - `GET /api/admin/top-hours?limit=` — sama dengan `top-hours`, plus `rule.gap_minutes`.
+- Semua peringkat user berbasis **`user_id`** (identitas stabil): ID akun dari body chat (`user.id`), fallback `legacy:<username>` untuk data lama/klien lama. Nama tampilan diambil dari tabel `users` (nama terbaru). Detail alur + kontrak client: `docs/USER_ID.md`.
 - `top-words` & `top-waifu` dihitung **live dari `chat_logs`** (tanpa tabel tambahan). `total_words` = estimasi dipisah spasi; `total_chars` = panjang pesan.
-- Tabel `user_chat_time` (username, total_seconds, last_message_at) dipelihara **incremental** setiap chat tersimpan di `src/routes/chatRoutes.js` (via `recordChatActivity`). Backfill histori otomatis saat boot (`ensureChatTimeBackfill` di `src/services/leaderboardService.js`):
+- Tabel `user_chat_time` (user_id, username, total_seconds, last_message_at) dipelihara **incremental** setiap chat tersimpan di `src/routes/chatRoutes.js` (via `recordChatActivity`). Backfill histori otomatis saat boot (`ensureChatTimeBackfill` di `src/services/leaderboardService.js`):
   - `NODE_ENV=production` → backfill sekali lalu ditandai di `settings.chat_time_backfill_v1`.
   - selain production → backfill selalu dijalankan dan marker tidak ditulis (agar deploy pertama di production pasti memuat seluruh histori).
   - Butuh backfill ulang manual? Hapus baris `chat_time_backfill_v1` dari tabel `settings` lalu restart server (mode production).
-- Cache in-memory 2 menit dapat diubah lewat konstanta `PUBLIC_CACHE_TTL_MS` di `src/routes/publicRoutes.js`.
+- Cache in-memory 2 menit dapat diubah lewat konstanta `PUBLIC_CACHE_TTL_MS` di `src/routes/publicRoutes.js` (cache key sudah termasuk `user_id`).

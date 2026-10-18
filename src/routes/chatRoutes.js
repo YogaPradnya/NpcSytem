@@ -9,6 +9,7 @@ const { validatePrompt, logSuspiciousActivity } = require('../guards/prompt_guar
 const { checkLocalBadwords, setBadWords } = require('../utils/badwordFilter');
 const { clampHeartLevel } = require('../heart_profiles');
 const { recordChatActivity } = require('../services/leaderboardService');
+const { claimLegacyUser, legacyIdFor } = require('../services/userIdentity');
 
 
 
@@ -106,6 +107,11 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
             const sanitizedMessage = validationResult.sanitized.message;
             const sanitizedContext = validationResult.sanitized.context || {};
             let currentUsername = validationResult.sanitized.username || 'Guest';
+
+            // Identitas stabil untuk leaderboard/users: pakai ID akun dari client
+            // bila dikirim; kalau tidak, jatuh ke identitas historis
+            // 'legacy:<username>' (perilaku lama tetap jalan).
+            const currentUserId = validationResult.sanitized.userId || legacyIdFor(currentUsername);
 
             const banCheck = await db.execute({
                 sql: "SELECT * FROM banned_users WHERE LOWER(TRIM(username)) = LOWER(?)",
@@ -338,10 +344,21 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
 
             // Simulator admin tidak ditulis ke users/chat_logs (token tetap dihitung di globalStats).
             if (!isSimulator) {
+                // Klaim histori lama ('legacy:<username>') ke ID akun — hanya
+                // berpengaruh sekali per nama, setelah itu baris legacy-nya habis.
+                try {
+                    const claimed = await claimLegacyUser(db, { userId: currentUserId, username: currentUsername });
+                    if (claimed > 0) {
+                        console.log(`[DB] Histori @${currentUsername} (${claimed} baris) diklaim ke user_id ${currentUserId}.`);
+                    }
+                } catch (claimErr) {
+                    console.error("[DB CLAIM ERROR]:", claimErr.message);
+                }
+
                 try {
                     await db.execute({
-                        sql: "INSERT INTO users (username, last_seen) VALUES (?, CURRENT_TIMESTAMP) ON CONFLICT(username) DO UPDATE SET last_seen=CURRENT_TIMESTAMP",
-                        args: [currentUsername]
+                        sql: "INSERT INTO users (user_id, username, last_seen) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET username=excluded.username, last_seen=CURRENT_TIMESTAMP",
+                        args: [currentUserId, currentUsername]
                     });
                 } catch (uErr) {
                     console.error("[DB USER SYNC ERROR]:", uErr.message);
@@ -350,8 +367,8 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 try {
                     const botResponse = (sentences.join('\n') || fullResponse).trim();
                     await db.execute({
-                        sql: "INSERT INTO chat_logs (ai_name, username, user_message, bot_response, tokens, prompt_tokens, completion_tokens, model, provider, latency, ai_pose, user_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        args: [aiKey, currentUsername, sanitizedMessage, botResponse, tokens, usage.prompt_tokens || 0, usage.completion_tokens || 0, activeCompletion.model, usedProvider, endTime - startTime, aiPose, currentHeartLv]
+                        sql: "INSERT INTO chat_logs (user_id, ai_name, username, user_message, bot_response, tokens, prompt_tokens, completion_tokens, model, provider, latency, ai_pose, user_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        args: [currentUserId, aiKey, currentUsername, sanitizedMessage, botResponse, tokens, usage.prompt_tokens || 0, usage.completion_tokens || 0, activeCompletion.model, usedProvider, endTime - startTime, aiPose, currentHeartLv]
                     });
                     console.log(`[DB] Log saved for @${currentUsername} | Pose: ${aiPose} | Lv: ${currentHeartLv}`);
                 } catch (logErr) {
@@ -361,7 +378,7 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 // Peringkat jam: akumulasi waktu aktif user (jeda < 10 menit dihitung).
                 // Terpisah dari log di atas agar kegagalan tidak memblokir balasan chat.
                 try {
-                    await recordChatActivity(db, currentUsername);
+                    await recordChatActivity(db, currentUserId, currentUsername);
                 } catch (timeErr) {
                     console.error("[DB CHAT TIME ERROR]: Gagal memperbarui total jam chat!", timeErr.message);
                 }

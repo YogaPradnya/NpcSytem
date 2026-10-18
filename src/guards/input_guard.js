@@ -3,6 +3,8 @@
  * Validates and sanitizes user input to prevent prompt injection attacks
  */
 
+const { sanitizeUserId } = require('../services/userIdentity');
+
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_CONTEXT_STRING_LENGTH = 500;
 const MAX_HISTORY_ITEMS = 10;
@@ -370,6 +372,16 @@ function validateChatInput({ user, message, context, system }) {
         }
         result.sanitized.username = usernameCheck.sanitized;
         result.sanitized.user = { ...user, username: usernameCheck.sanitized };
+    }
+
+    // Validasi ID akun (identitas stabil `user_id`) — opsional. ID tidak valid
+    // diabaikan (fallback ke 'legacy:<username>'), bukan menolak chat.
+    if (user) {
+        const sanitizedId = sanitizeUserId(user.id ?? user.user_id);
+        if (sanitizedId) {
+            result.sanitized.userId = sanitizedId;
+            result.sanitized.user = { ...(result.sanitized.user || user), id: sanitizedId };
+        }
     }
     
     // Validate message

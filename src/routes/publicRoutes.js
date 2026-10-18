@@ -1,10 +1,16 @@
 // Endpoint publik read-only untuk web/app animein (tanpa login admin).
 // Dilindungi API key statis dari env PUBLIC_STATS_KEY (header X-API-Key)
 // + dibatasi rate-limit dan cache in-memory singkat.
+//
+// Identitas user memakai `user_id` (ID akun stabil dari client; data lama
+// memakai 'legacy:<username>'). Setiap baris leaderboard mengembalikan
+// `user_id` + `username` (nama terbaru) — pakai `user_id` untuk mencocokkan
+// "aku" di aplikasi, bukan username yang bisa berubah.
 
 const express = require('express');
 const crypto = require('crypto');
 const { getTopChatUsers, getTopChatHours, getTopWordUsers, getUserWordStats, getTopWaifus, normalizeLimit, normalizeAiName } = require('../services/leaderboardService');
+const { sanitizeUserId, USER_ID_MAX_LENGTH } = require('../services/userIdentity');
 
 const PUBLIC_CACHE_TTL_MS = 2 * 60 * 1000; // 2 menit
 const AI_NAME_PATTERN = /^[a-z0-9._-]{1,50}$/;
@@ -85,6 +91,17 @@ function createPublicRoutes({ db }) {
         return { username, error: null };
     }
 
+    function readUserId(query) {
+        const raw = query?.user_id;
+        if (raw === undefined) return { userId: null, error: null };
+
+        const userId = sanitizeUserId(raw);
+        if (!userId) {
+            return { userId: null, error: `Parameter user_id tidak valid (maks ${USER_ID_MAX_LENGTH} karakter; huruf/angka/._:@+-).` };
+        }
+        return { userId, error: null };
+    }
+
     router.get('/api/public/top-chat', requireApiKey, async (req, res) => {
         try {
             const limit = normalizeLimit(req.query.limit, 10);
@@ -101,6 +118,7 @@ function createPublicRoutes({ db }) {
                     ai_name: aiName,
                     users: rows.map((row, i) => ({
                         rank: i + 1,
+                        user_id: row.user_id || null,
                         username: row.username,
                         level: Number(row.max_level) || 0,
                         total_chat: Number(row.total_chats) || 0,
@@ -130,6 +148,7 @@ function createPublicRoutes({ db }) {
                         const totalSeconds = Math.max(0, Number(row.total_seconds) || 0);
                         return {
                             rank: i + 1,
+                            user_id: row.user_id || null,
                             username: row.username,
                             total_seconds: Math.round(totalSeconds),
                             total_hours: formatHours(totalSeconds),
@@ -150,21 +169,27 @@ function createPublicRoutes({ db }) {
             const { aiName, error } = readAiName(req.query);
             if (error) return res.status(400).json({ success: false, error });
 
+            const { userId, error: userIdError } = readUserId(req.query);
+            if (userIdError) return res.status(400).json({ success: false, error: userIdError });
+
             const { username, error: usernameError } = readUsername(req.query);
             if (usernameError) return res.status(400).json({ success: false, error: usernameError });
 
-            const cacheKey = `top-words:${limit}:${aiName || ''}:${username || ''}`;
+            const cacheKey = `top-words:${limit}:${aiName || ''}:${username || ''}:${userId || ''}`;
             await respondWithCache(res, cacheKey, async () => {
-                if (username) {
-                    const stats = await getUserWordStats(db, { username, aiName });
+                // Mode satu user: prioritas user_id (identitas stabil), lalu username.
+                if (userId || username) {
+                    const stats = await getUserWordStats(db, userId ? { userId, aiName } : { username, aiName });
                     return {
                         success: true,
                         generated_at: new Date().toISOString(),
                         limit,
                         ai_name: aiName,
-                        username,
+                        user_id: userId,
+                        username: stats ? stats.username : username,
                         users: stats ? [{
                             rank: stats.rank,
+                            user_id: stats.user_id || userId || null,
                             username: stats.username,
                             total_words: stats.total_words,
                             total_chars: stats.total_chars,
@@ -180,9 +205,11 @@ function createPublicRoutes({ db }) {
                     generated_at: new Date().toISOString(),
                     limit,
                     ai_name: aiName,
+                    user_id: null,
                     username: null,
                     users: rows.map((row, i) => ({
                         rank: i + 1,
+                        user_id: row.user_id || null,
                         username: row.username,
                         total_words: Number(row.total_words) || 0,
                         total_chars: Number(row.total_chars) || 0,

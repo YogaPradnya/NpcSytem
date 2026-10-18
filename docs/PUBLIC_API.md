@@ -3,7 +3,7 @@
 Endpoint publik **read-only** untuk web/app Animein: peringkat chat & peringkat jam.
 Tanpa login admin — cukup API key statis lewat header `X-API-Key`.
 
-- **Base URL produksi:** `https://npcsytem-z0u1.onrender.com`
+- **Base URL produksi:** `https://npc.yogaa.web.id`
 - **Base URL lokal:** `http://localhost:4000`
 
 ---
@@ -63,7 +63,7 @@ Peringkat user berdasarkan **jumlah chat**, urut: level hati tertinggi → total
 
 ```bash
 curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
-  "https://npcsytem-z0u1.onrender.com/api/public/top-chat?limit=10&ai_name=alya"
+  "https://npc.yogaa.web.id/api/public/top-chat?limit=10&ai_name=alya"
 ```
 
 ### Contoh response
@@ -119,7 +119,7 @@ Peringkat user berdasarkan **total jam obrolan aktif**.
 
 ```bash
 curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
-  "https://npcsytem-z0u1.onrender.com/api/public/top-hours?limit=25"
+  "https://npc.yogaa.web.id/api/public/top-hours?limit=25"
 ```
 
 ### Contoh response
@@ -160,13 +160,13 @@ curl -H "X-API-Key: <PUBLIC_STATS_KEY>" \
 ```bash
 # Ganti ISI_KEY dengan nilai PUBLIC_STATS_KEY
 curl -H "X-API-Key: ISI_KEY" \
-  "https://npcsytem-z0u1.onrender.com/api/public/top-hours?limit=25"
+  "https://npc.yogaa.web.id/api/public/top-hours?limit=25"
 ```
 
 ### 5.2 Web / JavaScript (browser atau Node)
 
 ```js
-const NPC_API = 'https://npcsytem-z0u1.onrender.com';
+const NPC_API = 'https://npc.yogaa.web.id';
 const NPC_KEY = 'ISI_PUBLIC_STATS_KEY';
 
 async function getLeaderboard(path, params = {}) {
@@ -196,7 +196,7 @@ console.log(chats.users);
 ```kotlin
 val client = OkHttpClient()
 val request = Request.Builder()
-    .url("https://npcsytem-z0u1.onrender.com/api/public/top-hours?limit=25")
+    .url("https://npc.yogaa.web.id/api/public/top-hours?limit=25")
     .addHeader("X-API-Key", "ISI_PUBLIC_STATS_KEY")
     .build()
 
@@ -227,7 +227,7 @@ import 'package:http/http.dart' as http;
 
 Future<List<dynamic>> fetchTopHours() async {
   final res = await http.get(
-    Uri.parse('https://npcsytem-z0u1.onrender.com/api/public/top-hours?limit=25'),
+    Uri.parse('https://npc.yogaa.web.id/api/public/top-hours?limit=25'),
     headers: {'X-API-Key': 'ISI_PUBLIC_STATS_KEY'},
   );
   if (res.statusCode != 200) {

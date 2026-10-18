@@ -1,0 +1,50 @@
+# ============================================================================
+# npc-db — database produksi (sqld) + backup harian ke Turso
+#
+# CARA PAKAI DI COOLIFY:
+#   1. Service "npc-db" → Configuration → tempel SELURUH isi file ini.
+#   2. Halaman Environment Variables service ini harus berisi 3 variabel:
+#        SQLD_AUTH_JWT_KEY    = kunci publik Ed25519 sqld      (sudah ada)
+#        SQLD_AUTH_TOKEN      = token JWT sqld                 (tambahkan)
+#        TURSO_OLD_AUTH_TOKEN = token Turso (untuk cadangan)   (tambahkan)
+#   3. Redeploy / Restart.
+#
+# Container "backup" otomatis menjalankan backup tiap 03:00 WITA (19:00 UTC).
+# Cek hasilnya di Runtime Logs container "backup" (cari teks "[npc-backup]"),
+# atau backup manual via Terminal → container backup →
+#   /usr/local/bin/node /app/backup-sqld-to-turso.js
+# ============================================================================
+services:
+  sqld:
+    image: ghcr.io/tursodatabase/libsql-server:latest
+    environment:
+      - SQLD_NODE=standalone
+      - SQLD_HTTP_LISTEN_ADDR=0.0.0.0:8080
+      - SQLD_AUTH_JWT_KEY=${SQLD_AUTH_JWT_KEY:?}
+    volumes:
+      - sqld-data:/var/lib/sqld
+
+  backup:
+    image: node:20-alpine
+    restart: unless-stopped
+    environment:
+      - SQLD_URL=https://npc-db.yogaa.web.id
+      - SQLD_AUTH_TOKEN=${SQLD_AUTH_TOKEN:?}
+      - TURSO_OLD_URL=libsql://npcsytem-yogapradnyan.aws-ap-northeast-1.turso.io
+      - TURSO_OLD_AUTH_TOKEN=${TURSO_OLD_AUTH_TOKEN:?}
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        npm install --prefix /app @libsql/client@0.17.2 --no-fund --no-audit --loglevel=error >/dev/null 2>&1
+        wget -qO /app/libsql-sync.js https://raw.githubusercontent.com/YogaPradnya/NpcSytem/main/scripts/libsql-sync.js
+        wget -qO /app/backup-sqld-to-turso.js https://raw.githubusercontent.com/YogaPradnya/NpcSytem/main/scripts/backup-sqld-to-turso.js
+        printenv | grep -E '^(SQLD_URL|SQLD_AUTH_TOKEN|TURSO_OLD_URL|TURSO_OLD_AUTH_TOKEN)=' > /app/backup.env
+        chmod 600 /app/backup.env
+        echo '0 19 * * * . /app/backup.env && /usr/local/bin/node /app/backup-sqld-to-turso.js > /proc/1/fd/1 2>&1' | crontab -
+        echo "[npc-backup] siap — backup otomatis tiap 03:00 WITA (19:00 UTC); manual: /usr/local/bin/node /app/backup-sqld-to-turso.js"
+        exec crond -f -l 8
+
+volumes:
+  sqld-data:

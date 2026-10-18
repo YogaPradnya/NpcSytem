@@ -11,7 +11,8 @@ const BAD_WORDS_LIST = [
   'jancok', 'jancuk', 'cok', 'cuk', 'itil', 'puki', 'pukimak', 'kimak',
   'tolo', 'tolol', 'goblok', 'goblq', 'gblg', 'gblq', 'bego', 'geblek',
   'perek', 'lonte', 'lono', 'bajingan', 'kampang', 'suasu', 'asu',
-  
+  'sex', 'seks', 'ngewe', 'ngentot', 'bokep',
+
   // English profanities
   'fuck', 'fucker', 'fucking', 'shit', 'bitch', 'cunt', 'dick', 'pussy',
   'bastard', 'asshole', 'nigger', 'nigga', 'motherfucker'
@@ -72,6 +73,37 @@ function getBadWords() {
 }
 
 /**
+ * Bangun scanner untuk daftar kata tertentu (dipakai sistem ban massal).
+ * Semantik identik dengan checkLocalBadwords: word-boundary + normalisasi
+ * leetspeak (k0ntol → kontol). Berbedanya, match() mengembalikan SEMUA kata
+ * yang cocok, bukan berhenti di kata pertama.
+ *
+ * @param {string[]} wordList
+ * @returns {{ words: string[], match(text: string): string[] }}
+ */
+function makeScanner(wordList) {
+  const cleaned = [...new Set(
+    (Array.isArray(wordList) ? wordList : [wordList])
+      .map(w => String(w || '').trim().toLowerCase())
+      .filter(w => w.length > 0 && w.length <= 50)
+  )].slice(0, 500);
+  const patterns = buildPatterns(cleaned);
+  return {
+    words: cleaned,
+    match(text) {
+      if (!text || typeof text !== 'string') return [];
+      const normalized = normalizeText(text);
+      const lower = text.toLowerCase();
+      const matched = [];
+      for (let i = 0; i < cleaned.length; i++) {
+        if (patterns[i].test(normalized) || patterns[i].test(lower)) matched.push(cleaned[i]);
+      }
+      return matched;
+    }
+  };
+}
+
+/**
  * Memeriksa apakah teks mengandung kata kasar lokal
  * @param {string} text 
  * @returns {{ isToxic: boolean, word?: string }}
@@ -104,5 +136,6 @@ module.exports = {
   checkLocalBadwords,
   setBadWords,
   getBadWords,
+  makeScanner,
   BAD_WORDS_LIST
 };

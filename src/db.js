@@ -61,9 +61,12 @@ async function initDB(characters) {
         await db.execute(`CREATE TABLE IF NOT EXISTS banned_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE,
+            user_id TEXT,
             reason TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
+        // user_id: ban mengikuti ID akun (aman rename); diisi 'legacy:<nama>' oleh
+        // ensureUserIdentitySchema() untuk baris lama/cadangan.
         try { await db.execute("ALTER TABLE banned_users ADD COLUMN reason TEXT"); } catch (e) {}
 
         await db.execute(`CREATE TABLE IF NOT EXISTS settings (

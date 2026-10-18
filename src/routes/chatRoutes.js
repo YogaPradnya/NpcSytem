@@ -113,9 +113,10 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
             // 'legacy:<username>' (perilaku lama tetap jalan).
             const currentUserId = validationResult.sanitized.userId || legacyIdFor(currentUsername);
 
+            // Cek ban: cocokkan ID akun (ikut rename) ATAU username apa adanya.
             const banCheck = await db.execute({
-                sql: "SELECT * FROM banned_users WHERE LOWER(TRIM(username)) = LOWER(?)",
-                args: [currentUsername]
+                sql: "SELECT * FROM banned_users WHERE user_id = ? OR LOWER(TRIM(username)) = LOWER(?)",
+                args: [currentUserId, currentUsername]
             });
 
             if (banCheck.rows.length > 0) {
@@ -148,8 +149,8 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                 if (!isAdminCaller) {
                     try {
                         await db.execute({
-                            sql: "INSERT OR IGNORE INTO banned_users (username, reason) VALUES (?, ?)",
-                            args: [currentUsername, `auto-ban: kata kasar ('${toxicCheck.word}')`]
+                            sql: "INSERT OR IGNORE INTO banned_users (user_id, username, reason) VALUES (?, ?, ?)",
+                            args: [currentUserId, currentUsername, `auto-ban: kata kasar ('${toxicCheck.word}')`]
                         });
                     } catch (banErr) {
                         console.error("[AUTO-BAN DB ERROR]:", banErr.message);

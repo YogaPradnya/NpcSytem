@@ -1104,6 +1104,136 @@ async function unbanUser(username) {
     }
 }
 
+// ===== Ban massal berdasarkan kata terlarang =====
+let massbanRunning = false;
+
+function parseMassbanWords(text) {
+    return [...new Set(
+        String(text || '')
+            .split(/[\n,;]+/)
+            .map(w => w.trim().toLowerCase())
+            .filter(w => w.length > 0 && w.length <= 50)
+    )].slice(0, 500);
+}
+
+async function loadActiveBadwords() {
+    try {
+        const res = await fetch('/api/admin/badword-words');
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memuat daftar kata'));
+        const el = document.getElementById('massban-words-input');
+        if (el) el.value = data.words.join('\n');
+        setText('massban-summary', `Daftar filter aktif dimuat: ${data.words.length} kata (sama dengan yang dipakai auto-ban live).`);
+        showToast(`${data.words.length} kata filter aktif dimuat`, 'success');
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+}
+
+function setMassbanBusy(busy) {
+    ['btn-badword-scan', 'btn-mass-ban'].forEach(id => {
+        const b = document.getElementById(id);
+        if (b) b.disabled = busy;
+    });
+}
+
+function renderMassbanRows(users, truncated, summaryNote) {
+    const tbody = document.getElementById('massban-body');
+    if (!tbody) return;
+    if (!users.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="table-state">Tidak ada user yang cocok dengan daftar kata.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = users.map(u => {
+        const uid = String(u.user_id || '');
+        const fallbackName = uid.startsWith('legacy:') ? '@' + uid.slice(7) : uid;
+        const name = u.username || fallbackName;
+        const words = (u.words || []).join(', ');
+        const status = u.already_banned
+            ? '<span style="color:var(--success); font-weight:700;">Sudah diban</span>'
+            : '<span style="color:#dc2626; font-weight:700;">' + (summaryNote === 'applied' ? 'Baru di-ban' : 'Belum diban') + '</span>';
+        return `<tr>
+            <td style="font-weight:700;">${escapeHTML(name)}</td>
+            <td style="font-size:.72rem; color:var(--text-muted);">${escapeHTML(uid)}</td>
+            <td style="text-align:center; font-weight:600;">${Number(u.matched_chat_count || 0).toLocaleString(LOCALE_ID)}</td>
+            <td style="font-size:.75rem; color:#dc2626; font-weight:700;">${escapeHTML(words)}</td>
+            <td style="font-size:.72rem; color:var(--text-muted); max-width:340px; word-break:break-word;">${escapeHTML(u.sample || '')}</td>
+            <td style="font-size:.75rem;">${status}</td>
+        </tr>`;
+    }).join('') + (truncated ? '<tr><td colspan="6" class="table-state">Menampilkan sebagian; lihat ringkasan untuk jumlah total.</td></tr>' : '');
+}
+
+function buildMassbanParams(words, fullFlag) {
+    const params = new URLSearchParams();
+    if (words.length) params.set('words', words.join(','));
+    if (fullFlag) params.set('full', '1');
+    return params.toString();
+}
+
+async function runBadwordScan() {
+    if (massbanRunning) return showToast('Scan masih berjalan, tunggu sebentar...', 'error');
+    const tbody = document.getElementById('massban-body');
+    const words = parseMassbanWords(document.getElementById('massban-words-input')?.value || '');
+    const full = document.getElementById('massban-full-scan')?.checked ? '1' : '';
+    massbanRunning = true;
+    setMassbanBusy(true);
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="table-state">Memindai histori chat… (pindai penuh bisa 1–2 menit)</td></tr>';
+    setText('massban-summary', 'Memindai historis chat…');
+    try {
+        const res = await fetch('/api/admin/badword-scan?' + buildMassbanParams(words, full));
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal memindai'));
+        renderMassbanRows(data.users || [], data.truncated, null);
+        setText('massban-summary',
+            `Hasil scan: ${Number(data.scanned_rows || 0).toLocaleString(LOCALE_ID)} pesan dipindai — ` +
+            `${Number(data.matched_users || 0).toLocaleString(LOCALE_ID)} user cocok (${Number(data.already_banned || 0).toLocaleString(LOCALE_ID)} sudah diban). ` +
+            `Klik "BAN MASSAL" untuk memblokir semua yang tersisa.`);
+    } catch (e) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="table-state error">' + escapeHTML(e.message) + '</td></tr>';
+        setText('massban-summary', '');
+        showToast(e.message, 'error');
+    } finally {
+        massbanRunning = false;
+        setMassbanBusy(false);
+    }
+}
+
+async function runMassBanBadwords() {
+    if (massbanRunning) return showToast('Scan masih berjalan, tunggu sebentar...', 'error');
+    const tbody = document.getElementById('massban-body');
+    const words = parseMassbanWords(document.getElementById('massban-words-input')?.value || '');
+    const full = document.getElementById('massban-full-scan')?.checked ? true : false;
+    if (!confirm('Pindai histori lalu ban SEMUA user yang pesannya memuat kata terlarang?\nAlasan ban diisi otomatis. (Sarankan jalankan "Cari User" dulu untuk melihat siapa saja.)')) return;
+    massbanRunning = true;
+    setMassbanBusy(true);
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="table-state">Memindai + men-ban… mohon tunggu</td></tr>';
+    setText('massban-summary', 'Memindai dan men-ban…');
+    try {
+        const res = await fetch('/api/admin/badword-mass-ban', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ words: words.length ? words.join(',') : null, full })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(apiError(data, 'Gagal ban massal'));
+        renderMassbanRows(data.users || [], data.truncated, data.applied ? 'applied' : null);
+        setText('massban-summary',
+            `Selesai: ${Number(data.scanned_rows || 0).toLocaleString(LOCALE_ID)} pesan dipindai — ` +
+            `${Number(data.matched_users || 0).toLocaleString(LOCALE_ID)} user cocok — ` +
+            `${Number(data.banned_new || 0).toLocaleString(LOCALE_ID)} BARU di-ban, ` +
+            `${Number(data.already_banned || 0).toLocaleString(LOCALE_ID)} sebelumnya.`);
+        showToast(`${data.banned_new || 0} user baru di-ban`, 'success');
+        await loadBanList(1, { silent: true });
+    } catch (e) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="table-state error">' + escapeHTML(e.message) + '</td></tr>';
+        setText('massban-summary', '');
+        showToast(e.message, 'error');
+    } finally {
+        massbanRunning = false;
+        setMassbanBusy(false);
+    }
+}
+
 async function exportBanListTxt() {
     const q = document.getElementById('ban-search')?.value || '';
     showToast('Mengambil semua data ban untuk export...', 'success');

@@ -2,6 +2,8 @@ const express = require('express');
 const { formatUptime } = require('../stats');
 const { parseHeartProfiles, stringifyHeartProfiles } = require('../heart_profiles');
 const { getTopChatUsers, getTopChatHours, normalizeLimit, normalizeAiName } = require('../services/leaderboardService');
+const { legacyIdFor } = require('../services/userIdentity');
+const banService = require('../services/banService');
 
 function parseBadwordsSetting(raw) {
     if (!raw) return [];
@@ -533,12 +535,22 @@ function createAdminRoutes({    db,
     });
 
     router.post('/api/admin/ban-user', apiAuth, adminOnly, async (req, res) => {
-        let { username } = req.body;
-        username = username.toString().trim().replace(/^@/, '').toLowerCase();
         try {
-            await db.execute({
-                sql: "INSERT OR IGNORE INTO banned_users (username) VALUES (?)",
+            let username = String(req.body?.username ?? '').trim().replace(/^@+/, '').toLowerCase();
+            if (!username) return res.status(400).json({ success: false, error: 'Username/ID user diperlukan.' });
+
+            // Ban mengikuti identitas: pakai user_id akun bila terdaftar,
+            // kalau tidak pakai ID legacy:<nama> (sama seperti data lama).
+            const found = await db.execute({
+                sql: "SELECT user_id FROM users WHERE LOWER(TRIM(TRIM(username, '@'))) = LOWER(TRIM(TRIM(?, '@'))) ORDER BY last_seen DESC LIMIT 1",
                 args: [username]
+            });
+            const userId = found.rows[0]?.user_id || legacyIdFor(username);
+            const reason = String(req.body?.reason ?? '').trim() || 'manual-ban oleh admin';
+
+            await db.execute({
+                sql: "INSERT OR IGNORE INTO banned_users (user_id, username, reason) VALUES (?, ?, ?)",
+                args: [userId, username, reason]
             });
             res.json({ success: true, message: `User ${username} berhasil di-ban.` });
         } catch (err) {
@@ -547,14 +559,32 @@ function createAdminRoutes({    db,
     });
 
     router.post('/api/admin/unban-user', apiAuth, adminOnly, async (req, res) => {
-        let { username } = req.body;
-        username = username.toString().trim().replace(/^@/, '').toLowerCase();
         try {
-            await db.execute({
-                sql: "DELETE FROM banned_users WHERE username = ?",
+            const raw = String(req.body?.username ?? '').trim();
+            if (!raw) return res.status(400).json({ success: false, error: 'Username/ID user diperlukan.' });
+            const username = raw.replace(/^@+/, '').toLowerCase().replace(/@+$/, '');
+
+            // Lepas semua varian baris ban milik orang yang sama: ID akun
+            // (bila terdaftar), ID legacy nama ini, dan varian nama apa pun.
+            const found = await db.execute({
+                sql: "SELECT user_id FROM users WHERE LOWER(TRIM(TRIM(username, '@'))) = LOWER(TRIM(TRIM(?, '@'))) ORDER BY last_seen DESC LIMIT 1",
                 args: [username]
             });
-            res.json({ success: true, message: `User ${username} berhasil dilepas dari ban.` });
+            const resolvedId = found.rows[0]?.user_id || ':-:-:';
+            const legacyId = legacyIdFor(username);
+
+            const del = await db.execute({
+                sql: `DELETE FROM banned_users
+                      WHERE user_id = ? OR user_id = ? OR LOWER(TRIM(TRIM(username, '@'))) = LOWER(TRIM(TRIM(?, '@')))`,
+                args: [resolvedId, legacyId, username]
+            });
+            const removed = Number(del.rowsAffected) || 0;
+            res.json({
+                success: true,
+                message: removed > 0
+                    ? `User ${username} berhasil dilepas dari ban (${removed} baris).`
+                    : `Tidak ada ban aktif untuk ${username}.`
+            });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
         }
@@ -568,6 +598,47 @@ function createAdminRoutes({    db,
                 args: [message]
             });
             res.json({ success: true, message: "Pesan ban berhasil diperbarui." });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    // ===== Sistem ban massal berbasis kata terlarang =====
+    // 1) Daftar kata yang sedang aktif dipakai auto-ban.
+    router.get('/api/admin/badword-words', apiAuth, adminOnly, async (req, res) => {
+        try {
+            const words = await banService.getActiveBadWords(db);
+            res.json({ success: true, words });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    // 2) Pindai histori chat + pratinjau hasil (tanpa men-ban).
+    //    ?words=a,b      → pakai daftar kata sendiri (opsional)
+    //    ?full=1         → pindai seluruh histori dari awal (bisa lama)
+    router.get('/api/admin/badword-scan', apiAuth, adminOnly, async (req, res) => {
+        try {
+            const result = await banService.scanAndMaybeBan(db, {
+                words: req.query.words || null,
+                full: req.query.full === '1' || req.query.full === 'true',
+                apply: false
+            });
+            res.json({ success: true, ...result });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    // 3) Pindai + langsung ban SEMUA user yang pesannya cocok (alasan otomatis).
+    router.post('/api/admin/badword-mass-ban', apiAuth, adminOnly, async (req, res) => {
+        try {
+            const result = await banService.scanAndMaybeBan(db, {
+                words: req.body?.words ?? null,
+                full: req.body?.full === true || req.body?.full === '1',
+                apply: true
+            });
+            res.json({ success: true, ...result });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
         }

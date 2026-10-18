@@ -408,6 +408,32 @@ function getAdminDashboardHTML(stats, user) {
                         <div id="banlist-pagination" style="margin-top:1.5rem; display:flex; justify-content:center; gap:0.5rem; align-items:center"></div>
                     </div>
                 </div>
+
+                <!-- Ban massal: pindai histori sesuai daftar kata terlarang, lalu ban semua yang cocok -->
+                <div class="card-section" style="margin-top:2rem; padding:1.5rem; border-left:4px solid var(--danger);">
+                    <h2 style="font-size:0.9rem; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.5rem; color:var(--text-main);">Ban Massal Kata Terlarang</h2>
+                    <p style="margin:0 0 1rem; font-size:.75rem; color:var(--text-muted); font-weight:600; line-height:1.45;">
+                        "Cari User" memindai histori chat sesuai daftar kata di bawah (kosong = pakai daftar filter aktif auto-ban) tanpa men-ban siapa pun.
+                        "BAN MASSAL" memindai lalu langsung memblokir semua user yang pesannya cocok; alasan ban diisi otomatis, mis. "mass-ban: pesan memuat kata terlarang ('kontol')".
+                        Pindaiannya incremental — hanya pesan sejak scan terakhir. Centang "Pindai seluruh histori" untuk memaksa dari awal (bisa 1–2 menit).
+                    </p>
+                    <textarea id="massban-words-input" rows="3" placeholder="Kosongkan = daftar filter aktif. Atau isi sendiri, pisahkan dengan koma/baris baru." style="width:100%; padding:0.85rem 1rem; border-radius:10px; border:1px solid var(--border); background:var(--card); color:var(--text-main); font-family:inherit; font-size:0.88rem; outline:none; resize:vertical;"></textarea>
+                    <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap; margin-top:0.9rem;">
+                        <label style="font-size:.8rem; color:var(--text-muted); font-weight:600; display:flex; align-items:center; gap:.4rem;">
+                            <input type="checkbox" id="massban-full-scan"> Pindai seluruh histori (dari awal)
+                        </label>
+                        <button class="btn btn-outline" onclick="loadActiveBadwords()">Pakai Daftar Filter Aktif</button>
+                        <button class="btn" id="btn-badword-scan" onclick="runBadwordScan()" style="border-radius:8px; padding:0.65rem 1.2rem;">Cari User</button>
+                        <button class="btn btn-danger" id="btn-mass-ban" onclick="runMassBanBadwords()">BAN MASSAL</button>
+                    </div>
+                    <div id="massban-summary" style="margin-top:1rem; font-size:.85rem; font-weight:700; color:var(--text-main);"></div>
+                    <div class="table-container" style="margin-top:1rem; max-height:420px; overflow:auto;">
+                        <table>
+                            <thead><tr><th>USER</th><th>USER ID</th><th style="text-align:center">PESAN COCOK</th><th>KATA</th><th>PESAN CONTOH</th><th>STATUS</th></tr></thead>
+                            <tbody id="massban-body"><tr><td colspan="6" class="table-state">Belum ada hasil. Klik "Cari User" untuk memindai.</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
             <div id="page-logs" class="hidden">

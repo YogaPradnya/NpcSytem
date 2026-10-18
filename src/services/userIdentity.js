@@ -263,6 +263,17 @@ async function claimLegacyUser(db, { userId, username } = {}) {
             await tx.execute({ sql: 'DELETE FROM users WHERE user_id = ?', args: [legacyId] });
         }
 
+        // Ban ikut pindah ke ID akun: baris ban 'legacy:<nama>' diperbarui jadi
+        // ID asli. Kalau user ternyata sudah diban dengan ID akun-nya, baris
+        // legacy dihapus saja (sudah tertutup baris ID-nya) supaya tidak duplikat
+        // dengan UNIQUE index banned_users(user_id).
+        await tx.execute({
+            sql: `UPDATE banned_users SET user_id = ?
+                  WHERE user_id = ? AND NOT EXISTS (SELECT 1 FROM banned_users WHERE user_id = ?)`,
+            args: [uid, legacyId, uid]
+        });
+        await tx.execute({ sql: 'DELETE FROM banned_users WHERE user_id = ?', args: [legacyId] });
+
         await tx.commit();
         return Number(moved.rowsAffected) || 0;
     } catch (e) {
@@ -300,8 +311,41 @@ async function ensureUserIdentitySchema(db, log = () => {}) {
         log(`[schema] tabel user_chat_time dibangun ulang → PK user_id (${report.chatTimeRebuilt} identitas)`);
     }
 
+    // Ban ikut identitas: banned_users.user_id (kolom + pemetaan baris lama).
+    // Ban lama berbasis username dipetakan ke 'legacy:<nama>' — sama seperti
+    // chat_logs — supaya cek ban per-ID akun tetap menangkapnya.
+    if (!(await columnExists(db, 'banned_users', 'user_id'))) {
+        await db.execute('ALTER TABLE banned_users ADD COLUMN user_id TEXT');
+        report.bannedColumnAdded = true;
+        log('[schema] kolom banned_users.user_id ditambahkan');
+        const mapped = await db.execute({
+            sql: `UPDATE banned_users SET user_id = ? || LOWER(TRIM(TRIM(username, '@')))
+                  WHERE user_id IS NULL AND username IS NOT NULL AND TRIM(username) != ''`,
+            args: [LEGACY_PREFIX]
+        });
+        report.bannedRowsMapped = Number(mapped.rowsAffected) || 0;
+        log(`[schema] ${report.bannedRowsMapped} baris ban lama dipetakan ke user_id legacy`);
+
+        // Baris yang setelah normalisasi jadi sama (varian huruf besar/kecil dsb)
+        // digabungkan: pertahankan baris tertua, sisanya dihapus.
+        const banRows = (await db.execute('SELECT id, user_id FROM banned_users WHERE user_id IS NOT NULL ORDER BY id ASC')).rows;
+        const seen = new Set();
+        const duplicateIds = [];
+        for (const row of banRows) {
+            if (seen.has(String(row.user_id))) duplicateIds.push(Number(row.id));
+            else seen.add(String(row.user_id));
+        }
+        for (const id of duplicateIds) {
+            await db.execute({ sql: 'DELETE FROM banned_users WHERE id = ?', args: [id] });
+        }
+        report.bannedDuplicatesRemoved = duplicateIds.length;
+        if (duplicateIds.length) log(`[schema] ${duplicateIds.length} baris ban duplikat digabung`);
+    }
+
     await db.execute('CREATE INDEX IF NOT EXISTS idx_chat_logs_user_id ON chat_logs(user_id)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_user_chat_time_leaderboard ON user_chat_time(total_seconds DESC, user_id ASC)');
+    // Satu baris ban per identitas; INSERT OR IGNORE mengandalkan ini juga.
+    await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_banned_user_id ON banned_users(user_id)');
 
     return report;
 }

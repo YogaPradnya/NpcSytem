@@ -179,7 +179,7 @@ Kalau keduanya diisi, `user_id` yang dipakai.
 |---|---|---|---|---|
 | `limit` | tidak | `10`, `20`, `25`, `50`, `100` | `10` | Jumlah baris (diabaikan kalau `user_id`/`username` diisi). |
 | `ai_name` | tidak | ID karakter, mis. `alya` | — | Filter per karakter (case-insensitive). |
-| `user_id` | tidak | ID akun user, mis. `8123456789` | — | Statistik satu user berdasarkan identitas stabil. Maks 64 karakter. |
+| `user_id` | tidak | ID akun user, mis. `8123456789` — atau identitas lama `legacy:<nama>`, mis. `legacy:sakiko` | — | Statistik satu user berdasarkan identitas stabil. Maks 64 karakter. |
 | `username` | tidak | nama user, mis. `seialenz` | — | Statistik satu user berdasarkan nama (case-insensitive). Maks 50 karakter. |
 
 ### Contoh request

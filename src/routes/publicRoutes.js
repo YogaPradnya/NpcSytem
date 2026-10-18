@@ -10,7 +10,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const { getTopChatUsers, getTopChatHours, getTopWordUsers, getUserWordStats, getTopWaifus, normalizeLimit, normalizeAiName } = require('../services/leaderboardService');
-const { sanitizeUserId, USER_ID_MAX_LENGTH } = require('../services/userIdentity');
+const { sanitizeUserIdFilter, USER_ID_MAX_LENGTH } = require('../services/userIdentity');
 
 const PUBLIC_CACHE_TTL_MS = 2 * 60 * 1000; // 2 menit
 const AI_NAME_PATTERN = /^[a-z0-9._-]{1,50}$/;
@@ -95,9 +95,10 @@ function createPublicRoutes({ db }) {
         const raw = query?.user_id;
         if (raw === undefined) return { userId: null, error: null };
 
-        const userId = sanitizeUserId(raw);
+        // Terima ID akun maupun identitas lama `legacy:<nama>` (untuk lookup data lama).
+        const userId = sanitizeUserIdFilter(raw);
         if (!userId) {
-            return { userId: null, error: `Parameter user_id tidak valid (maks ${USER_ID_MAX_LENGTH} karakter; huruf/angka/._:@+-).` };
+            return { userId: null, error: `Parameter user_id tidak valid (maks ${USER_ID_MAX_LENGTH} karakter; huruf/angka/._:@+-, atau legacy:<nama>).` };
         }
         return { userId, error: null };
     }

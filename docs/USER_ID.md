@@ -109,6 +109,7 @@ curl -H "X-API-Key: <KEY>" "https://npc.yogaa.web.id/api/public/top-words?user_i
 
 - `user_id` → cocok persis dengan identitas stabil user.
 - `username` → pencarian nama (case-insensitive; untuk data lama, satu nama = satu identitas).
+- Identitas lama juga bisa dicek langsung: `?user_id=legacy:<nama>` (mis. `legacy:sakiko`) — berguna untuk data sebelum app mengirim ID akun.
 
 ---
 

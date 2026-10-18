@@ -306,12 +306,30 @@ async function ensureUserIdentitySchema(db, log = () => {}) {
     return report;
 }
 
+// Pola untuk lookup identitas lama lewat filter/query param (?user_id=legacy:...).
+const LEGACY_ID_PATTERN = /^legacy:[^\x00-\x1f\x7f]{1,57}$/;
+
+/**
+ * Seperti sanitizeUserId() tapi juga menerima nilai `legacy:<nama>`.
+ * Dipakai untuk FILTER pencarian (bukan identitas yang dikirim client).
+ */
+function sanitizeUserIdFilter(raw) {
+    if (raw === undefined || raw === null) return null;
+    const value = String(raw).trim();
+    if (!value) return null;
+    const asAccount = sanitizeUserId(value);
+    if (asAccount) return asAccount;
+    if (LEGACY_ID_PATTERN.test(value)) return value;
+    return null;
+}
+
 module.exports = {
     LEGACY_PREFIX,
     USER_ID_MAX_LENGTH,
     normalizeNameKey,
     legacyIdFor,
     sanitizeUserId,
+    sanitizeUserIdFilter,
     ensureUserIdentitySchema,
     backfillUserIds,
     claimLegacyUser

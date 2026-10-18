@@ -25,6 +25,15 @@ Aturan otomatis:
 - **Case/format nama digabung** — `Zyxe`, `zyxe`, `@zyxe` dianggap satu identitas untuk data lama.
 - **Auto-claim** — saat user dengan ID akun pertama kali chat memakai nama yang masih punya histori lama, histori itu otomatis dipindahkan ke ID-nya (mis. semua chat `legacy:zyxe` → `8123456789`). Statistik sebelum & sesudah pakai ID menyatu.
 
+**ID yang dikirim = ID resmi akun Animein** (`data.user.id` dari login AnimeinWeb, angka, mis. `299634`) — bukan ID buatan client. Kalau app belum mengirim ID, selama user pernah memakai bot Animein, historinya bisa digabung ke ID resmi lewat mapping DB bot:
+
+```bash
+node scripts/sync-user-id-animein.js          # pratinjau: nama → ID resmi
+node scripts/sync-user-id-animein.js --apply  # pindah chat/users/uct/ban ke ID resmi
+```
+
+Sumber mapping: DB bot (`../chat bot animein/.env`). Idempoten — aman diulang; jalankan ulang sewaktu-waktu kalau bot menambah user baru.
+
 ---
 
 ## 2. Yang perlu dikirim aplikasi chat

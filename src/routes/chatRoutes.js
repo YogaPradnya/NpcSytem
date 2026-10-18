@@ -8,6 +8,7 @@ const { validateChatInput } = require('../guards/input_guard');
 const { validatePrompt, logSuspiciousActivity } = require('../guards/prompt_guard');
 const { checkLocalBadwords, setBadWords } = require('../utils/badwordFilter');
 const { clampHeartLevel } = require('../heart_profiles');
+const { recordChatActivity } = require('../services/leaderboardService');
 
 
 
@@ -355,6 +356,14 @@ function createChatRoutes({ db, characters, providers, globalStats }) {
                     console.log(`[DB] Log saved for @${currentUsername} | Pose: ${aiPose} | Lv: ${currentHeartLv}`);
                 } catch (logErr) {
                     console.error("[DB LOG ERROR]: Gagal menyimpan percakapan!", logErr.message);
+                }
+
+                // Peringkat jam: akumulasi waktu aktif user (jeda < 10 menit dihitung).
+                // Terpisah dari log di atas agar kegagalan tidak memblokir balasan chat.
+                try {
+                    await recordChatActivity(db, currentUsername);
+                } catch (timeErr) {
+                    console.error("[DB CHAT TIME ERROR]: Gagal memperbarui total jam chat!", timeErr.message);
                 }
             } else {
                 console.log(`[SIM] Skip DB log for simulator @${currentUsername} | Pose: ${aiPose} | Lv: ${currentHeartLv}`);

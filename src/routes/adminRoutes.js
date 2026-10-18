@@ -1,6 +1,7 @@
 const express = require('express');
 const { formatUptime } = require('../stats');
 const { parseHeartProfiles, stringifyHeartProfiles } = require('../heart_profiles');
+const { getTopChatUsers, getTopChatHours, normalizeLimit, normalizeAiName } = require('../services/leaderboardService');
 
 function parseBadwordsSetting(raw) {
     if (!raw) return [];
@@ -260,34 +261,38 @@ function createAdminRoutes({    db,
 
     router.get('/api/admin/top-users', apiAuth, adminOnly, async (req, res) => {
         try {
-            const allowedLimits = [10, 20, 50, 100];
-            const reqLimit = parseInt(req.query.limit, 10);
-            const limit = allowedLimits.includes(reqLimit) ? reqLimit : 10;
-            const aiName = String(req.query.ai_name || '').trim().toLowerCase();
-
-            let where = "WHERE username IS NOT NULL AND TRIM(username) != ''";
-            let args = [];
-            if (aiName) {
-                where += " AND LOWER(ai_name) = ?";
-                args.push(aiName);
-            }
-
-            const result = await db.execute({
-                sql: `SELECT 
-                    username,
-                    MAX(user_level) as max_level,
-                    COUNT(*) as total_chats,
-                    MAX(timestamp) as last_active
-                FROM chat_logs
-                ${where}
-                GROUP BY username
-                ORDER BY max_level DESC, total_chats DESC
-                LIMIT ?`,
-                args: [...args, limit]
-            });
-            res.json({ success: true, users: result.rows });
+            const limit = normalizeLimit(req.query.limit, 10);
+            const aiName = normalizeAiName(req.query.ai_name);
+            const users = await getTopChatUsers(db, { limit, aiName });
+            res.json({ success: true, users });
         } catch (e) {
             console.error("[DB TOP USERS ERROR]:", e.message);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    // Peringkat jam: total waktu obrolan aktif per user
+    // (jeda antar pesan < 10 menit dihitung, >= 10 menit diabaikan).
+    router.get('/api/admin/top-hours', apiAuth, adminOnly, async (req, res) => {
+        try {
+            const limit = normalizeLimit(req.query.limit, 25);
+            const rows = await getTopChatHours(db, { limit });
+            res.json({
+                success: true,
+                rule: { gap_minutes: 10 },
+                users: rows.map((row, i) => {
+                    const totalSeconds = Math.max(0, Number(row.total_seconds) || 0);
+                    return {
+                        rank: i + 1,
+                        username: row.username,
+                        total_seconds: Math.round(totalSeconds),
+                        total_hours: Math.round((totalSeconds / 3600) * 100) / 100,
+                        last_active: row.last_message_at || null
+                    };
+                })
+            });
+        } catch (e) {
+            console.error("[DB TOP HOURS ERROR]:", e.message);
             res.status(500).json({ success: false, error: e.message });
         }
     });

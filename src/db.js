@@ -76,9 +76,20 @@ async function initDB(characters) {
             )
         `);
 
+        // Peringkat jam: total detik obrolan aktif per user (dipelihara incremental
+        // oleh chatRoutes; histori lama di-backfill sekali saat boot dari chat_logs).
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS user_chat_time (
+                username TEXT PRIMARY KEY,
+                total_seconds REAL DEFAULT 0,
+                last_message_at DATETIME
+            )
+        `);
+
         await db.execute("CREATE INDEX IF NOT EXISTS idx_chat_logs_username ON chat_logs(username)");
         await db.execute("CREATE INDEX IF NOT EXISTS idx_chat_logs_ai_name ON chat_logs(ai_name)");
         await db.execute("CREATE INDEX IF NOT EXISTS idx_banned_lower_username ON banned_users(username COLLATE NOCASE)");
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_user_chat_time_leaderboard ON user_chat_time(total_seconds DESC, username ASC)");
 
         await db.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('ban_message', 'Aku malas berbicara dengan kamu.')");
         await db.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('badwords', '')");

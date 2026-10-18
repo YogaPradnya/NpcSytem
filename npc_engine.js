@@ -13,6 +13,8 @@ const { attachConsoleBroadcast, openLogStream } = require('./src/logger');
 const { createAuthRoutes } = require('./src/routes/authRoutes');
 const { createChatRoutes } = require('./src/routes/chatRoutes');
 const { createAdminRoutes } = require('./src/routes/adminRoutes');
+const { createPublicRoutes } = require('./src/routes/publicRoutes');
+const { ensureChatTimeBackfill } = require('./src/services/leaderboardService');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -25,6 +27,16 @@ const chatLimiter = rateLimit({
     max: 100,
     standardHeaders: true,
     legacyHeaders: false, 
+    message: { success: false, error: 'Terlalu banyak request, coba lagi nanti.' }
+});
+
+// Endpoint publik read-only (web/app animein): API key + rate-limit terpisah.
+const publicCors = cors();
+const publicLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
     message: { success: false, error: 'Terlalu banyak request, coba lagi nanti.' }
 });
 
@@ -46,7 +58,11 @@ app.use(cookieParser(process.env.COOKIE_SECRET || 'npc-system-secret-88'));
 if (!process.env.COOKIE_SECRET) {
     console.warn('[SECURITY] COOKIE_SECRET tidak di-set di .env, memakai fallback lemah. Segera set COOKIE_SECRET acak yang panjang!');
 }
+if (!process.env.PUBLIC_STATS_KEY) {
+    console.warn('[PUBLIC API] PUBLIC_STATS_KEY belum di-set di .env. Endpoint /api/public/* dinonaktifkan (503).');
+}
 app.use('/api/npc', chatCors, chatLimiter);
+app.use('/api/public', publicCors, publicLimiter);
 
 app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -77,6 +93,15 @@ let server;
 async function boot() {
     // Load characters from DB before accepting traffic (avoid empty-characters race).
     await initDB(characters);
+
+    // Backfill total jam chat dari histori (sekali saja, ditandai di settings).
+    try {
+        const didBackfill = await ensureChatTimeBackfill(db);
+        if (didBackfill) console.log('[DB] Backfill total jam chat (user_chat_time) selesai.');
+    } catch (e) {
+        console.error('[DB] Backfill total jam chat gagal (akan dicoba saat boot berikutnya):', e.message);
+    }
+
     providers.startDeepInfraBillingSync();
     providers.startDailyStatsReset();
 
@@ -110,6 +135,7 @@ app.use(createAdminRoutes({
     adminOnly,
     openLogStream
 }));
+app.use(createPublicRoutes({ db }));
 
 function gracefulShutdown(signal) {
     console.log(`[SYSTEM] ${signal} received. Shutting down...`);

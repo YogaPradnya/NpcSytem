@@ -597,6 +597,290 @@ function getAdminDashboardHTML(stats, user) {
     `;
 }
 
+function getPublicBanPageHTML({ users = [], pagination = {}, q = '', error = '' } = {}) {
+    const page = Number(pagination.page) || 1;
+    const limit = Number(pagination.limit) || 20;
+    const total = Number(pagination.total) || 0;
+    const totalPages = Math.max(1, Number(pagination.totalPages) || 1);
+    const offset = (page - 1) * limit;
+    const start = total === 0 ? 0 : offset + 1;
+    const end = Math.min(offset + limit, total);
+
+    const formatDate = (value) => {
+        if (!value) return '-';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return escapeHTML(String(value));
+        return escapeHTML(date.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', hour12: false }));
+    };
+
+    const pageNumbers = (() => {
+        const picked = new Set([1, totalPages, page, page - 1, page + 1]);
+        if (page <= 3) [2, 3, 4].forEach(n => picked.add(n));
+        if (page >= totalPages - 2) [totalPages - 1, totalPages - 2, totalPages - 3].forEach(n => picked.add(n));
+        const sorted = [...picked].filter(n => n >= 1 && n <= totalPages).sort((a, b) => a - b);
+        const items = [];
+        let prev = 0;
+        for (const n of sorted) {
+            if (prev && n - prev > 1) items.push('ellipsis');
+            items.push(n);
+            prev = n;
+        }
+        return items;
+    })();
+
+    const encodedQ = q ? `&q=${encodeURIComponent(q)}` : '';
+    const pageHref = (n) => `/ban?page=${n}${encodedQ}`;
+
+    const rowsHtml = users.length
+        ? users.map((user) => {
+            const username = escapeHTML(user.username || '-');
+            const reason = escapeHTML(String(user.reason || '').trim() || 'Diban karena pelanggaran');
+            return `<tr>
+                <td><span class="ban-dot"></span><span class="username">${username}</span></td>
+                <td><div class="reason">${reason}</div></td>
+                <td><div class="date">${formatDate(user.created_at)}</div></td>
+            </tr>`;
+        }).join('')
+        : `<tr><td colspan="3" class="empty-state">${q ? 'Tidak ada username yang cocok dengan pencarian.' : 'Belum ada user yang diban.'}</td></tr>`;
+
+    const paginationHtml = totalPages > 1 ? `
+        <div class="pagination" aria-label="Navigasi halaman">
+            <a class="page-link ${page <= 1 ? 'disabled' : ''}" href="${pageHref(Math.max(1, page - 1))}" aria-label="Halaman sebelumnya">‹ Prev</a>
+            ${pageNumbers.map(item => item === 'ellipsis'
+                ? '<span class="page-ellipsis">…</span>'
+                : `<a class="page-link ${item === page ? 'active' : ''}" href="${pageHref(item)}">${item}</a>`
+            ).join('')}
+            <a class="page-link ${page >= totalPages ? 'disabled' : ''}" href="${pageHref(Math.min(totalPages, page + 1))}" aria-label="Halaman berikutnya">Next ›</a>
+        </div>` : '';
+
+    return `
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="robots" content="noindex">
+        <title>Daftar Ban - NPC System</title>
+        <link rel="icon" type="image/png" href="/favicon.png?v=2">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+        <script>try{document.documentElement.dataset.theme=localStorage.getItem('npc-theme')||'light';}catch(e){document.documentElement.dataset.theme='light';}</script>
+        <style>
+            :root {
+                color-scheme: light;
+                --bg: #f5f6f8;
+                --card: #ffffff;
+                --ink: #171717;
+                --muted: #60646c;
+                --border: #e5e7eb;
+                --border-strong: #d1d5db;
+                --primary: #000000;
+                --primary-hover: #1a1a1a;
+                --on-primary: #ffffff;
+                --danger: #dc2626;
+                --danger-soft: #fef2f2;
+                --chip: #f3f4f6;
+                --shadow: 0 10px 40px rgba(15, 23, 42, 0.06);
+            }
+            [data-theme="dark"] {
+                color-scheme: dark;
+                --bg: #0a0a0a;
+                --card: #161616;
+                --ink: #fafafa;
+                --muted: #a1a1aa;
+                --border: rgba(255, 255, 255, 0.08);
+                --border-strong: rgba(255, 255, 255, 0.16);
+                --primary: #ffffff;
+                --primary-hover: #d4d4d4;
+                --on-primary: #000000;
+                --danger: #ff8a8a;
+                --danger-soft: rgba(220, 38, 38, 0.12);
+                --chip: rgba(255, 255, 255, 0.06);
+                --shadow: none;
+            }
+            * { box-sizing: border-box; }
+            body {
+                margin: 0;
+                min-height: 100vh;
+                padding: 32px 20px 48px;
+                font-family: 'Inter', -apple-system, system-ui, sans-serif;
+                background: var(--bg);
+                background-image: radial-gradient(ellipse 70% 45% at 50% -10%, #dbeafe 0%, transparent 70%);
+                background-repeat: no-repeat;
+                color: var(--ink);
+                -webkit-font-smoothing: antialiased;
+            }
+            [data-theme="dark"] body { background-image: none; }
+            .shell { width: 100%; max-width: 1040px; margin: 0 auto; }
+            .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+            .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+            .brand img { width: 46px; height: 46px; border-radius: 11px; border: 1px solid var(--border); background: var(--card); }
+            .brand h1 { margin: 0; font-size: 15px; font-weight: 800; letter-spacing: 0.08em; }
+            .brand p { margin: 2px 0 0; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+            .topbar-actions { display: flex; align-items: center; gap: 8px; }
+            .icon-btn {
+                width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border-strong);
+                background: var(--card); color: var(--ink); font-size: 17px; line-height: 1;
+                display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+                transition: border-color .2s, transform .2s;
+            }
+            .icon-btn:hover { border-color: var(--ink); transform: translateY(-1px); }
+            .btn {
+                display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+                height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid transparent;
+                font-family: inherit; font-size: 13px; font-weight: 600; text-decoration: none;
+                cursor: pointer; transition: background .2s, border-color .2s, color .2s;
+                white-space: nowrap;
+            }
+            .btn-primary { background: var(--primary); color: var(--on-primary); }
+            .btn-primary:hover { background: var(--primary-hover); }
+            .btn-ghost { background: var(--card); color: var(--ink); border-color: var(--border-strong); }
+            .btn-ghost:hover { border-color: var(--ink); }
+            .card {
+                background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+                padding: 26px; box-shadow: var(--shadow);
+            }
+            .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 20px; }
+            .card-head h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+            .card-head p { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+            .count-badge {
+                display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0;
+                padding: 7px 12px; border-radius: 999px; background: var(--danger-soft);
+                color: var(--danger); font-size: 12px; font-weight: 700; white-space: nowrap;
+            }
+            .count-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); }
+            .alert {
+                margin-bottom: 16px; padding: 12px 14px; border-radius: 10px;
+                background: var(--danger-soft); color: var(--danger);
+                border: 1px solid color-mix(in srgb, var(--danger) 28%, transparent);
+                font-size: 13px; font-weight: 600;
+            }
+            .search { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+            .search input {
+                flex: 1; min-width: 220px; height: 42px; padding: 0 14px;
+                border: 1px solid var(--border-strong); border-radius: 10px;
+                background: var(--card); color: var(--ink); font-family: inherit; font-size: 14px;
+                outline: none; transition: border-color .2s, box-shadow .2s;
+            }
+            .search input:focus { border-color: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 8%, transparent); }
+            .search .btn { height: 42px; }
+            .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
+            table { width: 100%; border-collapse: collapse; font-size: 14px; }
+            th {
+                padding: 11px 16px; text-align: left; background: var(--chip);
+                border-bottom: 1px solid var(--border); color: var(--muted);
+                font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
+                white-space: nowrap;
+            }
+            td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+            tr:last-child td { border-bottom: 0; }
+            .ban-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--danger); margin-right: 8px; vertical-align: 1px; }
+            .username { font-weight: 700; overflow-wrap: anywhere; }
+            .reason { color: var(--muted); line-height: 1.5; max-width: 560px; overflow-wrap: anywhere; }
+            .date { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+            .empty-state { padding: 42px 16px; text-align: center; color: var(--muted); font-weight: 500; }
+            .table-foot {
+                display: flex; justify-content: space-between; align-items: center; gap: 12px;
+                margin-top: 14px; color: var(--muted); font-size: 12px; font-weight: 500;
+            }
+            .pagination { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin-top: 18px; }
+            .page-link {
+                display: inline-flex; align-items: center; justify-content: center;
+                min-width: 36px; height: 36px; padding: 0 11px; border-radius: 9px;
+                border: 1px solid var(--border-strong); background: var(--card); color: var(--ink);
+                font-size: 12px; font-weight: 600; text-decoration: none; transition: border-color .2s, background .2s;
+            }
+            .page-link:hover { border-color: var(--ink); }
+            .page-link.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+            .page-link.disabled { opacity: 0.4; pointer-events: none; }
+            .page-ellipsis { color: var(--muted); padding: 0 2px; }
+            .footer-note { margin: 18px 4px 0; text-align: center; font-size: 11px; line-height: 1.6; color: var(--muted); }
+            @media (max-width: 640px) {
+                body { padding: 20px 12px 32px; }
+                .card { padding: 18px; border-radius: 14px; }
+                .card-head { flex-direction: column; }
+                .topbar { align-items: flex-start; }
+                .brand img { width: 40px; height: 40px; }
+                .date { white-space: normal; }
+                .search input { min-width: 100%; }
+                .search .btn { flex: 1; }
+                .table-foot { flex-direction: column; align-items: flex-start; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="shell">
+            <header class="topbar">
+                <div class="brand">
+                    <img src="/logo.png" alt="NPC System">
+                    <div>
+                        <h1>NPC SYSTEM</h1>
+                        <p>Daftar Ban Publik</p>
+                    </div>
+                </div>
+                <div class="topbar-actions">
+                    <button class="icon-btn" id="theme-btn" type="button" onclick="togglePublicBanTheme()" title="Ganti tema" aria-label="Ganti tema">☾</button>
+                    <a class="btn btn-ghost" href="/login">Login</a>
+                </div>
+            </header>
+
+            <section class="card">
+                <div class="card-head">
+                    <div>
+                        <h2>Daftar Ban User</h2>
+                        <p>Halaman ini dapat diakses tanpa login. Halaman lain memerlukan autentikasi.</p>
+                    </div>
+                    <span class="count-badge"><span class="dot"></span>${total.toLocaleString('id-ID')} user diban</span>
+                </div>
+
+                ${error ? `<div class="alert">${escapeHTML(error)}</div>` : ''}
+
+                <form class="search" method="GET" action="/ban" role="search">
+                    <input type="search" name="q" value="${escapeHTML(q)}" maxlength="50" placeholder="Cari username..." aria-label="Cari username">
+                    <button class="btn btn-primary" type="submit">Cari</button>
+                    ${q ? '<a class="btn btn-ghost" href="/ban">Reset</a>' : ''}
+                </form>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Alasan</th>
+                                <th>Tanggal Ban</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </div>
+
+                <div class="table-foot">
+                    <span>${total ? `Menampilkan ${start}–${end} dari ${total.toLocaleString('id-ID')} user` : 'Tidak ada data untuk ditampilkan'}</span>
+                    ${q ? `<span>Hasil pencarian untuk “${escapeHTML(q)}”</span>` : ''}
+                </div>
+
+                ${paginationHtml}
+            </section>
+
+            <p class="footer-note">Daftar ban bersumber langsung dari database. Alasan ban ditampilkan sesuai data yang tercatat.</p>
+        </div>
+
+        <script>
+            function syncPublicBanTheme() {
+                var btn = document.getElementById('theme-btn');
+                if (btn) btn.textContent = document.documentElement.dataset.theme === 'dark' ? '☀' : '☾';
+            }
+            function togglePublicBanTheme() {
+                var next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+                document.documentElement.dataset.theme = next;
+                try { localStorage.setItem('npc-theme', next); } catch (e) {}
+                syncPublicBanTheme();
+            }
+            document.addEventListener('DOMContentLoaded', syncPublicBanTheme);
+        </script>
+    </body>
+    </html>`;
+}
+
 function getLoginPageHTML(error = '') {
     return `
     <!DOCTYPE html>
@@ -663,4 +947,4 @@ function getLoginPageHTML(error = '') {
     </html>`;
 }
 
-module.exports = { getAdminDashboardHTML, getLoginPageHTML };
+module.exports = { getAdminDashboardHTML, getLoginPageHTML, getPublicBanPageHTML };

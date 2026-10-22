@@ -59,6 +59,18 @@ Target default `.env`: `TURSO_URL` / `TURSO_AUTH_TOKEN` (sqld produksi). `--full
 - **Ban user** (`POST /api/admin/ban-user`): nama yang diketik dicari di tabel `users` → pakai `user_id` akunnya; tidak ada → `legacy:<nama>`. Kolom `reason` opsional (default `manual-ban oleh admin`).
 - **Unban** (`POST /api/admin/unban-user`): melepas SEMUA varian baris ban milik orang itu (ID akun, `legacy:<nama>`, dan varian nama).
 
-## 5. Checklist cadangan
+## 5. Halaman publik `/ban`
+
+Halaman `GET /ban` bisa dibuka **tanpa login** dan hanya menampilkan:
+
+- `username`
+- `reason` (alasan ban)
+- `created_at` (tanggal ban)
+
+Fitur: pencarian username (`?q=`) dan pagination 20 baris (`?page=`). `user_id` dan data internal lain tidak pernah dikirim ke browser. Halaman diberi rate-limit 60 request/menit/IP.
+
+Halaman dashboard lain tetap memerlukan login: `/admin` memakai `sessionAuth`, sedangkan endpoint `/api/admin/*` memakai `apiAuth` + `adminOnly`.
+
+## 6. Checklist cadangan
 
 Ban massal hanya menulis tabel `banned_users` kecil — nightly backup sqld → Turso otomatis mengikutinya. Jalankan manual bila ingin segera: `node scripts/backup-sqld-to-turso.js`.

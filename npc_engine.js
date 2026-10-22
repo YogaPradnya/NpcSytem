@@ -4,7 +4,7 @@ const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
-const { getAdminDashboardHTML, getLoginPageHTML } = require('./dashboard.js');
+const { getAdminDashboardHTML, getLoginPageHTML, getPublicBanPageHTML } = require('./dashboard.js');
 const { db, initDB } = require('./src/db');
 const { sessionAuth, apiAuth, adminOnly } = require('./src/auth');
 const { globalStats } = require('./src/stats');
@@ -14,6 +14,7 @@ const { createAuthRoutes } = require('./src/routes/authRoutes');
 const { createChatRoutes } = require('./src/routes/chatRoutes');
 const { createAdminRoutes } = require('./src/routes/adminRoutes');
 const { createPublicRoutes } = require('./src/routes/publicRoutes');
+const { createPublicBanRoutes } = require('./src/routes/publicBanRoutes');
 const { ensureChatTimeBackfill } = require('./src/services/leaderboardService');
 
 const app = express();
@@ -51,6 +52,15 @@ const loginLimiter = rateLimit({
     }
 });
 
+// Rate-limit halaman publik /ban agar query DB tidak dibanjiri request.
+const publicPageLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: 'Terlalu banyak request, coba lagi nanti.'
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
@@ -63,6 +73,7 @@ if (!process.env.PUBLIC_STATS_KEY) {
 }
 app.use('/api/npc', chatCors, chatLimiter);
 app.use('/api/public', publicCors, publicLimiter);
+app.use('/ban', publicPageLimiter);
 
 app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -136,6 +147,7 @@ app.use(createAdminRoutes({
     openLogStream
 }));
 app.use(createPublicRoutes({ db }));
+app.use(createPublicBanRoutes({ db, getPublicBanPageHTML }));
 
 function gracefulShutdown(signal) {
     console.log(`[SYSTEM] ${signal} received. Shutting down...`);

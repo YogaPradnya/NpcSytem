@@ -819,7 +819,6 @@ function getPublicBanPageHTML({ users = [], pagination = {}, q = '', error = '' 
                 </div>
                 <div class="topbar-actions">
                     <button class="icon-btn" id="theme-btn" type="button" onclick="togglePublicBanTheme()" title="Ganti tema" aria-label="Ganti tema">☾</button>
-                    <a class="btn btn-ghost" href="/login">Login</a>
                 </div>
             </header>
 
@@ -827,7 +826,6 @@ function getPublicBanPageHTML({ users = [], pagination = {}, q = '', error = '' 
                 <div class="card-head">
                     <div>
                         <h2>Daftar Ban User</h2>
-                        <p>Halaman ini dapat diakses tanpa login. Halaman lain memerlukan autentikasi.</p>
                     </div>
                     <span class="count-badge"><span class="dot"></span>${total.toLocaleString('id-ID')} user diban</span>
                 </div>

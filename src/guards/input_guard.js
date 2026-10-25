@@ -6,7 +6,7 @@
 const { sanitizeUserId } = require('../services/userIdentity');
 
 const MAX_MESSAGE_LENGTH = 2000;
-const MAX_CONTEXT_STRING_LENGTH = 500;
+const MAX_CONTEXT_STRING_LENGTH = 1500;
 const MAX_HISTORY_ITEMS = 10;
 const MAX_USERNAME_LENGTH = 50;
 
